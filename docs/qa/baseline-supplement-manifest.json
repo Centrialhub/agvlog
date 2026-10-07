@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-baseline-reviewed-supplements",
+  "originalManifestSha256": "cdccb706be4bd1ea38f88c09eff9538f0dea55a964f094ebb7ebf08ee7838715",
+  "followupManifestSha256": "fd8a78b2b1b7ca7e6a6e7618a894230ac477509cad74cdd71f824fef4cba63d4",
+  "forwards": [
+    {
+      "version": "20261006124418",
+      "filename": "20261006124418_restore_operational_route_name_audit.sql",
+      "sha256": "63d504933e3b2f43fffef97bc4aae5c4007c65234a3328bbb22a4ae3ca05d11f"
+    },
+    {
+      "version": "20261006131127",
+      "filename": "20261006131127_enforce_driver_trip_cargo_weight_precision.sql",
+      "sha256": "dda43defded059b3b0c13f88893915692844e0fab879d96776a7b1ce85fa9001"
+    },
+    {
+      "version": "20261006155532",
+      "filename": "20261006155532_align_ssx_cooldown_retry_after_contract.sql",
+      "sha256": "3d900ef761181caf6d1ff49cd05dc518607550e3b9e8cf48d97f3e0cd3b93f57"
+    }
+  ]
+}

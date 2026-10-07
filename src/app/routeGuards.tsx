@@ -147,7 +147,7 @@ export function DriverRoute({ children }: PropsWithChildren) {
   const { user, loading } = useAuth();
 
   if (loading) return <FullPageLoader />;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/auth?access=driver" replace />;
 
   return (
     <TenantProvider>

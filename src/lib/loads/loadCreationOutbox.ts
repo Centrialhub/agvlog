@@ -1,3 +1,4 @@
+import { deserializeLoadCreation, serializeLoadCreation } from './loadCreationStorageCodec';
 import type { LoadHeaderChanges } from './loadAggregateCommands';
 
 export type LoadCreationKind = 'grouped' | 'documents';
@@ -27,7 +28,7 @@ export function readPendingLoadCreations(storage: Storage, tenant: string, actor
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index);
     if (!key?.startsWith(prefix(tenant, actor, kind))) continue;
-    const row = JSON.parse(storage.getItem(key) || 'null') as PendingLoadCreation | null;
+    const row = deserializeLoadCreation(JSON.parse(storage.getItem(key) || 'null')) as PendingLoadCreation | null;
     if (!row || row.version !== 1 || row.tenant !== tenant || row.actor !== actor || row.kind !== kind
       || !row.payload?.request_id || row.payload.tenant_id !== tenant || keyFor(row) !== key) {
       throw new Error('Não foi possível ler a criação pendente. Preserve esta sessão e consulte a carga antes de reenviar.');
@@ -63,8 +64,9 @@ export function createLoadCreationOutbox(deps: Dependencies) {
         row = { version: 1, tenant, actor, kind, scope, payload: JSON.parse(JSON.stringify({
           ...input, tenant_id: tenant, request_id: deps.uuid(),
         })) };
-        deps.storage.setItem(key, JSON.stringify(row));
-        if (deps.storage.getItem(key) !== JSON.stringify(row)) throw new Error('Não foi possível salvar o pedido para recuperação.');
+        const serialized = serializeLoadCreation(row);
+        deps.storage.setItem(key, serialized);
+        if (deps.storage.getItem(key) !== serialized) throw new Error('Não foi possível salvar o pedido para recuperação.');
       }
       let response: { data: unknown; error: unknown };
       try { response = await deps.send(kind, row.payload); }

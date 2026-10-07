@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {QueryClient,QueryClientProvider,useQuery} from '@tanstack/react-query';
+import {QueryClient,QueryClientProvider,useQuery,onlineManager} from '@tanstack/react-query';
 import type {AuthChangeEvent,Session} from '@supabase/supabase-js';
 import {useState,StrictMode} from 'react';
 import {AuthProvider,useAuth} from '@/hooks/useAuth';
@@ -21,8 +21,8 @@ function Identity(){const {user,signOut,backendUnavailable}=useAuth();return <><
 function TenantIdentity(){const {currentTenant,currentRole,setCurrentTenantId}=useTenant();const [draft,setDraft]=useState('');return <><output aria-label="tenant">{currentTenant?.id??'none'}</output><output aria-label="role">{currentRole??'none'}</output><input aria-label="draft QA" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={()=>setCurrentTenantId('tenant-b')}>Trocar tenant QA</button><button onClick={()=>setCurrentTenantId('unrelated')}>Tenant inválido QA</button></>;}
 function Story({tenant=false,read=false}:{tenant?:boolean;read?:boolean}){return <QueryClientProvider client={client}><GlobalAlert/><AuthProvider><Identity/>{tenant?<TenantProvider><TenantIdentity/>{read?<LegacyQuery/>:null}</TenantProvider>:null}</AuthProvider></QueryClientProvider>;}
 function LegacyQuery(){const {currentTenant}=useTenant();const {data}=useQuery({queryKey:['legacy-unscoped-data'],enabled:!!currentTenant,queryFn:async()=>currentTenant?.id,staleTime:Infinity});return <output aria-label="legacy">{data??'none'}</output>;}
-beforeEach(()=>{vi.clearAllMocks();current=null;mock.listeners.clear();localStorage.clear();client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:120000}}});mock.getSession.mockResolvedValue({data:{session:null},error:null});mock.getUser.mockImplementation(async()=>({data:{user:current?.user??null}}));mock.signOut.mockImplementation(async()=>{await emit(null);return {error:null};});mock.rpc.mockImplementation(()=>{const request=Promise.resolve({data:[membership('tenant-a'),membership('tenant-b')],error:null});return Object.assign(request,{abortSignal:()=>request});});});
-afterEach(()=>{cleanup();client.clear();useAlertStore.getState().onCancel?.();useAlertStore.getState().hideAlert();vi.restoreAllMocks();vi.useRealTimers();});
+beforeEach(()=>{onlineManager.setOnline(true);vi.clearAllMocks();current=null;mock.listeners.clear();localStorage.clear();client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:120000}}});mock.getSession.mockResolvedValue({data:{session:null},error:null});mock.getUser.mockImplementation(async()=>({data:{user:current?.user??null}}));mock.signOut.mockImplementation(async()=>{await emit(null);return {error:null};});mock.rpc.mockImplementation(()=>{const request=Promise.resolve({data:[membership('tenant-a'),membership('tenant-b')],error:null});return Object.assign(request,{abortSignal:()=>request});});});
+afterEach(()=>{cleanup();client.clear();onlineManager.setOnline(true);useAlertStore.getState().onCancel?.();useAlertStore.getState().hideAlert();vi.restoreAllMocks();vi.useRealTimers();});
 
 describe('real session and tenant providers',()=>{
  it('ignores an initial session response that arrives after logout',async()=>{const initial=deferred<{data:{session:Session};error:null}>();mock.getSession.mockReturnValue(initial.promise);render(<Story/>);await emit('actor-a');await emit(null);await act(async()=>initial.resolve({data:{session:session('actor-a')},error:null}));expect(screen.getByLabelText('actor')).toHaveTextContent('none');});
@@ -35,7 +35,7 @@ describe('real session and tenant providers',()=>{
  it('rejects selecting a tenant absent from current memberships',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));fireEvent.click(screen.getByText('Tenant inválido QA'));expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a');});
  it('does not reuse even an unscoped legacy query after switching tenants',async()=>{render(<Story tenant read/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('legacy')).toHaveTextContent('tenant-a'));fireEvent.click(screen.getByText('Trocar tenant QA'));await waitFor(()=>expect(screen.getByLabelText('legacy')).toHaveTextContent('tenant-b'));});
  it('cancels in-flight reads and ignores late completion after account replacement',async()=>{render(<Story/>);await emit('actor-a');const pending=deferred<string>();let signal:AbortSignal|undefined;const result=client.fetchQuery({queryKey:['late-private'],queryFn:context=>{signal=context.signal;return pending.promise;}}).catch(()=>undefined);await emit('actor-b');expect(signal?.aborted).toBe(true);pending.resolve('private actor-a');await result;expect(client.getQueryData(['late-private'])).toBeUndefined();});
- it('ignores a tenant response from the previous actor even if the transport ignores abort',async()=>{const pending=deferred<{data:ReturnType<typeof membership>[];error:null}>();mock.rpc.mockImplementationOnce(()=>Object.assign(pending.promise,{abortSignal:()=>pending.promise}));render(<Story tenant/>);await emit('actor-a');await emit('actor-b');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));await act(async()=>pending.resolve({data:[membership('old-actor-tenant','owner')],error:null}));expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a');expect(screen.getByLabelText('role')).toHaveTextContent('operator');});
+ it('ignores a tenant response from the previous actor even if the transport ignores abort',async()=>{const pending=deferred<{data:ReturnType<typeof membership>[];error:null}>();mock.rpc.mockImplementationOnce(()=>Object.assign(pending.promise,{abortSignal:()=>pending.promise}));render(<Story tenant/>);await emit('actor-a');await emit('actor-b');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));await act(async()=>pending.resolve({data:[membership('old-actor-tenant','owner')],error:null}));expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a');expect(screen.getByLabelText('role')).toHaveTextContent('operator');expect(readTenantMembershipCache('actor-a')).toBeNull();});
  it('preserves a draft on ordinary refresh but removes it on tenant replacement',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));fireEvent.change(screen.getByLabelText('draft QA'),{target:{value:'private draft'}});await emit('actor-a','TOKEN_REFRESHED','renewed');await waitFor(()=>expect(mock.rpc.mock.calls.length).toBeGreaterThan(1));expect(screen.getByLabelText('draft QA')).toHaveValue('private draft');fireEvent.click(screen.getByText('Trocar tenant QA'));expect(screen.getByLabelText('draft QA')).toHaveValue('');});
  it('hides memberships on failed revalidation and recovers with an explicit retry',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));mock.rpc.mockImplementationOnce(()=>{const value=Promise.resolve({data:null,error:new Error('denied QA')});return Object.assign(value,{abortSignal:()=>value});});await emit('actor-a','TOKEN_REFRESHED','renewed');await screen.findByRole('alert');expect(screen.queryByLabelText('tenant')).not.toBeInTheDocument();fireEvent.click(screen.getByText('Tentar novamente'));await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));});
  it('reopens a previously validated tenant offline without contacting the membership RPC',async()=>{
@@ -60,4 +60,41 @@ describe('real session and tenant providers',()=>{
  it('cancels a global confirmation when replacing the account',async()=>{render(<Story/>);await emit('actor-a');let pending!:Promise<boolean>;act(()=>{pending=confirmAction('Ação privada da conta A');});expect(screen.getByRole('alertdialog')).toBeInTheDocument();await emit('actor-b');expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();await expect(pending).resolves.toBe(false);expect(useAlertStore.getState().description).toBe('');});
  it('cancels a global prompt when replacing the tenant',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));let pending!:Promise<string|null>;act(()=>{pending=promptAction('Justificativa privada do tenant A');});fireEvent.click(screen.getByText('Trocar tenant QA'));expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();await expect(pending).resolves.toBeNull();});
  it('keeps a global confirmation through an ordinary same-context refresh',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));let pending!:Promise<boolean>;act(()=>{pending=confirmAction('Ação do contexto atual');});await emit('actor-a','TOKEN_REFRESHED','same-context-refreshed');await waitFor(()=>expect(mock.rpc.mock.calls.length).toBeGreaterThan(1));expect(screen.getByRole('alertdialog')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Confirmar'}));await expect(pending).resolves.toBe(true);});
+ it('preserves the same-context draft offline and through a pending reconnect membership read',async()=>{
+   let online=true;vi.spyOn(Navigator.prototype,'onLine','get').mockImplementation(()=>online);
+   render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+   fireEvent.change(screen.getByLabelText('draft QA'),{target:{value:'merged pending plan'}});
+   const before=mock.rpc.mock.calls.length;
+   await act(async()=>{online=false;window.dispatchEvent(new Event('offline'));});
+   await waitFor(()=>expect(screen.getByLabelText('draft QA')).toHaveValue('merged pending plan'));
+   expect(mock.rpc.mock.calls.length).toBe(before);
+   const pending=deferred<{data:ReturnType<typeof membership>[];error:null}>();
+   mock.rpc.mockImplementationOnce(()=>Object.assign(pending.promise,{abortSignal:()=>pending.promise}));
+   await act(async()=>{online=true;window.dispatchEvent(new Event('online'));});
+   await waitFor(()=>expect(mock.rpc.mock.calls.length).toBeGreaterThan(before));
+   expect(screen.getByLabelText('draft QA')).toHaveValue('merged pending plan');
+   await act(async()=>pending.resolve({data:[membership('tenant-a'),membership('tenant-b')],error:null}));
+   await waitFor(()=>expect(client.isFetching()).toBe(0));
+   expect(screen.getByLabelText('draft QA')).toHaveValue('merged pending plan');
+ });
+ it('revalidates the offline cache TTL instead of extending an in-memory membership indefinitely',async()=>{
+   let online=true;vi.spyOn(Navigator.prototype,'onLine','get').mockImplementation(()=>online);
+   render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+   const cached=readTenantMembershipCache('actor-a');expect(cached).not.toBeNull();
+   saveTenantMembershipCache('actor-a',cached!,new Date(Date.now()-8*24*60*60*1000));
+   await act(async()=>{online=false;window.dispatchEvent(new Event('offline'));});
+   await screen.findByRole('alert');expect(screen.queryByLabelText('role')).not.toBeInTheDocument();
+   expect(readTenantMembershipCache('actor-a')).toBeNull();
+   await act(async()=>{online=true;window.dispatchEvent(new Event('online'));});
+   await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+ });
+ it('resets a draft when authoritative revalidation changes the current role',async()=>{
+   render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+   fireEvent.change(screen.getByLabelText('draft QA'),{target:{value:'operator-only plan'}});
+   mock.rpc.mockImplementationOnce(()=>{const request=Promise.resolve({data:[membership('tenant-a','driver')],error:null});return Object.assign(request,{abortSignal:()=>request});});
+   await emit('actor-a','TOKEN_REFRESHED','role-changed');
+   await waitFor(()=>expect(screen.getByLabelText('role')).toHaveTextContent('driver'));
+   expect(screen.getByLabelText('draft QA')).toHaveValue('');
+ });
+
 });

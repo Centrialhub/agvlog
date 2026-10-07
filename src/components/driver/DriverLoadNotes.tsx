@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Download, ExternalLink, FileText, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -8,11 +8,11 @@ import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
 import {
   parseDriverFiscalCatalog,
-  parseDriverFiscalFile,
   type DriverFiscalDocument,
   type DriverFiscalDocumentKind,
   type DriverFiscalFileFormat,
 } from '@/lib/driver/fiscalCatalog';
+import { downloadDriverFiscalFile } from '@/lib/driver/fiscalFileDownload';
 import { printRomaneioRoutes, type RomaneioDoc } from '@/lib/romaneioPrint';
 
 interface Props {
@@ -52,6 +52,15 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id;
   const actorId = user?.id;
+  const context = [actorId, tenantId, loadId].join(':');
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  const fileAbort = useRef<AbortController | null>(null);
+  useEffect(() => {
+    setActiveFile(null);
+    setFileError(null);
+    return () => { fileAbort.current?.abort(); fileAbort.current = null; };
+  }, [context]);
   const canQuery = !!actorId && !!tenantId && !!loadId;
 
   const { data, isPending, isFetching, error, refetch } = useQuery({
@@ -100,49 +109,37 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
     document: DriverFiscalDocument,
     format: DriverFiscalFileFormat,
   ) => {
-    if (document.kind === 'nfe' || !tenantId) return;
-    const requestKey = document.id + ':' + format;
-    setActiveFile(requestKey);
+    if (document.kind === 'nfe' || !tenantId || !actorId) return;
+    const requestContext = context;
+    const controller = new AbortController();
+    fileAbort.current?.abort();
+    fileAbort.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 35_000);
+    setActiveFile(document.id + ':' + format);
     setFileError(null);
-
     try {
-      const { data: fileData, error: fileQueryError } = await supabase.rpc(
-        'driver_get_load_fiscal_file',
-        {
-          _tenant_id: tenantId,
-          _load_id: loadId,
-          _document_kind: document.kind,
-          _document_id: document.id,
-          _format: format,
-        },
-      );
-      if (fileQueryError) throw fileQueryError;
-
-      const file = parseDriverFiscalFile(fileData, {
-        loadId,
-        kind: document.kind,
-        documentId: document.id,
-        format,
-      });
-
-      const link = window.document.createElement('a');
-      link.rel = 'noopener noreferrer';
-      if (file.source === 'url') {
-        link.href = file.url;
-        link.target = '_blank';
-      } else {
-        const objectUrl = URL.createObjectURL(new Blob([file.content], { type: 'application/xml;charset=utf-8' }));
+      const file = await downloadDriverFiscalFile({
+        tenantId, actorId, loadId, kind: document.kind, documentId: document.id, format,
+      }, controller.signal);
+      if (controller.signal.aborted || fileAbort.current !== controller || currentContext.current !== requestContext) return;
+      const objectUrl = URL.createObjectURL(file.blob);
+      try {
+        const link = window.document.createElement('a');
+        link.rel = 'noopener noreferrer';
         link.href = objectUrl;
         link.download = file.filename;
         link.click();
-        URL.revokeObjectURL(objectUrl);
-        return;
-      }
-      link.click();
+      } finally { URL.revokeObjectURL(objectUrl); }
     } catch {
-      setFileError('Não foi possível abrir o arquivo fiscal. Tente novamente.');
+      if (fileAbort.current === controller && currentContext.current === requestContext) {
+        setFileError('Não foi possível abrir o arquivo fiscal. Tente novamente.');
+      }
     } finally {
-      setActiveFile(null);
+      clearTimeout(timeout);
+      if (fileAbort.current === controller) {
+        fileAbort.current = null;
+        if (currentContext.current === requestContext) setActiveFile(null);
+      }
     }
   };
 

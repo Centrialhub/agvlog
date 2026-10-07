@@ -177,10 +177,10 @@ describe("production configuration contract", () => {
       "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue", "agvlog-schedule-tenants",
       "agvlog-ssx-dispatcher",
       "clients-merge-contacts-addresses", "create-team-member", "cte-sefaz-callback",
-      "cte-status-poll", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
+      "cte-status-poll", "driver-fiscal-file", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
       "finance-fiscal-evidence-preview", "finance-image-runtime-benchmark", "finance-payable-xml",
       "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
-      "list-tenant-members", "nfse-status-poll", "portal-download-file", "search-users-by-email", "secure-upload",
+      "list-tenant-members", "manage-driver-access", "nfse-status-poll", "portal-download-file", "search-users-by-email", "secure-upload",
       "delivery-receipt-email-webhook", "finance-statement-verify", "geocode-address", "process-delivery-receipt-ocr", "process-delivery-receipt-portals", "send-delivery-receipts",
       "process-address-resolution-queue",
       "ssx-diagnostic", "ssx-insert-person", "ssx-insert-person-client", "ssx-login",
@@ -211,6 +211,8 @@ describe("production configuration contract", () => {
       "ssx-insert-person-client",
       "update-trip-live-status",
       "agvlog-process-vehicle",
+      "manage-driver-access",
+      "driver-fiscal-file",
     ];
 
     for (const name of userFunctions) {

@@ -40,6 +40,10 @@ vi.mock('@/integrations/supabase/client', async () => {
   const fetchFixture: typeof fetch = async (input, init) => {
     const url = new URL(String(input)); state.requests.push(url);
     const table = url.pathname.split('/').pop()!;
+    // Model the observed competing FKs for the real billing/catalog hooks.
+    if (table === 'fiscal_documents' && /\bloads\(/.test(url.searchParams.get('select') ?? '')) {
+      return new Response(JSON.stringify({code: 'PGRST201', message: 'Ambiguous fiscal-to-load embedding'}), {status: 300});
+    }
     if (table === state.failTable || (table === 'cte_documents' && url.searchParams.has('deleted_at'))) {
       return new Response(JSON.stringify({message: 'consulta indisponível'}), {status: 400});
     }
@@ -271,8 +275,8 @@ it('renders precisely the 11 local NFS-e sources and restores them after clearin
 
 it('requires an explicit individual or unified choice for multiple NFS-e sources', async () => {
   state.rows.fiscal_documents = [
-    invoice('NF-101', {recipient_city: 'Montes Claros'}),
-    invoice('NF-102', {recipient_city: 'Montes Claros'}),
+    invoice('NF-101', {recipient_city: 'Montes Claros', freight_value: 80}),
+    invoice('NF-102', {recipient_city: 'Montes Claros', freight_value: 120}),
   ];
   render(<MemoryRouter><Wrapper><NFSeFromInvoicesDialog open onOpenChange={vi.fn()} /></Wrapper></MemoryRouter>);
   await waitFor(() => expect(screen.getByRole('cell', {name: 'NF-101'})).toBeInTheDocument());
@@ -290,7 +294,7 @@ it('requires an explicit individual or unified choice for multiple NFS-e sources
 });
 
 it('uses individual mode semantically for a single NFS-e source without asking for a redundant choice', async () => {
-  state.rows.fiscal_documents = [invoice('NF-201', {recipient_city: 'Montes Claros'})];
+  state.rows.fiscal_documents = [invoice('NF-201', {recipient_city: 'Montes Claros', freight_value: 80})];
   render(<MemoryRouter><Wrapper><NFSeFromInvoicesDialog open onOpenChange={vi.fn()} /></Wrapper></MemoryRouter>);
   await waitFor(() => expect(screen.getByRole('cell', {name: 'NF-201'})).toBeInTheDocument());
 

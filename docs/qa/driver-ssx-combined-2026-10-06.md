@@ -1,0 +1,23 @@
+# QA — candidato conjunto motorista/SSX, 06/10/2026
+
+**Integração local autorizada em nova task sobre260; gates e homologação são vinculados ao SHA/tree do handoff externo após o commit.** As fontes e serviços do revisor permanecem preservados. Os inputs congelados foram registrados no ledger de preservação exigido pelo coordenador antes dos merges.
+
+Base preservada:260391729cd7bc5c334153d41b43bb6703783a61, treefce8b63786edb3941a0427d88a032958c4151644. Entradas SSX preservadas: a19399268f77831dbe45f9ca61021b311b474639/tree68dda3010ca166874e6e5fd573b7b8bd9524ba6b, seguida de b44625c69eca2f2f5274ef9ff8f860f341109e64/tree2d2e42638b5e287fed2d4c5a9c40695e5fd6f90b. Ambas devem permanecer ancestrais do novo candidato por merges do coordenador, sem reescrita do histórico.
+
+Delta:15 caminhos SSX e dois registros de integração (QA e suplemento combinado). Zero colisões de caminhos entre SSX e61ad→260 verificado. O novo forward20261006155532_align_ssx_cooldown_retry_after_contract.sql, SHA2563d900ef761181caf6d1ff49cd05dc518607550e3b9e8cf48d97f3e0cd3b93f57, entra como terceiro suplemento; total29. Os manifests13+13, seus26 SQL e os dois suplementos anteriores devem permanecer byte-idênticos. Não alterar verificador, reparo de ledger, histórico ou limites de qualidade para aceitar o inventário.
+
+Contrato SSX: opções booleanas explícitas; lookback positivo finito; janela respeita binding/cursor e limite temporal superior; execução manual não ignora cooldown ativo; Retry-After válido não é encurtado; SQL compatível com até86400 segundos decorridos nas duas RPCs, mantendo guards/tenant/locks/ACL/invoker. Forward/rollback são condicionados a fingerprints de predecessores/sucessores. Rollback preserva deadlines ativos, mas as guardas antigas voltam a restringir novas gravações longas.
+
+Evidência da frente SSX:273 testes/27 arquivos e12 grupos nativos PostgreSQL17.6 em fixture própria parcial com dez tabelas sintéticas. Hashes de15 arquivos e14 logs conferidos na integração de leitura; testes não reexecutados pelo integrador nesta fase. Há uma falha standalone de baseline pela ausência do migration no inventário combinado, que precisa ser resolvida pela inclusão revisada do suplemento. O ensaio separado de append não aprova uma árvore conjunta.
+
+Gates do novo candidato: **pendentes**. Depois da autorização e do commit do inventário, registrar SHA/tree e executar os27 gates locais completos com o conjunto SSX adicional no focused unit, runtimeNode22/npm10.9.4, deps próprias sem envs de produção, pipeline, baseline29, release/Edge, typecheck, lint/qualidade estrutural, browsers isolados, build/release metadata e hashes/logs. Manter falhas/retestes como evidência. A validação anterior de260 não é herdada.
+
+Homologação nativa: **pendente com o revisor exclusivo** no mesmo novo SHA/contrato. Confirmar fingerprints reais, catálogo/327 tabelas/oito buckets/ACL/RLS/Auth/PostgREST/Storage/gateway e execução das Edge sem recorrer ao provedor. Fixture nativa parcial não valida toda a aplicação. O integrador não muda fonte servida, servidor, build, volumes, dados da réplica ou produção; nenhuma aplicação remota SQL/Edge, chamada SSX adicional ou emissão fiscal pertence a esta integração.
+
+Entrega: congelar fonte nova após gates completos, verificar fontes260/SSX e forwards/manifests preservados, selar bundle/pré-requisito260, patch260→novo e logs/hashes. Informar delta antes da transição; revisor controla a mudança de ambiente. CI/Preview segue pendente de automações/backend isolado comprovados. Não preparar commit único de publicação nem mover integration/local/main para contornar a homologação.
+
+## Correções dos fixtures necessárias ao gate completo
+
+Dois inputs de teste sobre260 foram entregues pelos donos e preservados antes da integração: e16c24656df1daf18f481d3cb0dce23b527f5f75 (redelivery-query-adapter) e737af1e46c04e6f371611c4c0401f49720d8e348 (driver-fiscal-caller-contract-test). O primeiro adiciona apenas mock encadeável abortSignal e SheetDescription, mantendo os três cenários/assertions. O segundo acrescenta apenas driver_get_load_fiscal_file ao conjunto de RPCs caller JWT authenticated; não modifica grants, assertions ou implementação. Deltas conferidos literalmente; nenhuma mudança de produto/SQL/Edge. Resultados focados de origem não são herdados como aceite combinado; F05 usou Node24 e o combinado exige novo gate Node22.
+
+Agora o delta combinado tem19 caminhos:15 SSX, dois testes de correção e os dois registros de integração. Os28 forwards anteriores/manifests13+13 permanecem byte-idênticos e o novo total é29. A fonte260/revisor não foi alterada.

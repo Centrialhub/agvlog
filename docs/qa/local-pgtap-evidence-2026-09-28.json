@@ -1,0 +1,12 @@
+{
+  "startedAtUtc": "2026-09-28T18:45:15.01Z",
+  "completedAtUtc": "2026-09-28T18:45:17.878Z",
+  "sourceSha": "6606d3a929b5d449026dd20f73e44e0b770067c0",
+  "testSha256": "77182e6e73a85ea3389a43f58dba5fcc285e3fc0ac3107da9d5ee877359c8bd2",
+  "exitCode": 1,
+  "summary": [
+    "Files=1, Tests=110,  1 wallclock secs ( 0.01 usr  0.02 sys +  0.01 cusr  0.01 csys =  0.05 CPU)",
+    "Result: FAIL"
+  ],
+  "applicationReady": false
+}

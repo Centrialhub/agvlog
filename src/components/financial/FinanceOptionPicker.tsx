@@ -18,7 +18,7 @@ export function FinanceOptionPicker({ tenant, actor, kind, trip = null, label, v
   return <div className="space-y-2">
     <div className="flex items-center gap-2"><Button ref={trigger} type="button" variant="outline" className="h-auto min-h-10 whitespace-normal text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
       {label}: {value?.label || 'Selecionar'}</Button>{value && <Button type="button" variant="ghost" aria-label={`Limpar ${label}`} onClick={() => onChange(null)}>Limpar</Button>}</div>
-    {open && <div className="space-y-2 rounded border p-3" role="group" aria-label={`Selecionar ${label}`} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setOpen(false);trigger.current?.focus();}}}>
+    {open && <div data-finance-option-picker className="space-y-2 rounded border p-3" role="group" aria-label={`Selecionar ${label}`} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setOpen(false);trigger.current?.focus();}}}>
       <div className="flex gap-2"><Input ref={searchInput} aria-label={`Buscar ${label}`} value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => {
         if (e.key === 'Enter') {e.preventDefault();setTerm(search);setPage(1);}
       }} /><Button type="button" onClick={() => {setTerm(search);setPage(1);}}>Buscar</Button></div>

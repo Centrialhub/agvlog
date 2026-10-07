@@ -1,5 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { localDateInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, fmtDateInTimeZone, localDateInputValue } from '@/lib/utils/formatDate';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -40,9 +40,7 @@ import {
 
 import { Checkbox } from "@/components/ui/checkbox";
 
-const dt = (value?: string | null) => value
-  ? new Date(value.length <= 10 ? `${value}T00:00:00` : value).toLocaleDateString('pt-BR')
-  : '—';
+const dt = (value?: string | null, timeZone = APP_TIME_ZONE) => fmtDateInTimeZone(value, timeZone);
 const brl = (value?: number | null) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num3 = (value?: number | null) => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
@@ -69,6 +67,7 @@ export default function ImportedNotesSummary() {
   const toast = useSonnerToast();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
+  const tenantTimezone = currentTenant?.timezone || APP_TIME_ZONE;
   const { data: companyProfile } = useCompanyProfile();
   const {
     data: clients = [],
@@ -443,7 +442,7 @@ export default function ImportedNotesSummary() {
                   <TableCell className="max-w-[180px] truncate">{r.recipient || '—'}</TableCell>
                   <TableCell className="font-mono text-xs">{r.cte_number || '—'}</TableCell>
                   <TableCell className="font-mono text-xs">{r.nfse_number || '—'}</TableCell>
-                  <TableCell>{dt(r.issue_date)}</TableCell>
+                  <TableCell>{dt(r.issue_date, tenantTimezone)}</TableCell>
                   <TableCell>{r.origin_city ? `${r.origin_city}${r.origin_state ? '/' + r.origin_state : ''}` : '—'}</TableCell>
                   <TableCell>{r.recipient_city ? `${r.recipient_city}${r.recipient_state ? '/' + r.recipient_state : ''}` : '—'}</TableCell>
                   <TableCell className="text-right">{brl(r.value)}</TableCell>
@@ -507,8 +506,8 @@ export default function ImportedNotesSummary() {
               <DetailRow label="Peso" value={`${num3(detailRow.weight_kg)} kg`} />
               <DetailRow label="Volume" value={num3(detailRow.volume_count ?? detailRow.pallet_count)} />
               <DetailRow label="Situação" value={NOTE_STATUS_LABELS[detailRow.operational_status]} />
-              <DetailRow label="Data emissão" value={dt(detailRow.issue_date)} />
-              <DetailRow label="Data importação" value={dt(detailRow.imported_at || detailRow.created_at)} />
+              <DetailRow label="Data emissão" value={dt(detailRow.issue_date, tenantTimezone)} />
+              <DetailRow label="Data importação" value={dt(detailRow.imported_at || detailRow.created_at, tenantTimezone)} />
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button 
                   size="sm" 

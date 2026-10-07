@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "task": "driver-cargo-weight-server-20261006",
+  "owner": "CodexCargoServer",
+  "base": "61adbbb997667396541244da147b224defb22e94",
+  "baseTree": "328f33f69c352720574b24deebaa9d19bde7faaf",
+  "migration": {
+    "path": "supabase/migrations/20261006131127_enforce_driver_trip_cargo_weight_precision.sql",
+    "sha256": "dda43defded059b3b0c13f88893915692844e0fab879d96776a7b1ce85fa9001"
+  },
+  "rollback": {
+    "path": "docs/qa/driver-cargo-weight-server-rollback-2026-10-06.sql",
+    "sha256": "9629b2c7b1394310f0b3ba2155c67637631a9f9b13e8899d75d6112bf67ccb7f"
+  },
+  "files": [
+    {
+      "path": "supabase/migrations/20261006131127_enforce_driver_trip_cargo_weight_precision.sql",
+      "sha256": "dda43defded059b3b0c13f88893915692844e0fab879d96776a7b1ce85fa9001"
+    },
+    {
+      "path": "docs/qa/driver-cargo-weight-server-rollback-2026-10-06.sql",
+      "sha256": "9629b2c7b1394310f0b3ba2155c67637631a9f9b13e8899d75d6112bf67ccb7f"
+    },
+    {
+      "path": "src/test/helpers/tripCargoWeightPrecisionDatabase.ts",
+      "sha256": "011b22c802c1e5840dee7fdc239cc0a5222369f9bc7025129c1cb863a91b0d40"
+    },
+    {
+      "path": "src/test/driverTripCargoWeightDatabase.test.ts",
+      "sha256": "718a1592d9a62bb09a5ead1c4ec5ea925f6afa71c781711b58d0fc87839d66c2"
+    },
+    {
+      "path": "docs/qa/driver-cargo-weight-server-2026-10-06.md",
+      "sha256": "c92c6a68e879a825d3084dc03a1084e1d0d31630b61eb8fe4e29f7afad7c8f94"
+    }
+  ],
+  "target": "private.driver_update_trip_cargo(uuid,uuid,uuid,text,jsonb)",
+  "predecessorProsrcMd5": "b3d9ae1864f6e7cbf4fae8c4d6df7d80",
+  "successorProsrcMd5": "c1680fb132f7940e998c2078eb2defb5",
+  "preservedWrapperProsrcMd5": "54f27bd013f36ac7e1558cd783ffa3d1",
+  "preservedActorProsrcMd5": "2e5d786ae5ed1c66d0581dbcde858bde",
+  "configurationDelta": {
+    "addedFunctionLocal": "extra_float_digits=3",
+    "preserved": "search_path=\"\""
+  },
+  "contract": {
+    "unit": "kg",
+    "decimalPlaces": 2,
+    "rounding": "decimal_half_up",
+    "sourceRepresentation": "binary64 shortest decimal, then numeric half-up",
+    "manualExtraFraction": "reject",
+    "historicalWeights": "preserve",
+    "historicalReplay": "preserve",
+    "idempotencyPayload": "original unchanged"
+  },
+  "databaseApplied": false,
+  "published": false,
+  "nativeAcceptance": "pending with exclusive reviewer",
+  "candidateIdentity": "External handoff pins final commit/tree after committing this manifest; no self-referential SHA.",
+  "originalManifestsModified": false,
+  "notes": "Separate closed supplement. Integration owner incorporates only after combined-candidate validation."
+}

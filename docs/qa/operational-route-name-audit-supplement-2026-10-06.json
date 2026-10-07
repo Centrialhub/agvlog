@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "purpose": "A5 operational route name audit narrow supplement, separate from preserved13+13",
+  "reviewBase": "61adbbb997667396541244da147b224defb22e94",
+  "reviewBaseTree": "328f33f69c352720574b24deebaa9d19bde7faaf",
+  "originalManifestSha256": "2d4a89c621ec1e036493db7dc75cd0bee1e9485e9bb68e0a552180d5d07e6bc0",
+  "followupManifestSha256": "36dc5cc3086345ca3c9dc637cf456b498f71e76e2adefff23f75e726c93edc37",
+  "preservedForwardCount": 26,
+  "newForwards": [
+    {
+      "filename": "20261006124418_restore_operational_route_name_audit.sql",
+      "version": "20261006124418",
+      "sha256": "63d504933e3b2f43fffef97bc4aae5c4007c65234a3328bbb22a4ae3ca05d11f"
+    }
+  ],
+  "rollback": {
+    "filename": "docs/qa/operational-route-name-audit-rollback-2026-10-06.sql",
+    "sha256": "f2af64e6cf34904ba0cbf859567a68729a3607cd38cd761ab1b2f4b6ef8e23f0",
+    "restoresOriginalBlocker": true
+  },
+  "contract": {
+    "migration": "supabase/migrations/20261006124418_restore_operational_route_name_audit.sql",
+    "originalBodyNormalizedMd5": "4cfc805c86f0eea3960b7d5f4ddc31b5",
+    "fixedBodyNormalizedMd5": "f6ca5ae3ea7607acbb5f11beb2d946b6",
+    "writerBodyNormalizedMd5": "5cf6b4d6eb565dad13fac6a391137e21",
+    "contextBodyMd5": "27bf2e71e1cf52212ac213a23de03dd7",
+    "strategy": "preserve OID/ACL/binding; move same internal trigger to private; closed definer for audit API only; auth/tenant guards",
+    "appliedToNative": false
+  },
+  "appliedToNative": false,
+  "productionAuthorized": false,
+  "nativeReviewRequired": true
+}

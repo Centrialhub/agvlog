@@ -3,11 +3,12 @@ import { expect, test } from "@playwright/test";
 
 import { accounts, fixtureIds } from "./fixtures/accounts";
 import { loginThroughUi, passwordToken } from "./fixtures/session";
+import { waitForRenderedAnimations } from "./fixtures/renderedAnimations";
 
 test("@critical fiscal route stays fail-closed for unconfigured fixture tenants", async ({ page }) => {
   await loginThroughUi(page, accounts.operator);
   await page.goto("/billing");
-  await expect(page.getByRole("heading", { name: "Integração em implantação" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Recurso indisponível" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Nenhuma sincronização, emissão ou cancelamento será executado/)).toBeVisible();
 });
 
@@ -27,12 +28,15 @@ test("@critical known cross-tenant IDs return no REST rows", async ({ request })
 
 test("auth and fail-closed fixture screen have no serious axe violations", async ({ page }) => {
   await page.goto("/auth");
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  await waitForRenderedAnimations(page.locator('body'));
   const authResults = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(authResults.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
 
   await loginThroughUi(page, accounts.operator);
   await page.goto("/billing");
-  await expect(page.getByRole("heading", { name: "Integração em implantação" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Recurso indisponível" })).toBeVisible({ timeout: 20_000 });
+  await waitForRenderedAnimations(page.locator('main').first());
   const capabilityResults = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(capabilityResults.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
 });

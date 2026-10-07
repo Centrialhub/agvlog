@@ -251,7 +251,7 @@ export function useFiscalDocuments() {
       return fetchAllPostgrestPages<FiscalDocument>(async (from,to) => {
         const { data, error } = await supabase
           .from('fiscal_documents')
-          .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
+          .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads!fiscal_documents_load_id_fkey(load_number), orders(order_number)')
           .eq('tenant_id', currentTenant.id)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })

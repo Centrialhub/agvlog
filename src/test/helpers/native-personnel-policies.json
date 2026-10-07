@@ -1,0 +1,167 @@
+[
+  {
+    "cmd": "ALL",
+    "qual": "private.is_request_tenant_member(tenant_id)",
+    "check": "private.is_request_tenant_member(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employee_incident_actions",
+    "policy": "agvlog_active_tenant_context",
+    "permissive": "RESTRICTIVE"
+  },
+  {
+    "cmd": "DELETE",
+    "qual": "is_tenant_admin(tenant_id)",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employee_incident_actions",
+    "policy": "agvlog_delete_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "INSERT",
+    "qual": null,
+    "check": "is_tenant_operator_or_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employee_incident_actions",
+    "policy": "agvlog_insert_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "UPDATE",
+    "qual": "is_tenant_operator_or_admin(tenant_id)",
+    "check": "is_tenant_operator_or_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employee_incident_actions",
+    "policy": "agvlog_update_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "SELECT",
+    "qual": "(is_tenant_operator_or_admin(tenant_id) OR (is_tenant_member(tenant_id) AND (EXISTS ( SELECT 1\n   FROM employees employee\n  WHERE ((employee.id = employee_incident_actions.employee_id) AND (employee.tenant_id = employee_incident_actions.tenant_id) AND (employee.user_id = ( SELECT auth.uid() AS uid)))))))",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employee_incident_actions",
+    "policy": "eia_select",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "ALL",
+    "qual": "private.is_request_tenant_member(tenant_id)",
+    "check": "private.is_request_tenant_member(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employees",
+    "policy": "agvlog_active_tenant_context",
+    "permissive": "RESTRICTIVE"
+  },
+  {
+    "cmd": "DELETE",
+    "qual": "is_tenant_admin(tenant_id)",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employees",
+    "policy": "agvlog_delete_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "INSERT",
+    "qual": null,
+    "check": "is_tenant_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employees",
+    "policy": "agvlog_insert_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "SELECT",
+    "qual": "is_tenant_operator_or_admin(tenant_id)",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employees",
+    "policy": "agvlog_select_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "UPDATE",
+    "qual": "is_tenant_admin(tenant_id)",
+    "check": "is_tenant_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "employees",
+    "policy": "agvlog_update_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "SELECT",
+    "qual": "(is_tenant_operator_or_admin(tenant_id) OR (is_tenant_member(tenant_id) AND (EXISTS ( SELECT 1\n   FROM employees employee\n  WHERE ((employee.id = incident_responsible.employee_id) AND (employee.tenant_id = incident_responsible.tenant_id) AND (employee.user_id = ( SELECT auth.uid() AS uid)))))))",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "incident_responsible",
+    "policy": "Assigned employees and operators can view incident_responsible",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "ALL",
+    "qual": "private.is_request_tenant_member(tenant_id)",
+    "check": "private.is_request_tenant_member(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "incident_responsible",
+    "policy": "agvlog_active_tenant_context",
+    "permissive": "RESTRICTIVE"
+  },
+  {
+    "cmd": "DELETE",
+    "qual": "is_tenant_admin(tenant_id)",
+    "check": null,
+    "roles": [
+      "authenticated"
+    ],
+    "table": "incident_responsible",
+    "policy": "agvlog_delete_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "INSERT",
+    "qual": null,
+    "check": "is_tenant_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "incident_responsible",
+    "policy": "agvlog_insert_authenticated",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "cmd": "UPDATE",
+    "qual": "is_tenant_admin(tenant_id)",
+    "check": "is_tenant_admin(tenant_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "table": "incident_responsible",
+    "policy": "agvlog_update_authenticated",
+    "permissive": "PERMISSIVE"
+  }
+]

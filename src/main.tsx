@@ -16,8 +16,8 @@ function registerServiceWorker() {
     window.location.reload();
   };
   navigator.serviceWorker.addEventListener('controllerchange', reloadForControllerChange);
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').then(registration => {
+  const register = () => {
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache:'none' }).then(registration => {
       const announceUpdate=()=>window.dispatchEvent(new CustomEvent('agvlog:pwa-update',{detail:{registration}}));
       if(registration.waiting)announceUpdate();
       registration.addEventListener('updatefound',()=>{
@@ -26,9 +26,12 @@ function registerServiceWorker() {
           if(worker.state==='installed'&&navigator.serviceWorker.controller)announceUpdate();
         });
       });
-      void registration.update();
-    });
-  });
+      void registration.update().catch(() => undefined);
+    }).catch(() => undefined);
+  };
+  // Deferred application imports may resolve after the page load event.
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
 }
 
 function BootstrapFailure({ configuration = false }: { configuration?: boolean }) {
@@ -66,6 +69,8 @@ if (configurationIssues.length > 0) {
   console.error("[bootstrap] invalid public runtime configuration", { issues: configurationIssues });
   root.render(<BootstrapFailure configuration />);
 } else {
+  // Recover/update the installed shell even when an old bootstrap chunk fails.
+  registerServiceWorker();
   void Promise.all([
     import("./App.tsx"),
     import("./components/AppErrorBoundary"),
@@ -74,7 +79,6 @@ if (configurationIssues.length > 0) {
   ]).then(([{ default: App }, { AppErrorBoundary }, { installGlobalErrorTelemetry }, { installPerformanceTelemetry }]) => {
     installGlobalErrorTelemetry();
     installPerformanceTelemetry();
-    registerServiceWorker();
     root.render(
       <AppErrorBoundary>
         <App />

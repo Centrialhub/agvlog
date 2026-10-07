@@ -1,25 +1,36 @@
 import { CheckCircle, Package, PenLine } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { isStopTerminal, stopStatusLabel } from '@/lib/status/stopStatus';
 import { getStopOrderNumber, type DeliveryEventSelection, type DriverStop } from './driverDeliveryEvents';
 
 type Props = {
+  onCloseAutoFocus?: (event: Event) => void;
   stop: DriverStop | null;
+  loading?: boolean;
+  refreshError?: boolean;
+  onRefresh?: () => unknown;
+  actionsDisabled?: boolean;
   onClose: () => void;
   onOpenCatalog: (stop: DriverStop) => void;
   onSelectEvent: (selection: DeliveryEventSelection) => void;
 };
 
-export function DriverDeliveryDetailSheet({ stop, onClose, onOpenCatalog, onSelectEvent }: Props) {
+export function DriverDeliveryDetailSheet({ stop, onClose, onOpenCatalog, onSelectEvent, loading = false, refreshError = false, onRefresh, actionsDisabled = false, onCloseAutoFocus }: Props) {
   return (
     <Sheet open={!!stop} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
+      <SheetContent onCloseAutoFocus={onCloseAutoFocus} side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-base text-center">Entrega</SheetTitle>
+          <SheetDescription className="sr-only">Consulte o cliente, o documento, a saída e o status atual desta entrega.</SheetDescription>
         </SheetHeader>
+        {refreshError && <div role="alert" className="space-y-2 text-sm">
+          <p>Não foi possível atualizar esta entrega. Tente novamente antes de lançar um evento.</p>
+          {onRefresh && <button type="button" onClick={() => void onRefresh()}>Tentar novamente</button>}
+        </div>}
+        {loading && <p role="status">Atualizando os dados desta entrega. Aguarde antes de lançar um evento.</p>}
         {stop && (
           <div className="space-y-4 mt-2">
             <div className="flex justify-center">
@@ -78,7 +89,7 @@ export function DriverDeliveryDetailSheet({ stop, onClose, onOpenCatalog, onSele
                 size="lg"
                 className="flex-1"
                 onClick={() => onOpenCatalog(stop)}
-                disabled={isStopTerminal(stop.status)}
+                disabled={actionsDisabled || loading || isStopTerminal(stop.status)}
               >
                 <PenLine className="h-4 w-4 mr-1.5" /> Lançar evento
               </Button>
@@ -86,7 +97,7 @@ export function DriverDeliveryDetailSheet({ stop, onClose, onOpenCatalog, onSele
                 size="lg"
                 className="flex-1"
                 onClick={() => onSelectEvent({ stop, eventKey: 'entregue' })}
-                disabled={isStopTerminal(stop.status)}
+                disabled={actionsDisabled || loading || isStopTerminal(stop.status)}
               >
                 <CheckCircle className="h-4 w-4 mr-1.5" /> TudoEntregue
               </Button>

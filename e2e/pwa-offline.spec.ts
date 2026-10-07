@@ -12,6 +12,8 @@ test.describe('PWA offline shell',()=>{
     await page.reload({waitUntil:'networkidle'});
     const onlineText=(await page.locator('body').innerText()).trim();
     expect(onlineText.length).toBeGreaterThan(20);
+    await expect(page.getByRole('button',{name:'Entrar',exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Não foi possível iniciar a aplicação'})).toHaveCount(0);
     await expect(page.locator('.vite-error-overlay')).toHaveCount(0);
     const cacheNames=await page.evaluate(()=>caches.keys());
     expect(cacheNames.some(name=>name.startsWith('agvlog-driver-shell-'))).toBe(true);
@@ -24,7 +26,8 @@ test.describe('PWA offline shell',()=>{
 
     await context.setOffline(true);
     await page.goto('/auth',{waitUntil:'domcontentloaded'});
-    await expect.poll(async()=>(await page.locator('body').innerText()).trim().length).toBeGreaterThan(20);
+    await expect(page.getByRole('button',{name:'Entrar',exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Não foi possível iniciar a aplicação'})).toHaveCount(0);
     await expect(page.locator('.vite-error-overlay')).toHaveCount(0);
     expect(pageErrors).toEqual([]);
   });

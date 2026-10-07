@@ -32,6 +32,8 @@ async function cacheApplicationShell() {
     // worker keeps serving the previous complete build.
     await cache.addAll(required);
     await cache.put('/', response);
+    const build=await (await cache.match('/driver-build.json')).json();
+    if(build?.buildHash!==BUILD_HASH)throw new Error('Application shell build mismatch');
     const cached=await Promise.all(['/',...required].map(path=>cache.match(path)));
     if(cached.some(entry=>!entry))throw new Error('Application shell cache incomplete');
     for (let index=0;index<required.length;index++) {
@@ -71,12 +73,12 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/rest/') || url.pathname.startsWith('/auth/')) return;
+  if (url.origin !== self.location.origin || /^\/(?:rest|auth|functions|storage|realtime)\//.test(url.pathname)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(request).then((cached) => cached || cache.match('/')))),
     );
     return;
   }
@@ -89,14 +91,21 @@ self.addEventListener('fetch', (event) => {
     && url.pathname.startsWith('/icons/');
 
   if (isBuildAsset || isPublicImage) {
-    event.respondWith(
-      // Vite preview/CDNs may emit `Vary: Origin`; module scripts use
-      // `crossorigin` while install-time requests do not. The URL is immutable
-      // and content-hashed, so matching it while ignoring Vary is intentional.
-      caches.match(url.pathname, { ignoreSearch:true, ignoreVary:true }).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
-        return response;
-      })),
-    );
+    const result = caches.open(CACHE_NAME).catch(() => null).then(async (cache) => {
+      // Waiting/obsolete workers must not contribute another build's shell.
+      const cached = cache ? await cache.match(url.pathname, { ignoreSearch:true, ignoreVary:true }).catch(() => undefined) : null;
+      if (cached) return { response:cached, write:Promise.resolve() };
+      const response = await fetch(request);
+      const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+      const validType = url.pathname.endsWith('.js') ? /(?:javascript|ecmascript)/.test(contentType)
+        : url.pathname.endsWith('.css') ? contentType.startsWith('text/css') : isPublicImage ? contentType.startsWith('image/') : true;
+      // Clone synchronously, before the page can consume the returned body.
+      const copy = cache && response.ok && validType ? response.clone() : null;
+      const write = copy ? cache.put(url.pathname, copy).catch(() => undefined) : Promise.resolve();
+      return { response, write };
+    });
+    event.respondWith(result.then(({ response }) => response));
+    // Register lifetime work synchronously; response delivery need not await IDB.
+    event.waitUntil(result.then(({ write }) => write).catch(() => undefined));
   }
 });

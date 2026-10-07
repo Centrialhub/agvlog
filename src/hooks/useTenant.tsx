@@ -48,12 +48,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [switchingTenant,setSwitchingTenant]=useState(false);
   const [tenantContextError,setTenantContextError]=useState<string|null>(null);
   const switchingTenantRef=useRef(false);
+  const pendingActivation=useRef<{actor:string;id:string;role:Membership['role'];revision:number}|null>(null);
   const syncRevision=useRef(0);
+  const mounted=useRef(false);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;++syncRevision.current;};},[actor]);
   const queryClient=useQueryClient();
   const authClient=(supabase as typeof supabase&{auth?:typeof supabase.auth}).auth;
   const canRefreshTenantClaim=typeof authClient?.refreshSession==='function';
   const query = useQuery({
-    queryKey: [MEMBERSHIP_QUERY, actor, online ? 'online' : 'offline'], enabled: !!actor && !authLoading,
+    // Connectivity changes revalidate the same actor rather than replacing its
+    // confirmed scope and unmounting in-progress plans. Offline reads are local.
+    queryKey: [MEMBERSHIP_QUERY, actor], enabled: !!actor && !authLoading,
+    networkMode: 'always', refetchOnReconnect: false,
     queryFn: async ({ signal }) => {
       if (!actor) return EMPTY_MEMBERSHIPS;
       if (!online) {
@@ -62,19 +68,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         return cached;
       }
       const fresh = await readTenantMemberships(signal);
+      if(signal.aborted)throw new DOMException('Membership read cancelled','AbortError');
       saveTenantMembershipCache(actor, fresh);
       return fresh;
     },
     retry: false, staleTime: 0, gcTime: 0,
   });
   const previousToken = useRef(session?.access_token);
+  const previousOnline = useRef(online);
   const { refetch } = query;
   useEffect(() => {
-    if (previousToken.current !== session?.access_token) {
-      previousToken.current = session?.access_token;
-      if (actor) void refetch();
-    }
-  }, [actor, session?.access_token, refetch]);
+    const changed=previousToken.current!==session?.access_token||previousOnline.current!==online;
+    previousToken.current=session?.access_token;previousOnline.current=online;
+    if(actor&&!authLoading&&changed)void refetch();
+  }, [actor, authLoading, online, session?.access_token, refetch]);
 
   const memberships = actor && !query.isError ? query.data ?? EMPTY_MEMBERSHIPS : EMPTY_MEMBERSHIPS;
   const claimTenant=tokenTenant(session?.access_token);
@@ -85,6 +92,19 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     : actor && selection?.actor === actor ? selection.tenant : actor ? readTenantSelection(actor) : null;
   const currentMembership = memberships.find(m => m.tenant_id === preferred) ?? memberships[0];
   const tenant = currentMembership?.tenant_id;
+  const role=currentMembership?.role;
+  const identity=useRef({actor,tenant,role});identity.current={actor,tenant,role};
+  const previousContext=useRef({tenant,role});
+  useEffect(()=>{
+    const target=pendingActivation.current;
+    // The signed target may have a different role from the source company.
+    // Only this confirmed target transition belongs to the pending switch.
+    const completingSwitch=switchingTenantRef.current&&target?.revision===syncRevision.current&&target.actor===actor&&target.id===tenant&&target.role===role;
+    if((previousContext.current.tenant!==tenant||previousContext.current.role!==role)&&!completingSwitch){
+      ++syncRevision.current;switchingTenantRef.current=false;setSwitchingTenant(false);setTenantContextError(null);
+    }
+    previousContext.current={tenant,role};
+  },[actor,role,tenant]);
   useEffect(()=>{
     if(!actor||!tenant){switchingTenantRef.current=false;clearActiveTenantId();setSwitchingTenant(false);setTenantContextError(null);return;}
     // A TOKEN_REFRESHED event is emitted before an explicit tenant switch can
@@ -92,31 +112,38 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     // the previous tenant while that signed switch is still in flight.
     if(switchingTenantRef.current)return;
     const revision=++syncRevision.current;
+    let alive=true;
+    const current=()=>alive&&mounted.current&&syncRevision.current===revision&&identity.current.actor===actor&&identity.current.tenant===tenant&&identity.current.role===role;
+    const release=()=>{alive=false;if(syncRevision.current===revision)switchingTenantRef.current=false;clearActiveTenantId(tenant);};
     setActiveTenantId(tenant);
     saveTenantSelection(actor,tenant);
-    if(tokenTenant(session?.access_token)===tenant||!online){switchingTenantRef.current=false;setSwitchingTenant(false);setTenantContextError(null);return()=>clearActiveTenantId(tenant);}
+    if(tokenTenant(session?.access_token)===tenant||!online){switchingTenantRef.current=false;setSwitchingTenant(false);setTenantContextError(null);return release;}
     const refresh=authClient?.refreshSession;
-    if(typeof refresh!=='function'){switchingTenantRef.current=false;setSwitchingTenant(false);return()=>clearActiveTenantId(tenant);}
+    if(typeof refresh!=='function'){switchingTenantRef.current=false;setSwitchingTenant(false);return release;}
     switchingTenantRef.current=true;
     setSwitchingTenant(true);setTenantContextError(null);
     void (async()=>{
       const activation=await supabase.rpc('set_active_tenant_context_v1',{_tenant_id:tenant});
+      if(!current())return;
       if(activation.error)throw activation.error;
       const renewed=await refresh.call(authClient);
+      if(!current())return;
       if(renewed.error)throw renewed.error;
       if(tokenTenant(renewed.data.session?.access_token)!==tenant)throw new Error('active_tenant_claim_missing');
-      if(syncRevision.current===revision){switchingTenantRef.current=false;setActiveTenantId(tenant);setSwitchingTenant(false);}
+      if(current()){switchingTenantRef.current=false;setActiveTenantId(tenant);setSwitchingTenant(false);}
     })().catch(error=>{
       console.error('[useTenant] active tenant synchronization failed',error);
-      if(syncRevision.current===revision){switchingTenantRef.current=false;clearActiveTenantId(tenant);setSwitchingTenant(false);setTenantContextError('Não foi possível confirmar a empresa ativa em todos os canais. Tente selecionar a empresa novamente.');}
+      if(current()){switchingTenantRef.current=false;clearActiveTenantId(tenant);setSwitchingTenant(false);setTenantContextError('Não foi possível confirmar a empresa ativa em todos os canais. Tente selecionar a empresa novamente.');}
     });
-    return()=>clearActiveTenantId(tenant);
-  },[actor,authClient,online,session?.access_token,tenant]);
+    return release;
+  },[actor,authClient,online,session?.access_token,tenant,role]);
   const activateTenantId = async (id: string):Promise<boolean> => {
-    if (!actor || !memberships.some(m => m.tenant_id === id)) return false;
+    const target=memberships.find(m=>m.tenant_id===id);
+    if (!actor || !target) return false;
     if(id===tenant&&!tenantContextError&&!switchingTenantRef.current)return true;
     const previousTenant=tenant;
     const revision=++syncRevision.current;
+    const current=()=>mounted.current&&syncRevision.current===revision&&identity.current.actor===actor&&((identity.current.tenant===previousTenant&&identity.current.role===role)||(identity.current.tenant===id&&identity.current.role===target.role));
     setTenantContextError(null);
     if(!online){
       switchingTenantRef.current=false;
@@ -128,6 +155,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       switchingTenantRef.current=false;
       setActiveTenantId(id);saveTenantSelection(actor,id);setSelection({actor,tenant:id});setSwitchingTenant(false);return true;
     }
+    pendingActivation.current={actor,id,role:target.role,revision};
     switchingTenantRef.current=true;
     setSwitchingTenant(true);
     const realtime=supabase as typeof supabase&{removeAllChannels?:()=>Promise<unknown>};
@@ -139,40 +167,49 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const refresh=authClient?.refreshSession;
       if(typeof refresh==='function'){
         const validated=await refresh.call(authClient);
+        if(!current())return false;
         if(validated.error)throw validated.error;
       }
+      if(!current())return false;
       await queryClient.cancelQueries();
+      if(!current())return false;
       setActiveTenantId(id);
       void realtime.removeAllChannels?.();
       const activation=await supabase.rpc('set_active_tenant_context_v1',{_tenant_id:id});
+      if(!current())return false;
       if(activation.error)throw activation.error;
        activationCommitted=true;
        if(typeof refresh==='function'){
          const renewed=await refresh.call(authClient);
+         if(!current())return false;
          if(renewed.error)throw renewed.error;
          if(tokenTenant(renewed.data.session?.access_token)!==id)throw new Error('active_tenant_claim_missing');
        }
-       if(syncRevision.current===revision){
+       if(current()){
          switchingTenantRef.current=false;
          saveTenantSelection(actor,id);
          setSelection({actor,tenant:id});
          setSwitchingTenant(false);
        }
-       return true;
+       return current();
     }catch(error){
       console.error('[useTenant] explicit tenant activation failed',error);
+      if(!current())return false;
       if(activationCommitted&&previousTenant){
         setActiveTenantId(previousTenant);
         const rollback=await supabase.rpc('set_active_tenant_context_v1',{_tenant_id:previousTenant});
+        if(!current())return false;
         if(rollback.error)console.error('[useTenant] tenant activation rollback failed',rollback.error);
       }
-      if(syncRevision.current===revision){
+      if(current()){
         switchingTenantRef.current=false;
         if(previousTenant)setActiveTenantId(previousTenant);else clearActiveTenantId();
         setSwitchingTenant(false);
         setTenantContextError(tenantActivationErrorMessage(error));
       }
       return false;
+    }finally{
+      if(pendingActivation.current?.revision===revision)pendingActivation.current=null;
     }
   };
   const handleSetTenantId = (id: string) => { void activateTenantId(id); };

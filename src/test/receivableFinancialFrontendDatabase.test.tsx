@@ -60,8 +60,21 @@ describe('financial UI backed by real SQL commands',{timeout:15000},()=>{
  it('loads and refunds the 501st payment through the real paged reader and canonical command',async()=>{
   const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
   const original=await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:1,effective_date:'2025-01-01'}));
-  for(let index=0;index<500;index++){await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:1}));if(index%25===0)await new Promise(resolve=>setTimeout(resolve,0));}
+  const seed=await financialPayload(db,s.receivable,{amount_cents:1});
+  expect(seed.expected_revision).toBe(original.revision);
+  expect(seed).toMatchObject({version:1,tenant_id:i.tenant,actor_id:i.operator,
+   receivable_id:s.receivable,action:'receive',amount_cents:1,
+   bank_account_id:s.bank,method:'pix'});
+  let revision=seed.expected_revision;
+  for(let index=0;index<500;index++){
+   const result=await financialCommand(db,{...seed,
+    request_id:'cf620000-0000-4000-8000-'+String(index+1).padStart(12,'0'),
+    expected_revision:revision});
+   revision=result.revision;
+   if(index%25===0)await new Promise(resolve=>setTimeout(resolve,0));
+  }
   const context=(await operationRpc<{result:{payments:{id:string}[];revision:string}}>(db,'select get_receivable_financial_context($1,$2) result',[i.tenant,s.receivable])).rows[0].result;
+  expect(context.revision).toBe(revision);
   expect(context.payments).toHaveLength(500);expect(context.payments.some(payment=>payment.id===original.payment_id)).toBe(false);
   render(<Story receivable={s.receivable}/>);
   for(let page=1;page<=10;page++){await screen.findByText(`501 recebimento(s) no histórico completo · página ${page} de 11`);fireEvent.click(screen.getByRole('button',{name:'Próxima página de recebimentos'}));}

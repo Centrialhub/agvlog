@@ -14,9 +14,9 @@ interface CachedResponse {
 type WorkerHandler=(event:Record<string,unknown>)=>void;
 
 function response(body:string|unknown,ok=true,contentType='text/plain'):CachedResponse {
-  const text=typeof body==='string'?body:JSON.stringify(body);
+  const text=typeof body==='string'?body:JSON.stringify(body);let consumed=false;
   return {ok,headers:{get:name=>name.toLowerCase()==='content-type'?contentType:null},
-    clone:()=>response(body,ok,contentType),text:async()=>text,json:async()=>JSON.parse(text)};
+    clone:()=>{if(consumed)throw new Error('body already consumed');return response(body,ok,contentType);},text:async()=>{consumed=true;return text;},json:async()=>{consumed=true;return JSON.parse(text);}};
 }
 
 function pathOf(request:unknown){
@@ -26,12 +26,13 @@ function pathOf(request:unknown){
 }
 
 function serviceWorkerHarness(shared:{stores:Map<string,Map<string,CachedResponse>>;indexedDB:{pending:Map<string,unknown>;deleteDatabase:ReturnType<typeof vi.fn>}},
-  hash:string,failPath?:string,htmlFallbackPath?:string){
+  hash:string,failPath?:string,htmlFallbackPath?:string,metadataHash=hash){
   const handlers=new Map<string,WorkerHandler>(),claim=vi.fn(async()=>undefined),skipWaiting=vi.fn();let online=true;
   let shellHtml='<html><script src="/assets/index.js"></script></html>';
   const fetch=async(request:unknown)=>{
     const path=pathOf(request);if(!online||path===failPath)throw new Error('offline');
     if(path==='/'||path==='/driver')return response(shellHtml,true,'text/html');
+    if(path==='/driver-build.json')return response({buildHash:metadataHash},true,'application/json');
     if(path==='/driver-shell-assets.json')return response(['/assets/DriverDeliveries.js'],true,'application/json');
     if(path===htmlFallbackPath)return response('<html>SPA fallback</html>',true,'text/html');
     return response(`asset:${path}`,true,path.endsWith('.js')?'application/javascript':'text/plain');
@@ -112,4 +113,28 @@ describe('driver PWA safe build upgrade',()=>{
     expect(saved.files[0]).toMatchObject({size:pendingBlob.size,type:'image/jpeg'});
     expect(shared.indexedDB.deleteDatabase).not.toHaveBeenCalled();
   });
+  it('rejects a manifest from another build without replacing the active complete cache',async()=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const first=serviceWorkerHarness(shared,'build-one');await first.waitFor('install');await first.waitFor('activate');
+    const mismatched=serviceWorkerHarness(shared,'build-two',undefined,undefined,'build-one');await expect(mismatched.waitFor('install')).rejects.toThrow('Application shell build mismatch');expect([...shared.stores.keys()]).toEqual(['agvlog-driver-shell-build-one']);
+  });
+  it('persists runtime responses through waitUntil after the consumer reads the original body',async()=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const active=serviceWorkerHarness(shared,'build-runtime');await active.waitFor('install');await active.waitFor('activate');
+    let answer!:Promise<CachedResponse>,lifetime!:Promise<unknown>;
+    active.handlers.get('fetch')?.({request:{method:'GET',url:'https://app.test/assets/runtime.js',mode:'cors',destination:''},respondWith:(value:Promise<CachedResponse>)=>{answer=value;},waitUntil:(value:Promise<unknown>)=>{lifetime=value;}});
+    expect(lifetime).toBeDefined();expect(await (await answer).text()).toBe('asset:/assets/runtime.js');await lifetime;
+    expect(await shared.stores.get('agvlog-driver-shell-build-runtime')?.get('/assets/runtime.js')?.text()).toBe('asset:/assets/runtime.js');
+  });
+  it('does not serve another cache or persist an HTML fallback as a JavaScript module',async()=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>([['foreign-cache',new Map([['/assets/runtime.js',response('foreign')]])]]),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const active=serviceWorkerHarness(shared,'build-runtime',undefined,'/assets/html.js');await active.waitFor('install');await active.waitFor('activate');
+    const read=async(path:string)=>{let answer!:Promise<CachedResponse>,lifetime!:Promise<unknown>;active.handlers.get('fetch')?.({request:{method:'GET',url:'https://app.test'+path,mode:'cors',destination:''},respondWith:(value:Promise<CachedResponse>)=>{answer=value;},waitUntil:(value:Promise<unknown>)=>{lifetime=value;}});const body=await (await answer).text();await lifetime;return body;};
+    expect(await read('/assets/runtime.js')).toBe('asset:/assets/runtime.js');expect(await read('/assets/html.js')).toContain('SPA fallback');expect(shared.stores.get('agvlog-driver-shell-build-runtime')?.has('/assets/html.js')).toBe(false);expect(shared.stores.has('foreign-cache')).toBe(true);
+  });
+  it.each(['rest','auth','functions','storage','realtime'])('never intercepts private %s API requests even as navigations',async prefix=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const active=serviceWorkerHarness(shared,'build-runtime'),respondWith=vi.fn(),waitUntil=vi.fn();active.handlers.get('fetch')?.({request:{method:'GET',url:'https://app.test/'+prefix+'/v1/private',mode:'navigate',destination:'document'},respondWith,waitUntil});expect(respondWith).not.toHaveBeenCalled();expect(waitUntil).not.toHaveBeenCalled();
+  });
+
 });

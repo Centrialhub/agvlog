@@ -104,6 +104,29 @@ describe('atomic payable bulk settlement',()=>{
     expect((await db.query('select count(*)::int n from payables_payments')).rows).toEqual([{n:0}]);
   });
 
+  it('exposes an increased authoritative balance while preserving intentional partial settlement',async()=>{
+    const m=await movement(),p=await payable(300),q=await payable(200),items=proposal([p,q],[30000,20000]);
+    const selected=await preview(m,items);
+    expect(selected.items.find(row=>row.payable_id===p)).toMatchObject({remaining_cents:'30000',amount_cents:'30000'});
+
+    await db.query('update payables set amount=350 where id=$1',[p]);
+    const current=await preview(m,items);
+    expect(current.eligible).toBe(true);
+    expect(current.expected_revision).not.toBe(selected.expected_revision);
+    expect(current.items.find(row=>row.payable_id===p)).toMatchObject({remaining_cents:'35000',amount_cents:'30000'});
+    await expect(apply(command(m,selected,items))).rejects.toThrow('finance_payable_bulk_changed');
+    expect((await db.query('select count(*)::int n from payables_payments')).rows).toEqual([{n:0}]);
+
+    // A fresh, deliberate partial amount is valid. The UI must compare the
+    // selected balance with this preview before offering confirmation.
+    const confirmed=await apply(command(m,current,items));
+    expect(confirmed.confirmed).toBe(true);
+    expect((await db.query<{status:string;paid_amount:string}>(
+      'select status,trunc(paid_amount,2)::text paid_amount from payables where id=$1',[p])).rows)
+      .toEqual([{status:'partial',paid_amount:'300.00'}]);
+    expect((await db.query('select count(*)::int n from payables_payments')).rows).toEqual([{n:2}]);
+  });
+
   it('rolls back the first item if the final item or its audit chain fails',async()=>{
     const m=await movement(),p=await payable(300),q=await payable(200),items=proposal([p,q],[30000,20000]),context=await preview(m,items);
     await db.exec(`create function fail_bulk_second() returns trigger language plpgsql as $$begin if new.payable_id='${q}'::uuid then raise exception 'qa_second_item_failed';end if;return new;end$$;

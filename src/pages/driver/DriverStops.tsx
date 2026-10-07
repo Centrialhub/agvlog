@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, CheckCircle, Clock, ArrowRight, AlertTriangle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
 import { NavigationLauncher } from '@/components/driver/NavigationLauncher';
@@ -23,10 +23,8 @@ import { deliveryErrorMessage, invalidateDeliveryQueries } from '@/lib/driver/dr
 import {
   getNextDriverStop,
   getPendingDriverStops,
-  readDriverRouteSnapshot,
-  saveDriverRouteSnapshot,
 } from '@/lib/driver/offlineRouteSnapshot';
-import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
+import { useDriverStopsSnapshots } from '@/hooks/useDriverStopsSnapshots';
 
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS;
@@ -42,6 +40,13 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'bg-destructive/10 text-destructive',
   delivered: 'bg-green-100 text-green-700',
 };
+
+function isRouteAccessDenied(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: string; status?: number };
+  return ['401', '403', '42501', 'PGRST301', 'PGRST302', 'PGRST116'].includes(value.code ?? '')
+    || value.status === 401 || value.status === 403;
+}
 
 export default function DriverStops() {
   const { currentTenant } = useTenant();
@@ -60,7 +65,7 @@ export default function DriverStops() {
 
   // If tripId is in URL use it, otherwise use auto-detected active trip
   const specificTripQuery = useQuery({
-    queryKey: ['driver_trip_specific', currentTenant?.id, driver?.id, tripIdParam],
+    queryKey: ['driver_trip_specific', currentTenant?.id, driver?.id, tripIdParam, user?.id],
     queryFn: async () => {
       if (!tripIdParam || !currentTenant || !driver) return null;
       const { data, error } = await supabase
@@ -73,14 +78,14 @@ export default function DriverStops() {
       if (error) throw error;
       return data ? normalizeDriverTrip(data) : null;
     },
-    enabled: !!tripIdParam && !!currentTenant && !!driver,
+    enabled: !!tripIdParam && !!currentTenant && !!driver && !!user?.id,
   });
   const { data: trip } = specificTripQuery;
 
   const activeTrip = tripIdParam ? trip : autoTrip;
 
   const stopsQuery = useQuery({
-    queryKey: ['driver_stops', currentTenant?.id, driver?.id, activeTrip?.id],
+    queryKey: ['driver_stops', currentTenant?.id, driver?.id, activeTrip?.id, user?.id],
     queryFn: async () => {
       if (!activeTrip || !currentTenant || !driver) return [];
       const { data, error } = await supabase
@@ -92,84 +97,20 @@ export default function DriverStops() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!activeTrip?.id && !!currentTenant?.id && !!driver?.id,
+    enabled: !!activeTrip?.id && !!currentTenant?.id && !!driver?.id && !!user?.id,
   });
   const { data: stops = [] } = stopsQuery;
-  const [cachedSnapshot, setCachedSnapshot] = useState(() => (
-    readDriverRouteSnapshot(currentTenant?.id, user?.id)
-  ));
-  const [operationalSnapshot, setOperationalSnapshot] = useState<DriverOperationalSnapshot | null>(null);
-
-  useEffect(() => {
-    setCachedSnapshot(readDriverRouteSnapshot(currentTenant?.id, user?.id));
-  }, [currentTenant?.id, user?.id]);
-
-  useEffect(() => {
-    const snapshotTripId = activeTrip?.id ?? cachedSnapshot?.trip.id;
-    if (!currentTenant?.id || !user?.id || !snapshotTripId) { setOperationalSnapshot(null); return; }
-    void driverOperationalSnapshotStore.read(currentTenant.id, user.id, snapshotTripId)
-      .then(setOperationalSnapshot).catch(() => setOperationalSnapshot(null));
-  }, [activeTrip?.id, cachedSnapshot?.trip.id, currentTenant?.id, user?.id]);
-
-  useEffect(() => {
-    if (!currentTenant?.id || !user?.id || !driver || !activeTrip || stopsQuery.isError || stopsQuery.isPending) return;
-    const savedSnapshot = saveDriverRouteSnapshot({
-      tenantId: currentTenant.id,
-      userId: user.id,
-      driver: { id: driver.id, name: driver.name ?? 'Motorista' },
-      trip: {
-        id: activeTrip.id,
-        status: activeTrip.status,
-        actual_start_at: activeTrip.actual_start_at,
-        loads: activeTrip.loads ? { load_number: activeTrip.loads.load_number } : null,
-      },
-      stops: stops.map((stop) => ({
-        id: stop.id,
-        stop_order: stop.stop_order,
-        destination: stop.destination,
-        status: stop.status,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
-        notes: stop.notes,
-        actual_arrival_at: stop.actual_arrival_at,
-        actual_departure_at: stop.actual_departure_at,
-        clients: stop.clients ? { company_name: stop.clients.company_name } : null,
-      })),
-    });
-    if (savedSnapshot) setCachedSnapshot(savedSnapshot);
-  }, [activeTrip, currentTenant?.id, driver, stops, stopsQuery.isError, stopsQuery.isPending, user?.id]);
-
-  useEffect(() => {
-    if (!currentTenant?.id || !user?.id || !driver || !activeTrip || stopsQuery.isError || stopsQuery.isPending) return;
-    void (async () => {
-      const existing = await driverOperationalSnapshotStore.read(currentTenant.id, user.id, activeTrip.id);
-      const next: DriverOperationalSnapshot = {
-        version: 1, tenantId: currentTenant.id, actorId: user.id, tripId: activeTrip.id, cachedAt: new Date().toISOString(),
-        trip: { id: activeTrip.id, status: activeTrip.status, actualStartAt: activeTrip.actual_start_at,
-          actualEndAt: activeTrip.actual_end_at ?? null, driver: { id: driver.id, name: driver.name ?? 'Motorista' },
-          vehicle: activeTrip.vehicle_id ? { id: activeTrip.vehicle_id, plate: activeTrip.vehicles?.plate ?? '', nickname: activeTrip.vehicles?.nickname ?? null } : null },
-        loads: activeTrip.loads ? [{ id: activeTrip.loads.id, loadNumber: activeTrip.loads.load_number,
-          status: activeTrip.loads.status, origin: activeTrip.loads.origin, destination: activeTrip.loads.destination,
-          volumeCount: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.volumeCount ?? null,
-          palletCount: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.palletCount ?? null,
-          weightKg: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.weightKg ?? null }] : existing?.loads ?? [],
-        stops: stops.map(stop => ({ id: stop.id, order: stop.stop_order ?? null, status: stop.status,
-          destination: stop.destination ?? null, latitude: stop.latitude == null ? null : Number(stop.latitude),
-          longitude: stop.longitude == null ? null : Number(stop.longitude), notes: stop.notes ?? null,
-          client: stop.clients ? { id: stop.client_id ?? null, name: stop.clients.company_name } : null,
-          actualArrivalAt: stop.actual_arrival_at ?? null, actualDepartureAt: stop.actual_departure_at ?? null })),
-        documents: existing?.documents ?? [],
-        deliveryItemsByStop: existing?.deliveryItemsByStop,
-        instructions: [...new Set(stops.map(stop => stop.notes?.trim()).filter((note): note is string => !!note))],
-        checklist: existing?.checklist ?? { pre: { id: null, boundaryId: null, checkedItems: [] }, post: { id: null, boundaryId: null, checkedItems: [] } },
-        journey: existing?.journey ?? { events: [], lastStartId: null, lastEndId: null },
-        occurrences: existing?.occurrences ?? [],
-        cargo: existing?.cargo ?? null,
-      };
-      await driverOperationalSnapshotStore.put(next);
-      setOperationalSnapshot(next);
-    })().catch(() => { /* The legacy route snapshot remains available as fallback. */ });
-  }, [activeTrip, currentTenant?.id, driver, stops, stopsQuery.isError, stopsQuery.isPending, user?.id]);
+  const tripResolutionQuery = tripIdParam ? specificTripQuery : autoTripQuery;
+  const routeError = driverQuery.error ?? tripResolutionQuery.error ?? stopsQuery.error;
+  const routeDenied = !currentTenant?.id || !user?.id
+    || (driverQuery.isSuccess && !driver) || driver?.active === false
+    || (!!driver?.tenant_id && driver.tenant_id !== currentTenant?.id)
+    || (tripResolutionQuery.isSuccess && !activeTrip)
+    || [driverQuery.error, tripResolutionQuery.error, stopsQuery.error].some(isRouteAccessDenied);
+  const { cachedSnapshot, operationalSnapshot, snapshotPending, cachedScopeMatches } = useDriverStopsSnapshots({
+    tenantId: currentTenant?.id, userId: user?.id, tripIdParam, activeTrip, driver, stops,
+    stopsIsError: stopsQuery.isError, stopsIsPending: stopsQuery.isPending, routeError, routeDenied,
+  });
 
   // Realtime: refresh stops when operator marks arrival/departure or updates status.
   useEffect(() => {
@@ -189,9 +130,14 @@ export default function DriverStops() {
     };
   }, [activeTrip?.id, qc]);
 
-  const cachedRouteMatches = !!cachedSnapshot && (!activeTrip || cachedSnapshot.trip.id === activeTrip.id);
-  const operationalMatches = !!operationalSnapshot && (!activeTrip || operationalSnapshot.tripId === activeTrip.id);
-  const showingOfflineSnapshot = (operationalMatches || cachedRouteMatches) && (!activeTrip || stopsQuery.isError || !isOnline);
+  const resolvedTripId = tripIdParam ?? activeTrip?.id;
+  const cachedRouteMatches = !!cachedSnapshot && cachedScopeMatches && (!resolvedTripId || cachedSnapshot.trip.id === resolvedTripId);
+  const operationalMatches = !!operationalSnapshot && operationalSnapshot.tenantId === currentTenant?.id
+    && operationalSnapshot.actorId === user?.id && (!resolvedTripId || operationalSnapshot.tripId === resolvedTripId)
+    && (!driver || operationalSnapshot.trip.driver.id === driver.id);
+  const showingOfflineSnapshot = !isOnline && !routeDenied && (operationalMatches || cachedRouteMatches)
+    && (!activeTrip || stopsQuery.isError || stopsQuery.isPending);
+  const routeUnavailable = routeDenied || (isOnline && !!routeError);
   const storedTrip = operationalMatches ? {
     id: operationalSnapshot.trip.id, status: operationalSnapshot.trip.status,
     actual_start_at: operationalSnapshot.trip.actualStartAt, actual_end_at: operationalSnapshot.trip.actualEndAt,
@@ -200,14 +146,17 @@ export default function DriverStops() {
     loads: operationalSnapshot.loads[0] ? { id: operationalSnapshot.loads[0].id, load_number: operationalSnapshot.loads[0].loadNumber,
       status: operationalSnapshot.loads[0].status, origin: operationalSnapshot.loads[0].origin, destination: operationalSnapshot.loads[0].destination } : null,
   } : null;
-  const effectiveTrip = activeTrip ?? storedTrip ?? (cachedRouteMatches ? cachedSnapshot?.trip : null);
-  const queuedForTrip = offlineCommands.commands.filter(command => command.aggregateId === effectiveTrip?.id);
+  const effectiveTrip = routeUnavailable ? null
+    : activeTrip ?? (showingOfflineSnapshot ? storedTrip ?? (cachedRouteMatches ? cachedSnapshot?.trip : null) : null);
+  const queuedForTrip = offlineCommands.commands.filter(command => command.aggregateId === effectiveTrip?.id
+    && command.tenantId === currentTenant?.id && command.actorId === user?.id);
   const storedStops = operationalMatches ? operationalSnapshot.stops.map(stop => ({ id: stop.id, stop_order: stop.order,
     destination: stop.destination, status: stop.status, latitude: stop.latitude, longitude: stop.longitude, notes: stop.notes,
     actual_arrival_at: stop.actualArrivalAt, actual_departure_at: stop.actualDepartureAt,
     client_id: stop.client?.id ?? null, clients: stop.client ? { company_name: stop.client.name } : null })) : [];
-  const effectiveStops = ((!activeTrip || stopsQuery.isError || !isOnline) && operationalMatches ? storedStops
-    : showingOfflineSnapshot ? cachedSnapshot?.stops ?? [] : activeTrip ? stops : []).map(stop => {
+  const effectiveStops = (routeUnavailable ? [] : showingOfflineSnapshot
+    ? operationalMatches ? storedStops : cachedSnapshot?.stops ?? []
+    : activeTrip ? stops : []).map(stop => {
     const queuedArrival = queuedForTrip.find(command => command.kind === 'arrival'
       && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
       && command.payload.stop_id === stop.id);
@@ -224,6 +173,8 @@ export default function DriverStops() {
   });
 
   const updateStop = useMutation({
+    // The operational service persists offline before attempting its transport.
+    networkMode: 'always',
     mutationFn: async ({ stopId, action }: { stopId: string; action: 'arrival' | 'depart' }) => {
       if (!effectiveTrip || !isDriverTripStarted(effectiveTrip.status,effectiveTrip.actual_start_at)) {
         throw new Error('Inicie a viagem antes de registrar chegada ou saída.');
@@ -270,8 +221,7 @@ export default function DriverStops() {
 
   const pendingStops = getPendingDriverStops(effectiveStops);
   const nextStop = getNextDriverStop(effectiveStops);
-  const tripResolutionQuery = tripIdParam ? specificTripQuery : autoTripQuery;
-  const pageError = driverQuery.error ?? tripResolutionQuery.error ?? stopsQuery.error;
+  const pageError = routeError;
   const pageErrorMessage = deliveryErrorMessage(pageError);
   const tripStarted = !!effectiveTrip && isDriverTripStarted(effectiveTrip.status,effectiveTrip.actual_start_at);
 
@@ -291,7 +241,8 @@ export default function DriverStops() {
       </div>
 
 
-      {(driverQuery.isLoading || tripResolutionQuery.isLoading || (activeTrip?.id && stopsQuery.isLoading)) && !showingOfflineSnapshot ? (
+      {((isOnline && (driverQuery.isLoading || tripResolutionQuery.isLoading || (activeTrip?.id && stopsQuery.isLoading)))
+        || (!isOnline && snapshotPending && !routeDenied && (!activeTrip || stopsQuery.isPending))) && !showingOfflineSnapshot ? (
         <div className="space-y-3" aria-label="Carregando viagem">
           {[1, 2, 3].map((item) => (
             <div key={item} className="h-28 w-full animate-pulse rounded-xl bg-muted" />
@@ -318,14 +269,19 @@ export default function DriverStops() {
             </Button>
           </CardContent>
         </Card>
+      ) : !isOnline && !effectiveTrip?.id && !routeDenied ? (
+        <Card><CardContent className="py-10 text-center" role="alert">
+          Paradas indisponíveis offline para esta viagem e sessão. Conecte-se para carregar os dados.
+        </CardContent></Card>
       ) : !effectiveTrip?.id ? (
         <Card>
           <CardContent className="py-12 text-center space-y-4">
             <MapPin className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
             <div className="space-y-1">
-              <p className="text-sm font-medium">Nenhuma viagem ativa</p>
+              <p className="text-sm font-medium">{tripIdParam ? 'Viagem indisponível' : 'Nenhuma viagem ativa'}</p>
               <p className="text-xs text-muted-foreground">
-                Aguarde o despacho da carga pela operação para ver suas paradas.
+                {tripIdParam ? 'Não foi possível acessar a viagem solicitada. Atualize para conferir seu vínculo.'
+                  : 'Aguarde o despacho da carga pela operação para ver suas paradas.'}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={() => navigate('/driver/loads')}>
@@ -382,9 +338,9 @@ export default function DriverStops() {
                 {stop.actual_arrival_at && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    Chegada: {new Date(stop.actual_arrival_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    Chegada: {new Date(stop.actual_arrival_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     {stop.actual_departure_at && (
-                      <> · Saída: {new Date(stop.actual_departure_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                      <> · Saída: {new Date(stop.actual_departure_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
                     )}
                   </div>
                 )}

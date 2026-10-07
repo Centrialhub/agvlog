@@ -5,14 +5,15 @@ import DriverStops from '@/pages/driver/DriverStops';
 
 const mocks=vi.hoisted(()=>({
   stop:{} as Record<string,unknown>,tripStatus:'in_transit',started:true,selected:null as string|null,
+  activeTrip:null as Record<string,unknown>|null, driver:{id:'driver',tenant_id:'tenant',active:true},
   driverPending:false,driverError:null as unknown,readError:null as unknown,
   rpc:vi.fn(),location:vi.fn(),submit:vi.fn(),invalidate:vi.fn(),toast:vi.fn(),navigate:vi.fn(),eq:vi.fn(),
 }));
+vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useCurrentDriver',()=>({
-  useCurrentDriver:()=>({data:mocks.driverPending?undefined:{id:'driver'},isLoading:mocks.driverPending,error:mocks.driverError,refetch:vi.fn()}),
-  useActiveTrip:()=>({data:mocks.driverPending?null:{id:'trip',status:mocks.tripStatus,
-    actual_start_at:mocks.started?'2026-08-29T10:00:00Z':null,loads:{load_number:'1012'}},refetch:vi.fn()}),
+  useCurrentDriver:()=>({data:mocks.driverPending?undefined:mocks.driver,isLoading:mocks.driverPending,error:mocks.driverError,refetch:vi.fn()}),
+  useActiveTrip:()=>({data:mocks.activeTrip,refetch:vi.fn()}),
 }));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mocks.toast})}));
 vi.mock('react-router-dom',()=>({useNavigate:()=>mocks.navigate,useSearchParams:()=>[
@@ -36,6 +37,7 @@ vi.mock('@/integrations/supabase/client',()=>({supabase:{
 }}));
 let client:QueryClient;
 beforeEach(()=>{
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
   vi.clearAllMocks();mocks.tripStatus='in_transit';mocks.started=true;mocks.selected=null;mocks.driverPending=false;
   mocks.driverError=null;mocks.readError=null;
   mocks.stop={id:'stop',status:'arrived',destination:'Rua QA',actual_arrival_at:'2026-08-29T12:00:00Z',actual_departure_at:null,
@@ -47,7 +49,11 @@ beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
 });
 afterEach(()=>{cleanup();client.clear();});
-const renderPage=()=>render(<QueryClientProvider client={client}><DriverStops/></QueryClientProvider>);
+const renderPage=()=>{
+  mocks.activeTrip=mocks.driverPending?null:{id:'trip',status:mocks.tripStatus,
+    actual_start_at:mocks.started?'2026-08-29T10:00:00Z':null,loads:{load_number:'1012'}};
+  return render(<QueryClientProvider client={client}><DriverStops/></QueryClientProvider>);
+};
 
 describe('driver stops rendered frontend',()=>{
   it('waits for driver lookup rather than showing no active trip',()=>{
@@ -117,5 +123,31 @@ describe('driver stops rendered frontend',()=>{
     expect(screen.queryByRole('button',{name:'Registrar saída'})).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Cheguei'})).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Registrar resultado da entrega'})).not.toBeInTheDocument();
+  });
+});
+
+describe('stop arrival and departure calendar dates', () => {
+  it('renders dates for events on different days and months', async () => {
+    mocks.stop.actual_departure_at = '2026-10-06T12:30:00Z';
+    renderPage(); await screen.findAllByText('Cliente QA');
+    const arrival = new Date(String(mocks.stop.actual_arrival_at)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const departure = new Date(String(mocks.stop.actual_departure_at)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    expect(screen.getByText(/Chegada:/)).toHaveTextContent('Chegada: ' + arrival + ' · Saída: ' + departure);
+  });
+  it('follows the user timezone across a year boundary', async () => {
+    mocks.stop.actual_arrival_at = '2027-01-01T01:30:00Z';
+    mocks.stop.actual_departure_at = '2027-01-01T03:30:00Z';
+    renderPage(); await screen.findAllByText('Cliente QA');
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const expected = zone === 'America/Sao_Paulo'
+      ? ['31/12/2026, 22:30', '01/01/2027, 00:30']
+      : ['01/01/2027, 01:30', '01/01/2027, 03:30'];
+    expect(['UTC', 'America/Sao_Paulo']).toContain(zone);
+    const text = screen.getByText(/Chegada:/);
+    expect(text).toHaveTextContent('Chegada: ' + expected[0] + ' · Saída: ' + expected[1]);
+  });
+  it('omits departure when it has not occurred', async () => {
+    renderPage(); await screen.findAllByText('Cliente QA');
+    expect(screen.getByText(/Chegada:/)).not.toHaveTextContent('Saída:');
   });
 });

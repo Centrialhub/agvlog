@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 import { loadEnv } from "vite";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { isImmutableCandidateOrigin } from "./scripts/release-candidate-origin.mjs";
+import { assertHostedStagingSupabaseUrl } from "./scripts/release-backend-identity.mjs";
 
 const fileEnv = loadEnv("test", process.cwd(), "");
 for (const key of ["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PROJECT_ID"]) {
@@ -20,6 +25,22 @@ if (!localBackend && process.env.E2E_ALLOW_REMOTE !== "true") {
   );
 }
 const useExternalApp = process.env.E2E_SKIP_WEBSERVER === "true";
+const appBaseUrl = process.env.E2E_BASE_URL ?? "http://127.0.0.1:4173";
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const protectedCandidate = isImmutableCandidateOrigin(appBaseUrl);
+if (useExternalApp && protectedCandidate) {
+  assertHostedStagingSupabaseUrl(backendUrl);
+}
+if (useExternalApp && protectedCandidate && !bypassSecret) {
+  throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required for hosted Preview E2E.");
+}
+if (bypassSecret && (!useExternalApp || !protectedCandidate)) {
+  throw new Error("Vercel automation bypass may only target this project's immutable hosted Preview URL.");
+}
+const bypassStateFile = bypassSecret
+  ? process.env.AGVLOG_VERCEL_BYPASS_STATE_FILE ?? join(tmpdir(), `agvlog-preview-${randomUUID()}.json`)
+  : undefined;
+if (bypassStateFile) process.env.AGVLOG_VERCEL_BYPASS_STATE_FILE = bypassStateFile;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -33,11 +54,15 @@ export default defineConfig({
   reporter: process.env.CI
     ? [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]]
     : [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
+  globalSetup: bypassSecret ? "./e2e/fixtures/vercelProtectionSetup.ts" : undefined,
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:4173",
+    baseURL: appBaseUrl,
+    storageState: bypassStateFile,
     locale: "pt-BR",
     timezoneId: "America/Sao_Paulo",
-    trace: "retain-on-failure",
+    // Hosted traces can contain the bypass cookie in network metadata and are
+    // uploaded as CI artifacts. Keep screenshots/video without that secret.
+    trace: bypassSecret ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },

@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import DeliveryReceiptScanner from '@/components/driver/DeliveryReceiptScanner';
 import SignaturePad from '@/components/driver/SignaturePad';
@@ -25,6 +25,10 @@ import {
 type Notice = { title: string; description?: string; variant?: 'destructive' };
 
 type Props = {
+  onCloseAutoFocus?: (event: Event) => void;
+  stopsLoading?: boolean;
+  stopsError?: boolean;
+  refetchStops?: () => unknown;
   selection: DeliveryEventSelection | null;
   definition: EventDef | null | undefined;
   draft: DriverDeliveryEventDraft;
@@ -53,6 +57,10 @@ type Props = {
 
 export function DriverDeliveryEventFormSheet({
   selection,
+  stopsLoading = false,
+  stopsError = false,
+  refetchStops,
+  onCloseAutoFocus,
   definition,
   draft,
   currentStop,
@@ -80,9 +88,10 @@ export function DriverDeliveryEventFormSheet({
   const def = definition;
   return (
     <Sheet open={!!selection} onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
+      <SheetContent onCloseAutoFocus={onCloseAutoFocus} side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-base">Dados do evento</SheetTitle>
+          <SheetDescription className="sr-only">Preencha os dados e comprovantes do evento da entrega selecionada.</SheetDescription>
         </SheetHeader>
         {def && selection && (
           <div className="space-y-4 mt-2">
@@ -91,7 +100,7 @@ export function DriverDeliveryEventFormSheet({
               Evento: <span className="font-bold">{def.label}</span>
             </div>
 
-            <fieldset disabled={submitting || submissionLocked} className="space-y-4 disabled:opacity-70">
+            <fieldset disabled={submitting || submissionLocked || stopsLoading} className="space-y-4 disabled:opacity-70">
               <div className="rounded-md border border-border p-3 space-y-1 bg-muted/30">
                 <p className="text-sm font-semibold">{selection.stop.clients?.company_name || 'Cliente'}</p>
                 <p className="text-[11px] text-muted-foreground">{selection.stop.destination}</p>
@@ -224,6 +233,11 @@ export function DriverDeliveryEventFormSheet({
               {def.requiresSignature && <div id="sig-anchor" />}
             </fieldset>
 
+            {stopsError && <div role="alert" className="space-y-2 text-sm">
+              <p>Não foi possível atualizar esta entrega. Tente novamente antes de lançar um evento.</p>
+              {refetchStops && <Button type="button" variant="outline" onClick={() => void refetchStops()}>Tentar novamente</Button>}
+            </div>}
+            {stopsLoading && <p role="status">Atualizando os dados desta entrega. Aguarde antes de lançar um evento.</p>}
             {submissionLocked && <p role="status" className="text-sm">Os dados deste envio foram preservados. Tentar novamente usa os mesmos anexos e identificador.</p>}
             {def.showsItems && productsLoading && <p role="status">Carregando itens desta tentativa…</p>}
             {productsError != null && (
@@ -247,7 +261,7 @@ export function DriverDeliveryEventFormSheet({
               </div>
             )}
 
-            <Button size="lg" className="w-full" onClick={onSubmit} disabled={(!canSubmit && !submissionLocked) || submitting}>
+            <Button size="lg" className="w-full" onClick={onSubmit} disabled={(!canSubmit && !submissionLocked) || submitting || stopsLoading}>
               {submitting ? 'Enviando...' : submissionLocked ? 'Tentar novamente o mesmo envio' : 'Lançar evento'}
             </Button>
             <p className="text-xs text-muted-foreground">Solicitações são registradas para análise da operação. O envio não representa aprovação.</p>

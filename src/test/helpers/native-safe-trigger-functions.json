@@ -1,0 +1,104 @@
+[
+  {
+    "acl": [
+      "postgres=X/postgres"
+    ],
+    "oid": "19344",
+    "owner": "postgres",
+    "config": [
+      "search_path=\"\""
+    ],
+    "bodyMd5": "3b05db0b8a1eb30ca63e13047c593118",
+    "definer": true,
+    "signature": "private.sync_employee_from_tenant_membership_v1()",
+    "definition": "CREATE OR REPLACE FUNCTION private.sync_employee_from_tenant_membership_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_workspace_id uuid;\n  v_tenant_id uuid;\n  v_user_id uuid;\n  v_role public.app_role;\n  v_active boolean := false;\n  v_was_employee boolean := false;\n  v_is_employee boolean := false;\nbegin\n  if pg_catalog.pg_trigger_depth() > 1 then\n    if tg_op = 'DELETE' then return old; end if;\n    return new;\n  end if;\n\n  if tg_op = 'DELETE' then\n    v_tenant_id := old.tenant_id;\n    v_user_id := old.user_id;\n    v_role := old.role;\n    v_was_employee := old.role in ('owner', 'admin', 'operator', 'driver');\n  else\n    v_tenant_id := new.tenant_id;\n    v_user_id := new.user_id;\n    v_role := new.role;\n    v_active := new.active;\n    v_is_employee := new.role in ('owner', 'admin', 'operator', 'driver');\n    if tg_op = 'UPDATE' then\n      v_was_employee := old.role in ('owner', 'admin', 'operator', 'driver');\n    end if;\n  end if;\n\n  select tenant.workspace_id\n  into v_workspace_id\n  from public.tenants tenant\n  where tenant.id = v_tenant_id;\n\n  if v_workspace_id is null then\n    if tg_op = 'DELETE' then return old; end if;\n    return new;\n  end if;\n\n  if tg_op <> 'DELETE' and v_is_employee then\n    insert into public.workspace_memberships (workspace_id, user_id, role, active)\n    values (v_workspace_id, v_user_id, v_role, v_active)\n    on conflict (workspace_id, user_id) do update\n    set role = excluded.role,\n        active = excluded.active,\n        updated_at = now();\n\n    insert into public.tenant_memberships (tenant_id, user_id, role, active)\n    select tenant.id, v_user_id, v_role, v_active\n    from public.tenants tenant\n    where tenant.workspace_id = v_workspace_id\n    order by tenant.id\n    on conflict (tenant_id, user_id) do update\n    set role = excluded.role,\n        active = excluded.active,\n        updated_at = now();\n  elsif v_was_employee then\n    update public.workspace_memberships\n    set active = false,\n        updated_at = now()\n    where workspace_id = v_workspace_id\n      and user_id = v_user_id;\n\n    update public.tenant_memberships membership\n    set active = false,\n        updated_at = now()\n    from public.tenants tenant\n    where tenant.id = membership.tenant_id\n      and tenant.workspace_id = v_workspace_id\n      and membership.user_id = v_user_id\n      and membership.role in ('owner', 'admin', 'operator', 'driver');\n  end if;\n\n  if tg_op = 'DELETE' then return old; end if;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "acl": [
+      "postgres=X/postgres"
+    ],
+    "oid": "19345",
+    "owner": "postgres",
+    "config": [
+      "search_path=\"\""
+    ],
+    "bodyMd5": "e41ac02a0164e958e93a552d546dba65",
+    "definer": true,
+    "signature": "private.sync_employee_from_workspace_membership_v1()",
+    "definition": "CREATE OR REPLACE FUNCTION private.sync_employee_from_workspace_membership_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_workspace_id uuid;\n  v_user_id uuid;\n  v_role public.app_role;\n  v_active boolean := false;\n  v_was_employee boolean := false;\n  v_is_employee boolean := false;\nbegin\n  if pg_catalog.pg_trigger_depth() > 1 then\n    if tg_op = 'DELETE' then return old; end if;\n    return new;\n  end if;\n\n  if tg_op = 'DELETE' then\n    v_workspace_id := old.workspace_id;\n    v_user_id := old.user_id;\n    v_role := old.role;\n    v_was_employee := old.role in ('owner', 'admin', 'operator', 'driver');\n  else\n    v_workspace_id := new.workspace_id;\n    v_user_id := new.user_id;\n    v_role := new.role;\n    v_active := new.active;\n    v_is_employee := new.role in ('owner', 'admin', 'operator', 'driver');\n    if tg_op = 'UPDATE' then\n      v_was_employee := old.role in ('owner', 'admin', 'operator', 'driver');\n    end if;\n  end if;\n\n  if tg_op <> 'DELETE' and v_is_employee then\n    insert into public.tenant_memberships (tenant_id, user_id, role, active)\n    select tenant.id, v_user_id, v_role, v_active\n    from public.tenants tenant\n    where tenant.workspace_id = v_workspace_id\n    order by tenant.id\n    on conflict (tenant_id, user_id) do update\n    set role = excluded.role,\n        active = excluded.active,\n        updated_at = now();\n  elsif v_was_employee then\n    update public.tenant_memberships membership\n    set active = false,\n        updated_at = now()\n    from public.tenants tenant\n    where tenant.id = membership.tenant_id\n      and tenant.workspace_id = v_workspace_id\n      and membership.user_id = v_user_id\n      and membership.role in ('owner', 'admin', 'operator', 'driver');\n  end if;\n\n  if tg_op = 'DELETE' then return old; end if;\n  return new;\nend;\n$function$\n"
+  },
+  {
+    "acl": [
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "oid": "19369",
+    "owner": "postgres",
+    "config": [
+      "search_path=public"
+    ],
+    "bodyMd5": "b24011eb0354ef334284035d89e6f5ca",
+    "definer": false,
+    "signature": "_block_client_membership()",
+    "definition": "CREATE OR REPLACE FUNCTION public._block_client_membership()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.role = 'client' THEN\n    RAISE EXCEPTION 'role_client_not_allowed_in_memberships'\n      USING HINT = 'Use client_portal_access para acesso de cliente externo.',\n            ERRCODE = '22023';\n  END IF;\n  RETURN NEW;\nEND; $function$\n"
+  },
+  {
+    "acl": [
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "oid": "20033",
+    "owner": "postgres",
+    "config": [
+      "search_path=public"
+    ],
+    "bodyMd5": "a5cddec545b878b27aad5e7445e0b253",
+    "definer": true,
+    "signature": "handle_new_user()",
+    "definition": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  INSERT INTO public.profiles (id, full_name)\n  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email));\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+    "acl": [
+      "postgres=X/postgres"
+    ],
+    "oid": "20252",
+    "owner": "postgres",
+    "config": [
+      "search_path=public"
+    ],
+    "bodyMd5": "5c148385f702f9e29c36f04750df0914",
+    "definer": true,
+    "signature": "protect_tenant_owners()",
+    "definition": "CREATE OR REPLACE FUNCTION public.protect_tenant_owners()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_actor uuid := auth.uid();\n  v_actor_role public.app_role;\n  v_tenant_id uuid := COALESCE(OLD.tenant_id, NEW.tenant_id);\n  v_other_active_owners integer;\nBEGIN\n  -- Trusted server-side maintenance has no end-user identity and is not\n  -- constrained by this API invariant.\n  IF v_actor IS NULL THEN\n    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended(v_tenant_id::text, 0));\n\n  SELECT role\n    INTO v_actor_role\n    FROM public.tenant_memberships\n   WHERE tenant_id = v_tenant_id\n     AND user_id = v_actor\n     AND active = true;\n\n  IF TG_OP = 'INSERT' THEN\n    IF NEW.role = 'owner' AND v_actor_role IS DISTINCT FROM 'owner' THEN\n      -- Preserve the create_tenant_with_owner bootstrap path only.\n      IF NEW.user_id <> v_actor OR EXISTS (\n        SELECT 1 FROM public.tenant_memberships WHERE tenant_id = NEW.tenant_id\n      ) THEN\n        RAISE EXCEPTION 'only_an_owner_can_assign_owner';\n      END IF;\n    END IF;\n    RETURN NEW;\n  END IF;\n\n  IF TG_OP = 'UPDATE' AND (NEW.tenant_id <> OLD.tenant_id OR NEW.user_id <> OLD.user_id) THEN\n    RAISE EXCEPTION 'membership_identity_is_immutable';\n  END IF;\n\n  IF OLD.role = 'owner'\n     OR (TG_OP = 'UPDATE' AND NEW.role = 'owner') THEN\n    IF v_actor_role IS DISTINCT FROM 'owner' THEN\n      RAISE EXCEPTION 'only_an_owner_can_manage_owners';\n    END IF;\n  END IF;\n\n  IF OLD.role = 'owner' AND OLD.active = true AND (\n    TG_OP = 'DELETE'\n    OR NEW.role <> 'owner'\n    OR NEW.active = false\n  ) THEN\n    SELECT count(*)\n      INTO v_other_active_owners\n      FROM public.tenant_memberships\n     WHERE tenant_id = OLD.tenant_id\n       AND role = 'owner'\n       AND active = true\n       AND id <> OLD.id;\n\n    IF v_other_active_owners = 0 THEN\n      RAISE EXCEPTION 'tenant_must_keep_an_active_owner';\n    END IF;\n  END IF;\n\n  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;\nEND;\n$function$\n"
+  },
+  {
+    "acl": [
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "oid": "20530",
+    "owner": "postgres",
+    "config": [
+      "search_path=public"
+    ],
+    "bodyMd5": "a27bb088c067b7b77a9f0707b0048e40",
+    "definer": false,
+    "signature": "update_updated_at_column()",
+    "definition": "CREATE OR REPLACE FUNCTION public.update_updated_at_column()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $function$\n"
+  },
+  {
+    "acl": [
+      "supabase_admin=X/supabase_admin",
+      "postgres=X/supabase_admin"
+    ],
+    "oid": "37226",
+    "owner": "supabase_admin",
+    "config": [
+      "search_path=\"\""
+    ],
+    "bodyMd5": "9509a8180267861ab8a17d486f1cb690",
+    "definer": true,
+    "signature": "audit_tenant_membership_change_v1()",
+    "definition": "CREATE OR REPLACE FUNCTION public.audit_tenant_membership_change_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  if old is distinct from new then\n    insert into public.entity_audit_log(tenant_id,entity_type,entity_id,action,old_data,new_data,actor_user_id,source)\n    values(new.tenant_id,'tenant_membership',new.id,'update',to_jsonb(old),to_jsonb(new),auth.uid(),'team_management');\n  end if;\n  return new;\nend;\n$function$\n"
+  }
+]

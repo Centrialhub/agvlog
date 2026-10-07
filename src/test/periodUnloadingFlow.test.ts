@@ -76,10 +76,18 @@ it('invalidates the revision for a freight allocation correction outside the sup
  await expect(read('2026-02-01','2026-02-28',c.supplier,1,before.revision)).rejects.toThrow('finance_history_changed');expect((await read('2026-02-01','2026-02-28')).receipt_totals.amount_cents).toBe('10000');
 });
 it('counts 1005 real charges and serves exact first and last pages without sampling totals',async()=>{
- const first=await charge(100),ids=[first.charge_id];for(let n=1;n<1005;n++)ids.push((await charge(100,'2026-01-10',first.supplier)).charge_id);ids.sort();
+ const first=await charge(100),ids=[first.charge_id];
+ for(let n=1;n<1005;n++){
+  // This rollback-only fixture grows from 2 allocations to 1007 without a
+  // commit. Refresh its seed statistics so native commands do not reuse a
+  // plan that scans every invoice for each new charge. Keep all 1005 writers.
+  if(n%100===0)await db.exec('analyze fiscal_documents;analyze dispatch_stop_documents;analyze finance_commands;analyze finance_unloading_charges;analyze receivables;');
+  ids.push((await charge(100,'2026-01-10',first.supplier)).charge_id);
+ }
+ ids.sort();
  const initial=await read();expect(initial.total).toBe(1005);expect(initial.origin_totals.amount_cents).toBe('100500');expect(initial.rows.map(r=>r.event_id)).toEqual(ids.slice(0,50));
  const last=await read('2026-01-01','2026-01-31',null,21,initial.revision);expect(last.rows.map(r=>r.event_id)).toEqual(ids.slice(1000));
-},60000);
+},180000);
 it('requires revision across pages and denies foreign accounts or mixed-driver access',async()=>{
  await charge();await expect(read('2026-01-01','2026-01-31',null,2)).rejects.toThrow('finance_history_revision_required');
  await expect(operationRpc(db,'select get_finance_period_unloading_flow($1,$2,$3,$4)',[i.tenant,'2026-01-01','2026-01-31',[randomUUID()]])).rejects.toThrow('finance_account_not_found');

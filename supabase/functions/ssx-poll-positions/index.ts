@@ -33,6 +33,8 @@ declare const Deno: {
   serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
+import { parsePollOptions, pollWindowMinutes, legacyWindowStart, cooldownRemainingSeconds, rateLimitSeconds } from "./poll-policy.ts";
+
 const POLL_MEMO_VERSION = 10;
 
 type TrackerBinding = {
@@ -80,14 +82,11 @@ Deno.serve(async (req) => {
     } catch {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
+    const parsedOptions = parsePollOptions(body);
+    if (!parsedOptions.ok) return jsonResp({ error: parsedOptions.error }, 400);
+    const { manual_run, force_rediscovery, lookback_minutes } = parsedOptions.options;
+    const { integration_account_id, provider_unit_ids } = body;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const {
-      integration_account_id,
-      provider_unit_ids,
-      manual_run = false,
-      force_rediscovery = false,
-      lookback_minutes,
-    } = body;
 
     if (!integration_account_id) {
       return jsonResp({ error: "integration_account_id required" }, 400);
@@ -121,9 +120,8 @@ Deno.serve(async (req) => {
     }
 
     // Check account-level cooldown
-    const cooldownUntil = account.poll_cooldown_until || config.settings.poll_cooldown_until;
-    if (cooldownUntil && new Date(cooldownUntil) > new Date() && !manual_run) {
-      const retryAfterSec = Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000);
+    const retryAfterSec = cooldownRemainingSeconds(Date.now(), account.poll_cooldown_until, config.settings.poll_cooldown_until);
+    if (retryAfterSec > 0) {
       return jsonResp({
         error: "Account in cooldown from previous rate limit",
         retry_after_seconds: retryAfterSec,
@@ -332,7 +330,7 @@ async function broadbandPoll(params: {
   const { units, unitToVehicle, positionUrls, config, supabase,
     integration_account_id, tenant_id, lookback_minutes } = params;
 
-  const pollWindowMin = lookback_minutes || config.pollWindowMinutes || 15;
+  const pollWindowMin = pollWindowMinutes(lookback_minutes, config.pollWindowMinutes);
   const windowEnd = new Date();
   const timeStart = new Date(windowEnd.getTime() - pollWindowMin * 60_000).toISOString();
   const broadbandUrl = positionUrls[0];
@@ -375,13 +373,14 @@ async function broadbandPoll(params: {
 
   if (resp.errorClass === "rate_limited") {
     const observedAt = new Date().toISOString();
+    const retryAfterSeconds = rateLimitSeconds(resp.retryAfterSeconds);
     const failure = await recordBroadbandFailure(supabase, {
       units, unitToVehicle, integrationAccountId: integration_account_id,
       observedAt, error: "SSX rate limited broadband polling",
-      backoffUntil: new Date(Date.now() + 120_000).toISOString(),
+      backoffUntil: new Date(Date.parse(observedAt) + retryAfterSeconds * 1000).toISOString(),
     });
     const cooldown = await setAccountCooldown(
-      supabase, tenant_id, integration_account_id, observedAt, 120,
+      supabase, tenant_id, integration_account_id, observedAt, retryAfterSeconds,
     );
     if (!failure.ok || !cooldown.ok) {
       return jsonResp({
@@ -391,7 +390,7 @@ async function broadbandPoll(params: {
     }
     return jsonResp({
       success: false, batch_aborted: true, abort_reason: "rate_limited",
-      total_units: units.length, total_inserted: 0,
+      total_units: units.length, total_inserted: 0, retry_after_seconds: retryAfterSeconds,
     }, 429);
   }
 
@@ -681,8 +680,6 @@ async function legacyPerUnitPoll(params: {
   const timeProps = ["EventDate", "UpdateDate"];
   const requestSpacingMs = config.settings.request_spacing_ms ?? 400;
   const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 500;
-  const defaultPollWindow = config.pollWindowMinutes;
-  const initialPollWindowMinutes = lookback_minutes || config.settings.initial_poll_window_minutes || 10080;
 
   let scoutHint: { property: string; value_source: string; url: string; format: string; timeProp: string } | null = null;
 
@@ -693,6 +690,7 @@ async function legacyPerUnitPoll(params: {
   let touchedVehicles = 0;
   let batchAborted = false;
   let abortReason = "";
+  let retryAfterSeconds: number | undefined;
 
   console.log(`[SSX:poll-positions] LEGACY per-unit mode | ${units.length} units | manual=${manual_run} | debug=${isDebugMode}`);
 
@@ -714,27 +712,19 @@ async function legacyPerUnitPoll(params: {
       .from("ingestion_cursors").select("*")
       .eq("provider_unit_id", unit.id).eq("tenant_id", mapping.tenant_id).single();
 
-    if (!manual_run && cursor?.backoff_until && new Date(cursor.backoff_until) > new Date()) {
+    if (cooldownRemainingSeconds(Date.now(), cursor?.backoff_until) > 0) {
       results.push({ unit_code: unit.external_code, status: "skipped", reason: "In backoff period" });
       continue;
     }
 
     const now = new Date();
-    const isFirstPoll = !cursor?.last_success_at;
-    const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : (manual_run ? Math.max(defaultPollWindow, 1440) : defaultPollWindow);
-
-    const maxLookbackStart = new Date(Date.now() - pollWindowMinutes * 60_000);
-    const incrementalStart = cursor?.last_success_at
-      ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000)
-      : null;
-
-    const cursorTimeStart = incrementalStart && !force_rediscovery
-      ? new Date(Math.max(incrementalStart.getTime(), maxLookbackStart.getTime())).toISOString()
-      : maxLookbackStart.toISOString();
-    const bindingStartMs = Date.parse(mapping.start_at);
-    const timeStart = Number.isFinite(bindingStartMs)
-      ? new Date(Math.max(Date.parse(cursorTimeStart), bindingStartMs)).toISOString()
-      : cursorTimeStart;
+    const timeStart = legacyWindowStart({ now: now.getTime(), lookback: lookback_minutes,
+      configuredWindow: config.pollWindowMinutes, initialWindow: config.settings.initial_poll_window_minutes,
+      lastSuccess: cursor?.last_success_at, bindingStart: mapping.start_at, forceRediscovery: force_rediscovery });
+    if (Date.parse(timeStart) >= now.getTime()) {
+      results.push({ unit_code: unit.external_code, status: "skipped", reason: "No elapsed binding window" });
+      continue;
+    }
 
     const meta = (unit as any).metadata || {};
     const identifierCandidates = buildIdentifierCandidates(unit.external_code, meta);
@@ -752,12 +742,14 @@ async function legacyPerUnitPoll(params: {
       integration_account_id,
     });
 
+    const observedAt = new Date().toISOString();
     if (unitResult.abortBatch) {
       batchAborted = true;
       abortReason = unitResult.abortReason || "rate_limited";
       if (unitResult.abortReason === "rate_limited") {
+        retryAfterSeconds = rateLimitSeconds(unitResult.retryAfterSeconds);
         const cooldown = await setAccountCooldown(
-          supabase, tenant_id, integration_account_id, now.toISOString(), 120,
+          supabase, tenant_id, integration_account_id, observedAt, retryAfterSeconds,
         );
         if (!cooldown.ok) {
           unitResult.persistenceFailed = true;
@@ -801,12 +793,11 @@ async function legacyPerUnitPoll(params: {
         unitResult.persistenceCommitted = true;
       }
     } else if (!unitResult.persistenceCommitted && !unitResult.persistenceFailed) {
-      const observedAt = now.toISOString();
       const recorded = await recordPollError(supabase, {
         integrationAccountId: integration_account_id,
         unit, mapping, observedAt,
         error: unitResult.error || "No combination returned positions",
-        backoffUntil: new Date(now.getTime() + 60_000).toISOString(),
+        backoffUntil: new Date(Date.parse(observedAt) + (unitResult.abortReason === "rate_limited" ? rateLimitSeconds(unitResult.retryAfterSeconds) : 60) * 1000).toISOString(),
         pollMemo: {
           memo_version: POLL_MEMO_VERSION,
           cleared: true,
@@ -850,7 +841,7 @@ async function legacyPerUnitPoll(params: {
     touched_vehicles: touchedVehicles,
     scout_hint: scoutHint ? `${scoutHint.property}:${scoutHint.value_source}@${scoutHint.url}` : null,
     batch_aborted: batchAborted,
-    abort_reason: abortReason || null,
+    abort_reason: abortReason || null, retry_after_seconds: retryAfterSeconds,
     manual_run, force_rediscovery: params.force_rediscovery,
     results,
   }, batchAborted
@@ -916,6 +907,7 @@ interface PollUnitResult {
   comboSource: string;
   abortBatch: boolean;
   abortReason?: string;
+  retryAfterSeconds?: number;
   persistenceFailed: boolean;
   persistenceCommitted?: boolean;
   latestApplied?: boolean;
@@ -963,6 +955,7 @@ async function pollSingleUnit(params: {
     const filters = [
       { PropertyName: property, Condition: "=", Value: value },
       { PropertyName: timeProp, Condition: ">=", Value: timeStart },
+      { PropertyName: timeProp, Condition: "<", Value: params.now.toISOString() },
     ];
     const body = format === "array" ? filters : { Filters: filters };
     const resp = await ssxPost(url, config.token, body, config.requestTimeoutMs);
@@ -1012,7 +1005,7 @@ async function pollSingleUnit(params: {
 
       if (memoCandidate) {
         const r = await tryCombo(memoProp, memoCandidate.value, memoCandidate.value_source, memoUrl, memoFormat, memoTimeProp, "unit_memo");
-        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount, r.resp.retryAfterSeconds);
         if (r && r.resp?.ok) {
           if (r.items.length > 0) {
             const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
@@ -1043,7 +1036,7 @@ async function pollSingleUnit(params: {
     if (hintCandidate) {
       const r = await tryCombo(scoutHint.property, hintCandidate.value, hintCandidate.value_source,
         scoutHint.url, scoutHint.format as any, scoutHint.timeProp, "scout_hint");
-      if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+      if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount, r.resp.retryAfterSeconds);
       if (r && r.items.length > 0) {
         const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
           { property: scoutHint.property, value_source: hintCandidate.value_source, url: scoutHint.url, format: scoutHint.format, timeProp: scoutHint.timeProp },
@@ -1062,7 +1055,7 @@ async function pollSingleUnit(params: {
         if (attemptCount >= MAX_ATTEMPTS) break;
 
         const r = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "array", timeProp, "discovery");
-        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount, r.resp.retryAfterSeconds);
         if (r && r.items.length > 0) {
           const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
             { property: candidate.property, value_source: candidate.value_source, url, format: "array", timeProp },
@@ -1072,7 +1065,7 @@ async function pollSingleUnit(params: {
 
         if (r?.resp?.errorClass === "body_incompatible") {
           const rw = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "wrapped", timeProp, "discovery_wrapped");
-          if (rw?.abort) return buildAbortResult(rw.abortReason!, attempts, attemptCount);
+          if (rw?.abort) return buildAbortResult(rw.abortReason!, attempts, attemptCount, rw.resp.retryAfterSeconds);
           if (rw && rw.items.length > 0) {
             const processedWrapped = await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
               { property: candidate.property, value_source: candidate.value_source, url, format: "wrapped", timeProp },
@@ -1191,13 +1184,13 @@ async function processPositions(
   };
 }
 
-function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
+function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number, retryAfterSeconds?: number): PollUnitResult {
   return {
     positions_found: false, inserted: 0, duplicates: 0,
     rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
-    abortBatch: true, abortReason: reason, persistenceFailed: reason === "persistence_failure",
+    abortBatch: true, abortReason: reason, retryAfterSeconds, persistenceFailed: reason === "persistence_failure",
     attemptCount, attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
 }
@@ -1694,7 +1687,8 @@ async function setAccountCooldown(
   const receipt = Array.isArray(data) ? data[0] : data;
   if (!receipt || receipt.version !== 1 || receipt.tenant_id !== tenantId ||
       receipt.integration_account_id !== accountId ||
-      typeof receipt.cooldown_until !== "string") {
+      typeof receipt.cooldown_until !== "string" || !Number.isFinite(Date.parse(receipt.cooldown_until)) ||
+      Date.parse(receipt.cooldown_until) < Date.parse(cooldownUntil)) {
     return { ok: false, error: "ssx_account_cooldown_receipt_invalid" };
   }
   return { ok: true };

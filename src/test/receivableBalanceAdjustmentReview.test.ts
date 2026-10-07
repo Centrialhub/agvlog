@@ -96,7 +96,7 @@ it('rejects effective dates before title existence or before the original adjust
 it('propagates cash and discount separately through invoice and closing settlement and partial reopening',async()=>{
  const payer=randomUUID(),invoice=randomUUID(),closing=randomUUID(),id=randomUUID();
  await db.query("insert into clients(id,tenant_id,company_name,active) values($1,$2,'Adjustment invoice payer',true)",[payer,i.tenant]);
- await db.query("insert into client_invoices(id,tenant_id,client_id,receivable_id,total_amount,status,invoice_number,issue_date) values($1,$2,$3,$4,100,'generated','ADJUST-INVOICE',current_date)",[invoice,i.tenant,payer,id]);
+ await db.query("insert into client_invoices(id,tenant_id,client_id,receivable_id,total_amount,status,invoice_number,issue_date) values($1,$2,$3,$4,100,'generated','ADJUST-INVOICE',$5::date)",[invoice,i.tenant,payer,id,await day()]);
  await db.query("insert into closing_reports(id,tenant_id,client_id,receivable_id,client_invoice_id,total_amount,received_amount,open_amount,status,payment_status,closing_number,title,report_type,report_model,period_start,period_end) values($1,$2,$3,$4,$5,100,0,100,'invoiced','unpaid','ADJUST-CLOSE','Adjustment closing','freight','standard','2026-01-01','2026-01-31')",[closing,i.tenant,payer,id,invoice]);
  await db.query("insert into receivables(id,tenant_id,client_id,client_invoice_id,closing_report_id,amount,received_amount,status,description) values($1,$2,$3,$4,$5,100,0,'invoiced','Coherent adjustment graph')",[id,i.tenant,payer,invoice,closing]);
  await cash(id,9000);const before=await money();const event=await write(await adjustment(id,'1000'));

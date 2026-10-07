@@ -15,6 +15,17 @@ import {
 } from '@/lib/driver/driverExpenseSubmission';
 import type {DriverExpenseSource} from '@/lib/driver/driverExpenseOfflineStore';
 
+// Cached values are only an offline fallback. An online denial, invalid
+// session/context or malformed response must remain an error.
+const mayUseOfflineCache=(cause:unknown)=>{
+ if(navigator.onLine)return false;
+ if(cause instanceof TypeError)return /fetch|network|load failed/i.test(cause.message);
+ if(!cause||typeof cause!=='object')return false;
+ const error=cause as {code?:unknown;message?:unknown};
+ // PostgREST serializes a failed fetch into an error object with an empty code.
+ return error.code===''&&typeof error.message==='string'&&/^TypeError:.*(fetch|network|load failed)/i.test(error.message);
+};
+
 const id=z.string().uuid();
 const sourceSchema=z.object({id,driver_id:id,status:z.enum(['planned','in_transit','completed']),notes:z.string().nullable(),created_at:z.string(),actual_start_at:z.string().nullable(),actual_end_at:z.string().nullable()}).strict();
 const sourcesSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,offset:z.number().int().nonnegative(),total:z.number().int().nonnegative(),rows:z.array(sourceSchema).max(50)}).strict();
@@ -34,7 +45,7 @@ export function useOperationalDriverExpenseSources(offset:number,enabled=true){
  return useQuery({queryKey:['driver-expense-operational-sources',tenantId,actorId,offset],enabled:enabled&&!!tenantId&&!!actorId,retry:false,networkMode:'always',queryFn:async({signal})=>{
   try{const {data,error}=await supabase.rpc('list_driver_expense_sources',{_tenant_id:tenantId!,_offset:offset}).abortSignal(signal);if(error)throw error;const page=sourcesSchema.parse(data);
    if(page.tenant_id!==tenantId||page.actor_id!==actorId||page.offset!==offset)throw new Error('Viagens incompatíveis com esta sessão.');if(offset===0)void driverExpenseOfflineStore.saveSources(tenantId!,actorId!,page.rows).catch(()=>{});return {...page,offline:false};
-  }catch(cause){const cached=offset===0?await driverExpenseOfflineStore.readSources(tenantId!,actorId!):[];if(!cached.length)throw cause;return {version:1 as const,tenant_id:tenantId!,actor_id:actorId!,offset,total:cached.length,rows:cached,offline:true};}
+  }catch(cause){if(!mayUseOfflineCache(cause))throw cause;const cached=offset===0?await driverExpenseOfflineStore.readSources(tenantId!,actorId!):[];if(!cached.length)throw cause;return {version:1 as const,tenant_id:tenantId!,actor_id:actorId!,offset,total:cached.length,rows:cached,offline:true};}
  }});
 }
 
@@ -43,7 +54,7 @@ export function useOperationalDriverExpenseContext(sourceId:string|undefined){
  return useQuery({queryKey:['driver-expense-operational-context',tenantId,actorId,sourceId],enabled:!!tenantId&&!!actorId&&!!sourceId,retry:false,networkMode:'always',queryFn:async({signal})=>{
   try{const {data,error}=await supabase.rpc('get_expense_creation_context',{_tenant_id:tenantId!,_source_type:'trip',_source_id:sourceId!}).abortSignal(signal);if(error)throw error;
    const context=parseCreationContext(data,tenantId!,actorId!,'trip',sourceId!);void driverExpenseOfflineStore.saveContext(tenantId!,actorId!,context).catch(()=>{});return {context,offline:false};
-  }catch(cause){const context=await driverExpenseOfflineStore.readContext(tenantId!,actorId!,sourceId!);if(!context)throw cause;return {context,offline:true};}
+  }catch(cause){if(!mayUseOfflineCache(cause))throw cause;const context=await driverExpenseOfflineStore.readContext(tenantId!,actorId!,sourceId!);if(!context)throw cause;return {context,offline:true};}
  }});
 }
 
@@ -52,7 +63,9 @@ export function useDriverExpenseSubmission(){
  const queueKey=['driver-expense-operational-queue',tenantId,actorId] as const;
  const pending=useQuery({queryKey:queueKey,enabled:!!tenantId&&!!actorId,networkMode:'always',queryFn:()=>submission.list(tenantId!,actorId!)});
  const invalidate=async()=>{await Promise.all([client.invalidateQueries({queryKey:queueKey}),client.invalidateQueries({queryKey:['driver_expenses']}),client.invalidateQueries({queryKey:['expense_approval']})]);};
- const submit=useMutation({mutationFn:async({input,file}:{input:ExpenseCreationInput;file:File}):Promise<DriverExpenseSubmissionResult>=>{
+ // Saving is local-first: React Query must enter submission.submit while offline.
+ // The submission persists command/PDF before its own online transport guard.
+ const submit=useMutation({networkMode:'always',mutationFn:async({input,file}:{input:ExpenseCreationInput;file:File}):Promise<DriverExpenseSubmissionResult>=>{
   if(!tenantId||!actorId)throw new Error('Entre e selecione a empresa.');const scope={tenantId,actorId};const result=await submission.submit(tenantId,actorId,input,file);
   if(latest.current.tenantId!==scope.tenantId||latest.current.actorId!==scope.actorId)throw new Error('A sessão mudou. Consulte a fila da sessão original.');return result;
  },onSettled:()=>void invalidate()});

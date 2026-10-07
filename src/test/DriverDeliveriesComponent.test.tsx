@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import DriverDeliveries from '@/pages/driver/DriverDeliveries';
 
 const mocks=vi.hoisted(() => ({
+  tenant:'tenant',actor:'driver-user',stopRead:vi.fn(),realSheets:false,
   stops:[] as Record<string,unknown>[], status:'in_transit', started:true, pending:false, readError:false,online:true,
   liveDriver:true,liveTrip:true,snapshot:null as Record<string,unknown>|null,
   driverRecord:{id:'driver',name:'Motorista QA',user_id:'driver-user'},
@@ -15,8 +16,8 @@ const mocks=vi.hoisted(() => ({
   selectedTrip:null as string|null,
   documents:[] as Record<string,unknown>[],items:[] as Record<string,unknown>[],
 }));
-vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
-vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'driver-user'}})}));
+vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:mocks.tenant}})}));
+vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:mocks.actor}})}));
 vi.mock('@/hooks/useOnlineStatus',()=>({useOnlineStatus:()=>mocks.online}));
 vi.mock('@/hooks/useDriverOperationalOffline',()=>({useDriverOperationalOffline:()=>({
   submit:mocks.arrival,commands:mocks.offlineCommands,pending:mocks.offlineCommands.length,syncing:false,online:mocks.online,
@@ -52,17 +53,20 @@ vi.mock('@/components/driver/DeliveryReceiptScanner',()=>({default:({onChange}:{
     scanMode:'document_scan',crop:{left:0.02,top:0.02,right:0.98,bottom:0.98},quality:{accepted:true,warnings:[]}})}>
     Digitalizar canhoto teste
   </button>}));
-vi.mock('@/components/ui/sheet',()=>({
-  Sheet:({open,children}:{open:boolean;children:ReactNode})=>open?<section>{children}</section>:null,
-  SheetContent:({children}:{children:ReactNode})=><div>{children}</div>,
-  SheetHeader:({children}:{children:ReactNode})=><header>{children}</header>,
-  SheetTitle:({children}:{children:ReactNode})=><h2>{children}</h2>,
-}));
+vi.mock('@/components/ui/sheet',async importOriginal=>{
+  const actual=await importOriginal<typeof import('@/components/ui/sheet')>();
+  return {
+  Sheet:({open,children,...props}:React.ComponentProps<typeof actual.Sheet>)=>mocks.realSheets?<actual.Sheet open={open} {...props}>{children}</actual.Sheet>:open?<section>{children}</section>:null,
+  SheetContent:({children,...props}:React.ComponentProps<typeof actual.SheetContent>)=>mocks.realSheets?<actual.SheetContent {...props}>{children}</actual.SheetContent>:<div>{children}</div>,
+  SheetHeader:({children}:{children:ReactNode})=>mocks.realSheets?<actual.SheetHeader>{children}</actual.SheetHeader>:<header>{children}</header>,
+  SheetTitle:({children}:{children:ReactNode})=>mocks.realSheets?<actual.SheetTitle>{children}</actual.SheetTitle>:<h2>{children}</h2>,
+  SheetDescription:({children}:{children:ReactNode})=>mocks.realSheets?<actual.SheetDescription>{children}</actual.SheetDescription>:<p>{children}</p>,
+};});
 vi.mock('@/integrations/supabase/client',()=>({supabase:{
   rpc:mocks.rpc,
   from:(table:string)=>{
-    const query={select:()=>query,eq:(...args:unknown[])=>{mocks.eq(table,...args);return query;},in:()=>query,order:()=>query,maybeSingle:()=>query,
-      then:(resolve:(value:unknown)=>unknown)=>mocks.pending?new Promise(()=>undefined):Promise.resolve({
+    const query={select:()=>query,eq:(...args:unknown[])=>{mocks.eq(table,...args);return query;},in:()=>query,order:()=>query,maybeSingle:()=>query,abortSignal:()=>query,
+      then:(resolve:(value:unknown)=>unknown)=>table==='dispatch_stops'?mocks.stopRead().then(resolve):mocks.pending?new Promise(()=>undefined):Promise.resolve({
         data:table==='dispatch_stop_documents'?mocks.documents:table==='load_items'?mocks.items:table==='dispatch_stops'?mocks.stops:table==='dispatch_trips'?{id:'trip-selected',status:'completed',driver_id:'driver',tenant_id:'tenant',
           actual_start_at:'2026-08-29T10:00:00Z',dispatch_trip_loads:[],vehicles:null}:[],error:mocks.readError?{message:'Falha de rede'}:null,
       }).then(resolve)};
@@ -72,11 +76,12 @@ vi.mock('@/integrations/supabase/client',()=>({supabase:{
 }}));
 let client:QueryClient;
 beforeEach(()=>{
-  vi.clearAllMocks(); mocks.status='in_transit';mocks.started=true;mocks.pending=false;mocks.readError=false;mocks.selectedTrip=null;
+  vi.clearAllMocks();mocks.realSheets=false;mocks.tenant='tenant';mocks.actor='driver-user'; mocks.status='in_transit';mocks.started=true;mocks.pending=false;mocks.readError=false;mocks.selectedTrip=null;
   mocks.online=true;mocks.liveDriver=true;mocks.liveTrip=true;mocks.snapshot=null;
   mocks.documents=[];mocks.items=[];mocks.offlineCommands=[];
-  mocks.stops=[{id:'stop',dispatch_trip_id:'trip',status:'arrived',destination:'Rua QA',actual_arrival_at:'2026-08-29T12:00:00Z',actual_departure_at:null,
+  mocks.stops=[{id:'stop',tenant_id:'tenant',dispatch_trip_id:'trip',status:'arrived',destination:'Rua QA',actual_arrival_at:'2026-08-29T12:00:00Z',actual_departure_at:null,
     planned_arrival_at:null,dispatch_stop_documents:[],clients:{company_name:'Cliente QA'}}];
+  mocks.stopRead.mockImplementation(async()=>mocks.pending?new Promise(()=>undefined):({data:structuredClone(mocks.stops),error:mocks.readError?{message:'Falha de rede'}:null}));
   mocks.submit.mockResolvedValue({event_id:'event',operational_event_id:'occurrence',replayed:false});
   mocks.arrival.mockResolvedValue({queued:false});
   mocks.location.mockResolvedValue({latitude:-23.55052,longitude:-46.633308,accuracyM:8});
@@ -274,7 +279,7 @@ describe('driver deliveries rendered frontend',()=>{
     expect(mocks.create).toHaveBeenCalledTimes(1);
   });
   it('honors the explicit completed trip and scopes reads to driver and tenant',async()=>{
-    mocks.selectedTrip='trip-selected';renderPage();await screen.findByRole('button',{name:/Cliente QA/});
+    mocks.selectedTrip='trip-selected';mocks.stops[0].dispatch_trip_id='trip-selected';renderPage();await screen.findByRole('button',{name:/Cliente QA/});
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','id','trip-selected');
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','driver_id','driver');
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','tenant_id','tenant');
@@ -327,5 +332,160 @@ describe('driver deliveries rendered frontend',()=>{
     expect(screen.queryByText('Registre a chegada antes do resultado da entrega.')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
     await waitFor(()=>expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({stopId:'stop',expectedStatus:'arrived'})));
+  });
+});
+
+describe('live delivery selection and refresh',()=>{
+  async function openDetail(){const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));return view;}
+  async function updateStops(stops:Record<string,unknown>[]){await act(async()=>{client.setQueryData(['driver_delivery_stops',mocks.tenant,'driver','trip',mocks.actor],stops);await new Promise(resolve=>setTimeout(resolve,10));});}
+  it('updates the open detail with departure, reference and status without reopening',async()=>{
+    await openDetail();expect(screen.getByText('Saída não registrada')).toBeInTheDocument();
+    await updateStops([{...mocks.stops[0],status:'delivered',actual_departure_at:'2026-10-06T12:34:00Z',dispatch_stop_documents:[{fiscal_documents:{invoice_number:null,reference_number:'443659'}}]}]);
+    expect(screen.getByText('Outro: 443659')).toBeInTheDocument();expect(screen.getByText(/06\/10\/2026/)).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'TudoEntregue'})).toBeDisabled();expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();
+  });
+  it('makes refresh visible and disables actions until a delayed response arrives',async()=>{
+    await openDetail();let finish!:(value:unknown)=>void;
+    mocks.stopRead.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    const refreshing=client.invalidateQueries({queryKey:['driver_delivery_stops']});
+    expect(await screen.findByRole('status')).toHaveTextContent('Atualizando os dados');
+    expect(screen.getByRole('button',{name:'TudoEntregue'})).toBeDisabled();
+    finish({data:[{...mocks.stops[0],actual_departure_at:'2026-10-06T12:34:00Z'}],error:null});await act(async()=>{await refreshing;});
+    expect(await screen.findByText(/06\/10\/2026/)).toBeInTheDocument();await waitFor(()=>expect(screen.getByRole('button',{name:'TudoEntregue'})).toBeEnabled());
+  });
+  it.each(['removed','reassigned','other tenant'])('invalidates a %s stop and does not reopen when the ID returns',async(mode)=>{
+    await openDetail();await updateStops(mode==='removed'?[]:[{...mocks.stops[0],...(mode==='reassigned'?{dispatch_trip_id:'other-trip'}:{tenant_id:'other-tenant'})}]);
+    expect(screen.queryByText('Entrega',{selector:'h2'})).not.toBeInTheDocument();
+    await updateStops(mocks.stops);expect(screen.queryByText('Entrega',{selector:'h2'})).not.toBeInTheDocument();
+  });
+  it('updates the selected catalog and blocks all actions after terminal update',async()=>{
+    await openDetail();fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
+    await updateStops([{...mocks.stops[0],status:'cancelled'}]);
+    expect(screen.getByRole('alert')).toHaveTextContent('Esta parada foi encerrada');
+    expect(screen.getByRole('button',{name:'ENTREGUE'})).toBeDisabled();expect(screen.getByRole('button',{name:'OUTROS'})).toBeDisabled();
+  });
+  it('renders the latest client and document in an open form while preserving proof fields',async()=>{
+    await openDelivery();fireEvent.change(screen.getByLabelText(/Recebedor/),{target:{value:'Recebedor preservado'}});
+    await updateStops([{...mocks.stops[0],clients:{company_name:'Cliente atualizado'},dispatch_stop_documents:[{fiscal_documents:{invoice_number:'443659',reference_number:null}}]}]);
+    expect(await screen.findByText('Cliente atualizado',{selector:'p[class="text-sm font-semibold"]'})).toBeInTheDocument();
+    expect(screen.getByText('Pedido 443659')).toBeInTheDocument();expect(screen.getByLabelText(/Recebedor/)).toHaveValue('Recebedor preservado');
+  });
+  it.each(['tenant','actor','trip'])('clears detail immediately on %s change even if the same stop ID exists',async(kind)=>{
+    const view=await openDetail();
+    if(kind==='tenant')mocks.tenant='tenant-two';else if(kind==='actor')mocks.actor='actor-two';else mocks.selectedTrip='trip-selected';
+    view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    expect(screen.queryByText('Entrega',{selector:'h2'})).not.toBeInTheDocument();
+    await waitFor(()=>expect(mocks.stopRead).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Entrega',{selector:'h2'})).not.toBeInTheDocument();
+  });
+  it('ignores a late response from another tenant and clears its cached selection',async()=>{
+    const view=await openDetail();let finish!:(value:unknown)=>void;
+    mocks.stopRead.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    const refreshing=client.invalidateQueries({queryKey:['driver_delivery_stops']});await screen.findByRole('status');
+    mocks.tenant='tenant-two';mocks.stops=[{...mocks.stops[0],tenant_id:'tenant-two',clients:{company_name:'Cliente novo tenant'}}];
+    view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    await screen.findByRole('button',{name:/Cliente novo tenant/});
+    finish({data:[{...mocks.stops[0],tenant_id:'tenant',clients:{company_name:'Resposta antiga'}}],error:null});
+    await act(async()=>{await refreshing;});expect(screen.queryByText('Resposta antiga')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entrega',{selector:'h2'})).not.toBeInTheDocument();
+  });
+  it('rejects an arrival whose context changes while geolocation is pending',async()=>{
+    const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
+    fireEvent.click(screen.getByRole('button',{name:'CHEGADA NO CLIENTE'}));let finish!:(value:unknown)=>void;
+    mocks.location.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));await waitFor(()=>expect(mocks.location).toHaveBeenCalledTimes(1));
+    mocks.tenant='tenant-two';view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    finish({latitude:-23.55,longitude:-46.63,accuracyM:8});await act(async()=>{await Promise.resolve();});
+    expect(mocks.arrival).not.toHaveBeenCalled();expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('ignores a late submitted response after switching actor',async()=>{
+    const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));await fillProof();
+    let finish!:(value:unknown)=>void;mocks.submit.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(1));
+    mocks.actor='actor-two';view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    finish({event_id:'old-event',operational_event_id:'old-occurrence'});await act(async()=>{await Promise.resolve();});
+    expect(screen.queryByRole('button',{name:'Ver evento enviado à operação'})).not.toBeInTheDocument();
+  });
+  it('returns focus to the opener through real detail, catalog and form sheets',async()=>{
+    mocks.realSheets=true;const user=(await import('@testing-library/user-event')).default.setup();renderPage();
+    const opener=await screen.findByRole('button',{name:/Cliente QA/});await user.click(opener);
+    await screen.findByRole('dialog',{name:'Entrega'});await user.click(screen.getByRole('button',{name:'Lançar evento'}));
+    await screen.findByRole('dialog',{name:'Listagem de eventos'});await user.click(screen.getByRole('button',{name:'OUTROS'}));
+    const dialog=await screen.findByRole('dialog',{name:'Dados do evento'});expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard('{Escape}');await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());expect(opener).toHaveFocus();
+  });
+});
+
+describe('delivery selection lifecycle regressions',()=>{
+  const key=['driver_delivery_stops','tenant','driver','trip','driver-user'];
+  it('keeps a different stop selected when a late response updates the first stop, then reopens current data',async()=>{
+    mocks.stops.push({...mocks.stops[0],id:'stop-two',clients:{company_name:'Segundo cliente'}});
+    const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));
+    let finish!:(value:unknown)=>void;mocks.stopRead.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    const refreshing=client.invalidateQueries({queryKey:['driver_delivery_stops']});await screen.findByRole('status');
+    // Simulate an independent selection while the query is in flight.
+    fireEvent.click(screen.getByRole('button',{name:/Segundo cliente/}));
+    finish({data:[{...mocks.stops[0],notes:'Documento 443659',actual_departure_at:'2026-10-06T12:34:00Z'},mocks.stops[1]],error:null});
+    await act(async()=>{await refreshing;});
+    expect(screen.queryByText('Outro: 443659')).not.toBeInTheDocument();expect(screen.getByText('Saída não registrada')).toBeInTheDocument();
+    mocks.realSheets=true;view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    const user=(await import('@testing-library/user-event')).default.setup();await user.keyboard('{Escape}');
+    await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button',{name:/Cliente QA/}));
+    expect(await screen.findByText('Outro: 443659')).toBeInTheDocument();expect(screen.getByText(/06\/10\/2026/)).toBeInTheDocument();
+  });
+  it('closes a removed catalog permanently and rejects a later resurrection of the same ID',async()=>{
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
+    await act(async()=>{client.setQueryData(key,[]);await new Promise(resolve=>setTimeout(resolve,10));});
+    expect(screen.queryByText('Listagem de eventos')).not.toBeInTheDocument();
+    await act(async()=>{client.setQueryData(key,mocks.stops);await new Promise(resolve=>setTimeout(resolve,10));});
+    expect(screen.queryByText('Listagem de eventos')).not.toBeInTheDocument();
+  });
+  it('shows explicit absent document and departure values',async()=>{
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));
+    expect(screen.getByText('Outro: —')).toBeInTheDocument();expect(screen.getByText('Saída não registrada')).toBeInTheDocument();expect(screen.getByText('Sem previsão cadastrada')).toBeInTheDocument();
+  });
+  it('blocks a refreshed read failure even when an owned cached snapshot keeps the detail visible',async()=>{
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));await waitFor(()=>expect(mocks.snapshotPut).toHaveBeenCalled());
+    mocks.readError=true;await act(async()=>{await client.invalidateQueries({queryKey:['driver_delivery_stops']});});
+    await waitFor(()=>expect(screen.getByRole('button',{name:'TudoEntregue'})).toBeDisabled());
+    expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();expect(mocks.submit).not.toHaveBeenCalled();
+  });
+  it('does not submit arrival when another session terminates the stop during GPS acquisition',async()=>{
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));fireEvent.click(screen.getByRole('button',{name:'CHEGADA NO CLIENTE'}));
+    let finish!:(value:unknown)=>void;mocks.location.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));await waitFor(()=>expect(mocks.location).toHaveBeenCalled());
+    await act(async()=>{client.setQueryData(key,[{...mocks.stops[0],status:'delivered'}]);await new Promise(resolve=>setTimeout(resolve,10));});
+    finish({latitude:-23.55,longitude:-46.63,accuracyM:8});
+    await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Envio não confirmado'})));
+    expect(mocks.arrival).not.toHaveBeenCalled();expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('clears form proof before a different actor starts a new attempt',async()=>{
+    const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));fireEvent.change(screen.getByLabelText(/Recebedor/),{target:{value:'Ator anterior'}});
+    mocks.actor='actor-two';view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    await waitFor(()=>expect(screen.queryByLabelText(/Recebedor/)).not.toBeInTheDocument());
+    fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));
+    expect(screen.getByLabelText(/Recebedor/)).toHaveValue('');
+  });
+});
+
+describe('context generation and snapshot boundaries',()=>{
+  it('ignores an old success even after returning to the same actor and opening a fresh form',async()=>{
+    const view=renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));await fillProof();
+    let finish!:(value:unknown)=>void;mocks.submit.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));await waitFor(()=>expect(mocks.submit).toHaveBeenCalled());
+    mocks.actor='actor-two';view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    await waitFor(()=>expect(screen.queryByLabelText(/Recebedor/)).not.toBeInTheDocument());
+    mocks.actor='driver-user';view.rerender(<QueryClientProvider client={client}><DriverDeliveries/></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));
+    fireEvent.change(screen.getByLabelText(/Recebedor/),{target:{value:'Novo rascunho'}});
+    finish({event_id:'old-event',operational_event_id:'old-occurrence'});await act(async()=>{await Promise.resolve();});
+    expect(screen.getByLabelText(/Recebedor/)).toHaveValue('Novo rascunho');expect(screen.queryByRole('button',{name:'Ver evento enviado à operação'})).not.toBeInTheDocument();
+  });
+  it.each(['tenant','actor'])('rejects an offline snapshot belonging to a different %s',async(kind)=>{
+    mocks.online=false;mocks.liveDriver=false;mocks.liveTrip=false;mocks.stops=[];
+    mocks.snapshot={tenantId:kind==='tenant'?'other-tenant':'tenant',actorId:kind==='actor'?'other-actor':'driver-user',tripId:'trip'};
+    renderPage();expect(await screen.findByRole('alert')).toHaveTextContent('Falha de rede');
+    expect(screen.queryByRole('button',{name:/Cliente QA/})).not.toBeInTheDocument();expect(mocks.create).not.toHaveBeenCalled();
   });
 });

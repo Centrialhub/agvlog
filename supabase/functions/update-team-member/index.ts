@@ -89,10 +89,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "send_password_reset") {
+      if (targetMembership.role === "driver") {
+        return new Response(JSON.stringify({ error: "Troque a senha pelo gerenciamento de acesso do motorista." }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { data: target, error: targetError } = await adminClient.auth.admin.getUserById(user_id);
       if (targetError || !target.user?.email) {
         return new Response(JSON.stringify({ error: targetError?.message || "User email not found" }), {
           status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (target.user.app_metadata?.driver_username_managed || target.user.email.toLowerCase().endsWith("@usuario.com")) {
+        return new Response(JSON.stringify({ error: "Troque a senha pelo gerenciamento de acesso do motorista." }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const appOrigin = Deno.env.get("AGVLOG_APP_ORIGIN")?.replace(/\/$/, "") || "https://agvlogistica.vercel.app";

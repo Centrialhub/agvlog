@@ -14,12 +14,15 @@ const ids = {
 
 const mock = vi.hoisted(() => ({
   rpc: vi.fn(),
+  download: vi.fn(),
+  actor: "10000000-0000-4000-8000-000000000001",
   responses: [] as Array<{ data: unknown; error: unknown }>,
 }));
 
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: ids.tenant } }) }));
-vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: ids.actor } }) }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: mock.actor } }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mock.rpc } }));
+vi.mock('@/lib/driver/fiscalFileDownload', () => ({ downloadDriverFiscalFile: mock.download }));
 vi.mock('@/lib/romaneioPrint', () => ({ printRomaneioRoutes: vi.fn() }));
 
 const safeCatalog = {
@@ -33,16 +36,18 @@ const safeCatalog = {
 
 let client: QueryClient;
 
-function Story() {
+function Story({ loadId = ids.load }: { loadId?: string } = {}) {
   return (
     <QueryClientProvider client={client}>
-      <DriverLoadNotes loadId={ids.load} loadNumber="1012" />
+      <DriverLoadNotes loadId={loadId} loadNumber="1012" />
     </QueryClientProvider>
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.actor = ids.actor;
+  mock.download.mockReset();
   mock.responses = [{ data: safeCatalog, error: null }];
   mock.rpc.mockImplementation(() => {
     let response: { data: unknown; error: unknown } | undefined;
@@ -112,67 +117,52 @@ describe('DriverLoadNotes read-only fiscal catalog', () => {
     expect(screen.queryByText('NF-e 1012')).not.toBeInTheDocument();
   });
 
-  it('opens only an HTTPS file returned by the scoped file RPC', async () => {
-    let clickedHref = '';
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      clickedHref = this.href;
+  it.each(['pdf', 'xml'] as const)('downloads authorized %s bytes and immediately revokes the local URL', async format => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const createObjectURL = vi.fn(() => 'blob:local-fixture329');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', class extends URL {
+      static override createObjectURL = createObjectURL;
+      static override revokeObjectURL = revokeObjectURL;
     });
-    mock.responses = [
-      { data: safeCatalog, error: null },
-      { data: { load_id: ids.load, kind: 'cte', document_id: ids.cte, format: 'pdf', source: 'url', filename: 'cte-7001.pdf', url: 'https://files.example.test/cte-7001.pdf' }, error: null },
-    ];
+    const blob = new Blob([format === 'pdf' ? '%PDF-1.7 fixture' : '<cteProc/>']);
+    mock.download.mockResolvedValue({ blob, filename: 'cte-7001.' + format });
+    render(<Story />);
+    fireEvent.click(screen.getByRole('button', { name: /Documentos fiscais/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir ' + format.toUpperCase() + ' do CT-e 7001' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(mock.download).toHaveBeenCalledWith({ tenantId: ids.tenant, actorId: ids.actor, loadId: ids.load,
+      kind: 'cte', documentId: ids.cte, format }, expect.any(AbortSignal));
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:local-fixture329');
+    expect(mock.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a finite download failure without opening a provider URL', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    mock.download.mockRejectedValue(new Error('UNAUTHORIZED fixture'));
     render(<Story />);
     fireEvent.click(screen.getByRole('button', { name: /Documentos fiscais/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Abrir PDF do CT-e 7001' }));
-    await waitFor(() => expect(mock.rpc).toHaveBeenCalledWith('driver_get_load_fiscal_file', {
-      _tenant_id: ids.tenant,
-      _load_id: ids.load,
-      _document_kind: 'cte',
-      _document_id: ids.cte,
-      _format: 'pdf',
-    }));
-    expect(click).toHaveBeenCalledTimes(1);
-    expect(clickedHref).toBe('https://files.example.test/cte-7001.pdf');
-    click.mockRestore();
-  });
-
-  it('rejects an unsafe file URL without navigating', async () => {
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    mock.responses = [
-      { data: safeCatalog, error: null },
-      { data: { load_id: ids.load, kind: 'nfse', document_id: ids.nfse, format: 'xml', source: 'url', filename: 'nfse-8001.xml', url: 'javascript:alert(1)' }, error: null },
-    ];
-    render(<Story />);
-    fireEvent.click(screen.getByRole('button', { name: /Documentos fiscais/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Abrir XML do NFS-e 8001' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível abrir o arquivo fiscal');
     expect(click).not.toHaveBeenCalled();
-    click.mockRestore();
+    expect(screen.getByRole('button', { name: 'Abrir PDF do CT-e 7001' })).not.toBeDisabled();
   });
 
-  it('downloads an inline CT-e XML without making another network request', async () => {
-    let downloadedName = '';
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      downloadedName = this.download;
-    });
-    const NativeUrl = URL;
-    const createObjectUrl = vi.fn(() => 'blob:cte-7001');
-    const revokeObjectUrl = vi.fn();
-    class FileUrl extends NativeUrl {
-      static override createObjectURL = createObjectUrl;
-      static override revokeObjectURL = revokeObjectUrl;
-    }
-    vi.stubGlobal('URL', FileUrl);
-    mock.responses = [
-      { data: safeCatalog, error: null },
-      { data: { load_id: ids.load, kind: 'cte', document_id: ids.cte, format: 'xml', source: 'inline', filename: 'cte-7001.xml', content: '<cteProc />' }, error: null },
-    ];
-    render(<Story />);
+  it.each(['actor', 'load'])('aborts and discards a pending download after %s changes', async contextChange => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    let resolve: (file: { blob: Blob; filename: string }) => void = () => undefined;
+    mock.download.mockImplementation(() => new Promise(done => { resolve = done; }));
+    const story = render(<Story />);
     fireEvent.click(screen.getByRole('button', { name: /Documentos fiscais/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Abrir XML do CT-e 7001' }));
-    await waitFor(() => expect(createObjectUrl).toHaveBeenCalledTimes(1));
-    expect(downloadedName).toBe('cte-7001.xml');
-    expect(click).toHaveBeenCalledTimes(1);
-    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:cte-7001');
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir PDF do CT-e 7001' }));
+    mock.responses = [{ data: { ...safeCatalog, load_id: contextChange === 'load' ? ids.note : ids.load }, error: null }];
+    if (contextChange === 'actor') mock.actor = ids.note;
+    story.rerender(<Story loadId={contextChange === 'load' ? ids.note : ids.load} />);
+    const signal = mock.download.mock.calls[0][1] as AbortSignal;
+    expect(signal.aborted).toBe(true);
+    resolve({ blob: new Blob(['%PDF-1.7 fixture']), filename: 'cte-7001.pdf' });
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(click).not.toHaveBeenCalled();
   });
 });

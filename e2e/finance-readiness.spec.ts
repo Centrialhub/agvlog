@@ -25,7 +25,7 @@ test('financial pages load their actual backend queries for an internal operator
    page.on('response',capture);
    try{
     await page.goto(path);
-    await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:heading,exact:true,level:1})).toBeVisible();
     await expect(page.locator('[role="status"]').filter({hasText:/Carregando|Consultando|Verificando/})).toHaveCount(0,{timeout:20_000});
     await expect(page.getByRole('alert').filter({hasText:/Não foi possível|não está disponível|não permitido/})).toHaveCount(0);
     expect(failures,'RPCs devem existir e aceitar a consulta autorizada').toEqual([]);

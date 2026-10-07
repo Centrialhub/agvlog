@@ -10,9 +10,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileStack, MapPin, Truck, CheckCircle, Loader2, User, UserX } from 'lucide-react';
+import { FileStack, MapPin, Truck, CheckCircle, Loader2, User, UserX, Plus } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 import { matchOperationalRoute } from '@/lib/routes/matchOperationalRoute';
@@ -20,30 +20,9 @@ import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import type { LoadHeaderChanges } from '@/lib/loads/loadAggregateCommands';
 import { useLoadCreation } from '@/hooks/useLoadCreation';
 import { suggestGroupDrivers, suggestGroupVehicles } from '@/lib/loads/groupAssignments';
-
-interface PendingDoc {
-  id: string;
-  invoice_number: string | null;
-  recipient: string | null;
-  recipient_city: string | null;
-  recipient_state: string | null;
-  pallet_count: number | null;
-  weight_kg: number | null;
-  value: number | null;
-  created_at: string;
-  clients?: { company_name: string } | null;
-}
-
-interface RouteGroup {
-  routeId: string | null;
-  routeName: string;
-  docs: PendingDoc[];
-  totalPallets: number;
-  totalWeight: number;
-  totalValue: number;
-  cities: string[];
-  ambiguousCities?: string[];
-}
+import { combinePendingGroups, type CombinedRouteGroup, type GroupCombination, type PendingRouteDoc, type PendingRouteGroup } from '@/lib/loads/pendingGroupCombinations';
+import { PendingGroupPicker } from './PendingGroupPicker';
+import { canSelectDocumentForNewLoad } from '@/lib/loads/newLoadDocumentSelection';
 
 interface Props {
   open: boolean;
@@ -64,29 +43,33 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [vehicleAssignments, setVehicleAssignments] = useState<Map<string, string>>(new Map());
   const [driverAssignments, setDriverAssignments] = useState<Map<string, string>>(new Map());
+  const [combinations, setCombinations] = useState<GroupCombination[]>([]);
+  const [combiningTarget, setCombiningTarget] = useState<string | null>(null);
   const initialSelectionApplied = useRef(false);
 
   const { data: drivers = [] } = useDrivers({ enabled: open });
 
-  const { data: pendingDocs = [], isLoading } = useQuery({
+  const { data: pendingDocs = [], isLoading, isPending, isFetching, isError, refetch } = useQuery({
     queryKey: ['pending_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
-        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, clients!fiscal_documents_client_id_fkey(company_name)')
+        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')
         .is('load_id', null)
         .is('deleted_at', null)
         .order('created_at', { ascending: true }).order('id')
-        .range(from, to)) as Promise<PendingDoc[]>;
+        .range(from, to).overrideTypes<PendingRouteDoc[], { merge: false }>());
     },
     enabled: !!currentTenant && open,
   });
 
+  const eligibleDocs = useMemo(() => pendingDocs.filter(canSelectDocumentForNewLoad), [pendingDocs]);
+
   // Group docs by operational route
-  const groups = useMemo(() => {
+  const baseGroups = useMemo(() => {
     const routeRefs = operationalRoutes.map(r => ({
       id: r.id,
       name: r.name,
@@ -95,9 +78,9 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
         : [],
     }));
 
-    const groupMap = new Map<string, RouteGroup>();
+    const groupMap = new Map<string, PendingRouteGroup>();
 
-    for (const doc of pendingDocs) {
+    for (const doc of eligibleDocs) {
       const city = doc.recipient_city || '';
       const { matched: matchedRoute, ambiguous } = matchOperationalRoute(city, routeRefs);
 
@@ -130,11 +113,16 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     }
 
     return Array.from(groupMap.values()).sort((a, b) => b.totalPallets - a.totalPallets);
-  }, [pendingDocs, operationalRoutes]);
+  }, [eligibleDocs, operationalRoutes]);
+  const groups = useMemo(() => combinePendingGroups(baseGroups, combinations), [baseGroups, combinations]);
+  const selectedCount = groups.filter(group => selectedGroups.has(group.routeName)).length;
+  const availabilityBlocked = isPending || isFetching || isError;
+  const planLocked = executing || creation.isPending || !!creation.error || creation.pending.length > 0 || availabilityBlocked;
 
   useEffect(() => {
     setVehicleAssignments(new Map()); setDriverAssignments(new Map()); manualDrivers.current.clear();
     initialSelectionApplied.current = false; setSelectedGroups(new Set());
+    setCombinations([]); setCombiningTarget(null);
   }, [currentTenant?.id]);
 
   // Auto-select only once per dialog opening; an explicit empty selection is preserved.
@@ -142,21 +130,28 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     if (!open) {
       initialSelectionApplied.current = false;
       setSelectedGroups(new Set());
-    } else if (!initialSelectionApplied.current && groups.length > 0) {
+      setCombinations([]); setCombiningTarget(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && !availabilityBlocked && !initialSelectionApplied.current && groups.length > 0) {
       setSelectedGroups(new Set(groups.map(g => g.routeName)));
       initialSelectionApplied.current = true;
     }
-  }, [groups, open]);
+  }, [groups, open, availabilityBlocked]);
 
   // Suggestions fill untouched choices only; explicit empty selections survive.
   useEffect(() => {
+    if (availabilityBlocked) return;
     setVehicleAssignments(previous => suggestGroupVehicles(groups, vehicles, previous));
-  }, [vehicles, groups]);
+  }, [vehicles, groups, availabilityBlocked]);
 
   // Auto-suggest driver based on vehicle assignment
   useEffect(() => {
+    if (availabilityBlocked) return;
     setDriverAssignments(previous => suggestGroupDrivers(groups, vehicles, drivers, vehicleAssignments, previous, manualDrivers.current));
-  }, [vehicleAssignments, drivers, groups, vehicles]);
+  }, [vehicleAssignments, drivers, groups, vehicles, availabilityBlocked]);
 
   const refreshLoads = () => {
     for (const key of ['loads', 'fiscal_documents', 'pending_fiscal_docs', 'load_items', 'pending_docs_count', 'new_load_available_fiscal_docs']) {
@@ -173,6 +168,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   };
 
   const toggleGroup = (name: string) => {
+    if (planLocked) return;
     setSelectedGroups(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
@@ -181,7 +177,41 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     });
   };
 
+  const handleCombine = (target: CombinedRouteGroup, source: CombinedRouteGroup) => {
+    if (planLocked || target.routeName === source.routeName) return;
+    setCombinations(previous => {
+      // Keep the full plan, including destinations temporarily absent from the query.
+      // Otherwise the stable target could reappear as a second group with the same key.
+      const targetMembers = previous.find(item => item.target === target.routeName)?.members || target.members;
+      const sourceMembers = previous.find(item => item.target === source.routeName)?.members || source.members;
+      return [
+        ...previous.filter(item => item.target !== target.routeName && item.target !== source.routeName),
+        { target: target.routeName, members: Array.from(new Set([...targetMembers, ...sourceMembers])) },
+      ];
+    });
+    setSelectedGroups(previous => {
+      const next = new Set(previous);
+      next.delete(source.routeName);
+      next.add(target.routeName);
+      return next;
+    });
+    setCombiningTarget(null);
+  };
+
+  const handleSeparate = (group: CombinedRouteGroup) => {
+    if (planLocked) return;
+    setCombinations(previous => previous.filter(item => item.target !== group.routeName));
+    setSelectedGroups(previous => {
+      const next = new Set(previous);
+      next.delete(group.routeName);
+      if (previous.has(group.routeName)) group.members.forEach(name => next.add(name));
+      return next;
+    });
+    setCombiningTarget(null);
+  };
+
   const handleExecute = async () => {
+    if (planLocked) return;
     const selected = groups.filter(g => selectedGroups.has(g.routeName));
     if (selected.length === 0) return;
     const overCapacity = selected.find(group => {
@@ -207,7 +237,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           const docIds = group.docs.map(d => d.id);
           await creation.submit(group.routeName, {
               changes: {
-                destination: group.routeName,
+                destination: group.destination,
                 vehicle_id: vehicleId,
                 driver_id: driverId,
               } satisfies LoadHeaderChanges,
@@ -236,7 +266,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     }
   };
 
-  const getOccupancy = (group: RouteGroup) => {
+  const getOccupancy = (group: PendingRouteGroup) => {
     const vId = vehicleAssignments.get(group.routeName);
     const vehicle = vId ? vehicles.find(candidate => candidate.id === vId) : null;
     if (!vehicle || !vehicle.max_pallets) return null;
@@ -245,7 +275,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={value => { if (!executing && !creation.isPending) onOpenChange(value); }}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         {creation.error && <p role="alert" className="text-sm text-destructive">{creation.error}</p>}
         {creation.pending.map(pending => <div key={pending.scope} className="flex items-center justify-between gap-3 rounded border p-3 text-sm">
@@ -257,11 +287,17 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             <FileStack className="h-5 w-5 text-primary" />
             Agrupar NF-es Pendentes em Cargas
           </DialogTitle>
+          <DialogDescription>Use o (+) para juntar destinos na mesma carga antes de criar. Confira as notas, os totais e o veículo.</DialogDescription>
         </DialogHeader>
+
+        {isError && <div role="alert" className="space-y-2 rounded border border-destructive/30 p-3 text-sm text-destructive">
+          <p>Não foi possível atualizar a disponibilidade das notas. O plano foi mantido. Atualize antes de alterar ou criar cargas.</p>
+          <Button variant="outline" disabled={isFetching || executing || creation.isPending} onClick={() => void refetch()}>Atualizar notas</Button>
+        </div>}
 
         {isLoading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando NF-es pendentes...</div>
-        ) : pendingDocs.length === 0 ? (
+        ) : eligibleDocs.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             Nenhuma NF-e pendente (sem carga vinculada).
             <br />
@@ -269,23 +305,24 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Badge variant="outline">{pendingDocs.length} NF-es pendentes</Badge>
-              <Badge variant="outline">{groups.length} rotas identificadas</Badge>
-              <Badge variant="outline">{selectedGroups.size} selecionadas</Badge>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <Badge variant="outline">{eligibleDocs.length} NF-es pendentes</Badge>
+              <Badge variant="outline">{groups.length} grupos de carga</Badge>
+              <Badge variant="outline">{selectedCount} selecionadas</Badge>
             </div>
 
             {groups.map(g => {
               const selected = selectedGroups.has(g.routeName);
               const occ = getOccupancy(g);
-              const isOver = occ && occ.pct > 100;
+              const isOver = occ && occ.vehicle.max_pallets != null && g.totalPallets > occ.vehicle.max_pallets;
 
               return (
                 <Card key={g.routeName} className={`transition-all ${selected ? '' : 'opacity-50'} ${isOver ? 'border-destructive/30' : ''}`}>
                   <CardContent className="py-3 px-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Checkbox
-                        disabled={executing || creation.isPending}
+                        disabled={planLocked}
+                        aria-label={`Selecionar ${g.destination}`}
                         checked={selected}
                         onCheckedChange={() => toggleGroup(g.routeName)}
                       />
@@ -293,9 +330,19 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge className={g.routeId ? 'bg-primary/10 text-primary border-primary/20 gap-1' : 'bg-warning/10 text-warning border-warning/20 gap-1'}>
                             <MapPin className="h-3 w-3" />
-                            {g.routeName}
+                            {g.destination}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">{g.docs.length} NF-es</Badge>
+                          <Button variant="outline" size="icon" className="h-7 w-7" disabled={planLocked || groups.length < 2}
+                            aria-label={`Juntar outro grupo a ${g.destination}`} title="Juntar outro grupo a esta carga"
+                            aria-expanded={combiningTarget === g.routeName}
+                            onClick={() => { if (!planLocked) setCombiningTarget(previous => previous === g.routeName ? null : g.routeName); }}>
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          {combinations.some(item => item.target === g.routeName) && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={planLocked}
+                              aria-label={`Separar grupos de ${g.destination}`} onClick={() => handleSeparate(g)}>Separar grupos</Button>
+                          )}
                           {g.ambiguousCities && g.ambiguousCities.length > 0 && (
                             <Badge variant="outline" className="text-[10px] border-warning/40 text-warning" title={`Cidades cobertas por >1 rota ativa: ${g.ambiguousCities.join(', ')}. Revise antes de confirmar.`}>
                               Rota ambígua ({g.ambiguousCities.length})
@@ -309,22 +356,23 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span>{g.totalPallets} paletes</span>
+                          {isOver && <span role="alert" className="text-destructive">Excede a capacidade do veículo</span>}
                           {g.totalWeight > 0 && <span>{g.totalWeight.toLocaleString('pt-BR')} kg</span>}
                           {g.totalValue > 0 && <span>R$ {g.totalValue.toLocaleString('pt-BR')}</span>}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex flex-wrap items-center gap-3 max-w-full">
                         <Select
-                          disabled={executing || creation.isPending}
+                          disabled={planLocked}
                           value={vehicleAssignments.get(g.routeName) || '__none__'}
-                          onValueChange={v => setVehicleAssignments(prev => {
+                          onValueChange={v => { if (planLocked) return; setVehicleAssignments(prev => {
                             const next = new Map(prev);
                             next.set(g.routeName, v === '__none__' ? '' : v);
                             return next;
-                          })}
+                          }); }}
                         >
-                          <SelectTrigger className="w-[140px] h-8 text-xs">
+                          <SelectTrigger className="w-[140px] h-8 text-xs" aria-label={`Veículo de ${g.destination}`}>
                             <SelectValue placeholder="Veículo" />
                           </SelectTrigger>
                           <SelectContent>
@@ -342,15 +390,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                         </Select>
 
                         <Select
-                          disabled={executing || creation.isPending}
+                          disabled={planLocked}
                           value={driverAssignments.get(g.routeName) || '__none__'}
-                          onValueChange={v => { manualDrivers.current.add(g.routeName); setDriverAssignments(prev => {
+                          onValueChange={v => { if (planLocked) return; manualDrivers.current.add(g.routeName); setDriverAssignments(prev => {
                             const next = new Map(prev);
                             next.set(g.routeName, v === '__none__' ? '' : v);
                             return next;
                           }); }}
                         >
-                          <SelectTrigger className="w-[160px] h-8 text-xs">
+                          <SelectTrigger className="w-[160px] h-8 text-xs" aria-label={`Motorista de ${g.destination}`}>
                             <SelectValue placeholder="Motorista" />
                           </SelectTrigger>
                           <SelectContent>
@@ -379,14 +427,18 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                         )}
                       </div>
                     </div>
+                    {combiningTarget === g.routeName && (
+                      <PendingGroupPicker target={g} candidates={groups.filter(group => group.routeName !== g.routeName)}
+                        disabled={planLocked} onAdd={source => handleCombine(g, source)} onCancel={() => setCombiningTarget(null)} />
+                    )}
                   </CardContent>
                 </Card>
               );
             })}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleExecute} disabled={executing || creation.isPending || !!creation.error || creation.pending.length > 0 || selectedGroups.size === 0 || groups.some(group => {
+              <Button variant="outline" disabled={executing || creation.isPending} onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button onClick={handleExecute} disabled={planLocked || selectedCount === 0 || groups.some(group => {
                 if (!selectedGroups.has(group.routeName)) return false;
                 const vehicle = vehicles.find(candidate => candidate.id === vehicleAssignments.get(group.routeName));
                 return vehicle?.max_pallets != null && vehicle.max_pallets > 0 && group.totalPallets > vehicle.max_pallets;
@@ -394,7 +446,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                 {executing ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Criando...</>
                 ) : (
-                  <><CheckCircle className="h-4 w-4 mr-2" /> Criar {selectedGroups.size} Carga(s)</>
+                  <><CheckCircle className="h-4 w-4 mr-2" /> Criar {selectedCount} Carga(s)</>
                 )}
               </Button>
             </div>

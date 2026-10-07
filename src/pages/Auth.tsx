@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,10 +10,13 @@ import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { IntegraLabsCredit } from '@/components/branding/IntegraLabsCredit';
 import { authErrorMessage } from '@/lib/auth/authErrorMessage';
+import { driverLoginEmail, driverUsernameFromEmail } from '@/lib/auth/driverCredentials';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { backendUnavailable } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const driverAccess = params.get('access') === 'driver';
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8">
@@ -50,11 +54,15 @@ export default function Auth() {
           <CardHeader className="pb-4">
             <CardTitle>Entrar</CardTitle>
             <CardDescription>
-              O acesso é criado por convite do administrador da sua empresa.
+              {driverAccess ? 'Use o usuário e a senha informados pela sua empresa.' : 'O acesso é criado por convite do administrador da sua empresa.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <LoginForm loading={loading} setLoading={setLoading} />
+            <div className="mb-4 flex gap-2">
+              <Button type="button" variant={driverAccess ? 'default' : 'outline'} disabled={loading} aria-pressed={driverAccess} onClick={() => setParams({ access: 'driver' }, { replace: true })}>Motorista</Button>
+              <Button type="button" variant={driverAccess ? 'outline' : 'default'} disabled={loading} aria-pressed={!driverAccess} onClick={() => setParams({}, { replace: true })}>Painel e clientes</Button>
+            </div>
+            <LoginForm key={driverAccess ? 'driver' : 'email'} driverAccess={driverAccess} loading={loading} setLoading={setLoading} />
           </CardContent>
         </Card>
         <IntegraLabsCredit className="mt-6" />
@@ -63,7 +71,7 @@ export default function Auth() {
   );
 }
 
-function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: boolean) => void }) {
+function LoginForm({ driverAccess, loading, setLoading }: { driverAccess: boolean; loading: boolean; setLoading: (v: boolean) => void }) {
   const toast = useSonnerToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,10 +82,11 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) toast.error(authErrorMessage(error));
+      const loginEmail = driverAccess ? driverLoginEmail(email) : email.trim().toLowerCase();
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+      if (error) toast.error(driverAccess && error.code === 'invalid_credentials' ? 'Usuário ou senha inválidos.' : authErrorMessage(error));
     } catch (error) {
-      toast.error(authErrorMessage(error, 'Não foi possível conectar ao serviço de autenticação.'));
+      toast.error(error instanceof Error && error.message.startsWith('Use um usuário') ? error.message : authErrorMessage(error, 'Não foi possível conectar ao serviço de autenticação.'));
     } finally {
       setLoading(false);
     }
@@ -85,6 +94,10 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
 
   const handlePasswordReset = async () => {
     const normalizedEmail = email.trim().toLowerCase();
+    if (driverAccess || driverUsernameFromEmail(normalizedEmail)) {
+      toast.info('Solicite a troca de senha ao painel operacional da sua empresa.');
+      return;
+    }
     if (!normalizedEmail) {
       toast.error('Informe seu e-mail para receber o link de redefinição.');
       return;
@@ -106,8 +119,8 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
   return (
     <form onSubmit={handleLogin} className="space-y-4" aria-busy={loading}>
       <div className="space-y-2">
-        <Label htmlFor="login-email">Email</Label>
-        <Input id="login-email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="seu.email@empresa.com.br" className="h-11 text-base md:text-sm" value={email} onChange={e => setEmail(e.target.value)} required />
+        <Label htmlFor="login-email">{driverAccess ? 'Usuário' : 'Email'}</Label>
+        <Input id="login-email" name={driverAccess ? 'username' : 'email'} type={driverAccess ? 'text' : 'email'} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={driverAccess ? 'seu.usuario' : 'seu.email@empresa.com.br'} className="h-11 text-base md:text-sm" value={email} onChange={e => setEmail(e.target.value)} required />
       </div>
       <div className="space-y-2">
         <Label htmlFor="login-password">Senha</Label>
@@ -122,9 +135,9 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
         {loading && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
         {loading ? 'Entrando...' : 'Entrar'}
       </Button>
-      <Button type="button" variant="link" className="w-full" disabled={loading || resetting} onClick={handlePasswordReset}>
+      {driverAccess ? <p className="text-center text-sm text-muted-foreground">Esqueceu sua senha? Solicite a troca ao painel operacional da sua empresa.</p> : <Button type="button" variant="link" className="w-full" disabled={loading || resetting} onClick={handlePasswordReset}>
         {resetting ? 'Enviando link...' : 'Esqueci minha senha'}
-      </Button>
+      </Button>}
     </form>
   );
 }

@@ -27,7 +27,9 @@ beforeEach(async()=>{
 });
 const count=async()=>Number((await db.query<{n:number}>('select count(*)::int n from load_items where load_id=$1',[i.load2])).rows[0].n);
 async function run(input=orders()){
- const outbox=controller();return prepareOrderItems({loadId:i.load2,loadNumber:1003,orders:input,orderIds:new Map(),confirmedCount:0,
+ const orderIds=new Map(input.map(({source},n)=>[source.orderNumber,`b0000000-0000-4000-8000-${String(n+1).padStart(12,'0')}`]));
+ for(const id of orderIds.values())await db.query('insert into orders(id,tenant_id) values($1,$2)',[id,i.tenant]);
+ const outbox=controller();return prepareOrderItems({loadId:i.load2,loadNumber:1003,orders:input,orderIds,confirmedCount:0,
   submit:(payload:Omit<ItemPreparationPayload,'tenant_id'>)=>outbox.submit(i.tenant,i.operator,{...payload,tenant_id:i.tenant})});
 }
 describe('ingestion order-item sequence with real outbox/SQL and result component',()=>{

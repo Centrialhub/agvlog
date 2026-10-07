@@ -37,14 +37,19 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!membership) return json({ error: "Forbidden" }, 403);
 
-    const { data: memberships, error: mErr } = await admin
-      .from("tenant_memberships")
-      .select("user_id")
-      .eq("tenant_id", tenant_id);
-    if (mErr) return json({ error: mErr.message }, 500);
+    const memberships: Array<{ user_id: string; active: boolean }> = [];
+    for (let from = 0; ; from += 500) {
+      const { data, error } = await admin.from("tenant_memberships").select("user_id,active")
+        .eq("tenant_id", tenant_id).order("user_id").range(from, from + 499);
+      if (error) return json({ error: error.message }, 500);
+      memberships.push(...(data || []));
+      if ((data?.length || 0) < 500) break;
+    }
 
     const ids = [...new Set((memberships || []).map((m) => m.user_id))];
+    const activeIds = new Set((memberships || []).filter(m => m.active).map(m => m.user_id));
     const users: Array<{ id: string; email: string | null; full_name: string | null }> = [];
+    const retiredUserIds: string[] = [];
 
     // Memberships already provide the authoritative IDs. Resolve those users
     // directly instead of scanning a capped prefix of the global auth catalog.
@@ -52,11 +57,21 @@ Deno.serve(async (req) => {
     for (let index = 0; index < ids.length; index += batchSize) {
       const batch = ids.slice(index, index + batchSize);
       const results = await Promise.all(batch.map((id) => admin.auth.admin.getUserById(id)));
-      for (const result of results) {
-        if (result.error) return json({ error: result.error.message }, 500);
+      for (const [offset, result] of results.entries()) {
+        if (result.error) {
+          if (!activeIds.has(batch[offset]) && result.error.status === 404) {
+            retiredUserIds.push(batch[offset]);
+            continue;
+          }
+          return json({ error: result.error.message }, 500);
+        }
         const u = result.data.user;
+        if (u && ((u as typeof u & { deleted_at?: string }).deleted_at || u.app_metadata?.driver_access_retired === true)) {
+          retiredUserIds.push(u.id);
+          continue;
+        }
         if (u) {
-          const meta = (u.user_metadata as any) || {};
+          const meta = u.user_metadata || {};
           users.push({
             id: u.id,
             email: u.email ?? null,
@@ -66,7 +81,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ users });
+    return json({ users, retired_user_ids: retiredUserIds });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

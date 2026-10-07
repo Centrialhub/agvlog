@@ -21,10 +21,10 @@ it('diagnoses a real unloading legacy debtor mismatch before projecting future r
  expect(snapshot).toMatchObject({source_issue:'finance_unloading_source_mismatch',requires_reconciliation:false});
  const current=(await db.query<{definition:string}>("select pg_get_functiondef('finance_private.cash_forecast_collect_before_agenda(uuid,date,date)'::regprocedure) definition")).rows[0].definition;
  await db.exec(published.find(p=>p.proname==='cash_forecast_collect_before_agenda')!.definition);
- const previous=(await db.query<{v:{origins:Array<{source_id:string,valid:boolean,nominal_cents:string|null}>}}> ('select finance_private.cash_forecast_collect($1,current_date-1,current_date+30) v',[i.tenant])).rows[0].v;
+ const previous=(await db.query<{v:{origins:Array<{source_id:string,valid:boolean,nominal_cents:string|null}>}}> ('select finance_private.cash_forecast_collect($1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date-1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date+30) v',[i.tenant])).rows[0].v;
  expect(previous.origins.find(r=>r.source_id===source.receivable_id)).toMatchObject({valid:true,nominal_cents:'15000'});
  await db.exec(current);
- const collected=(await db.query<{v:{origins:Array<{source_id:string,valid:boolean,nominal_cents:string|null}>}}> ('select finance_private.cash_forecast_collect($1,current_date-1,current_date+30) v',[i.tenant])).rows[0].v;
+ const collected=(await db.query<{v:{origins:Array<{source_id:string,valid:boolean,nominal_cents:string|null}>}}> ('select finance_private.cash_forecast_collect($1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date-1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date+30) v',[i.tenant])).rows[0].v;
  expect(collected.origins.find(r=>r.source_id===source.receivable_id)).toMatchObject({valid:false,nominal_cents:null});
  await db.exec('rollback');
  }finally{await db.close();}

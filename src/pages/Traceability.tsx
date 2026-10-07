@@ -248,7 +248,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [], proofs: [], total: 0 };
       let documentsQuery = supabase
           .from('fiscal_documents')
-          .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, import_batch_id, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))',{count:'exact'})
+          .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, import_batch_id, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads!fiscal_documents_load_id_fkey(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))',{count:'exact'})
           .eq('tenant_id', currentTenant.id)
           .order('created_at', { ascending: false })
           .order('id', { ascending: false });

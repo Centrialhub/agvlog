@@ -52,7 +52,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!["admin", "operator", "driver", "client"].includes(role)) {
+    if (role === "driver" || (typeof email === "string" && email.trim().toLowerCase().endsWith("@usuario.com"))) {
+      return new Response(JSON.stringify({ error: "Crie o acesso por usuário na tela de Motoristas." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!["admin", "operator", "client"].includes(role)) {
       return new Response(
         JSON.stringify({ error: "Invalid role" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

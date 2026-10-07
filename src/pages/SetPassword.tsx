@@ -10,6 +10,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { authErrorMessage } from '@/lib/auth/authErrorMessage';
+import { driverUsernameFromEmail } from '@/lib/auth/driverCredentials';
 
 function isStrongPassword(value: string): boolean {
   return value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
@@ -23,7 +24,8 @@ export default function SetPassword() {
   const [confirmation, setConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const valid = isStrongPassword(password) && password === confirmation;
+  const managedDriver = !!driverUsernameFromEmail(user?.email);
+  const valid = !managedDriver && isStrongPassword(password) && password === confirmation;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -70,6 +72,8 @@ export default function SetPassword() {
                 </div>
                 <Button className="w-full" onClick={() => navigate('/auth', { replace: true })}>Voltar ao login</Button>
               </div>
+            ) : managedDriver ? (
+              <div className="space-y-4"><p className="text-sm">A senha do motorista é definida pelo painel operacional. Solicite a troca à sua empresa.</p><Button className="w-full" onClick={() => navigate('/driver', { replace: true })}>Voltar ao app</Button></div>
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="space-y-2">

@@ -27,35 +27,8 @@ import { useDriverDeliveryStopsView } from '@/hooks/useDriverDeliveryStopsView';
 import { getDriverDeliveryEvent, type DeliveryEventSelection, type DriverStop, type StopProduct } from '@/components/driver/deliveries/driverDeliveryEvents';
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
 import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
+import { useDriverDeliverySelection, useDriverDeliverySnapshotPersistence, stopFromSnapshot, tripFromSnapshot, type DeliveryTrip } from '@/hooks/useDriverDeliverySelection';
 import { fiscalSnapshotAsJson, getDriverDeliveryFiscalSnapshot, type DriverDeliveryFiscalSnapshot } from '@/lib/driver/driverDeliveryFiscalSnapshot';
-type DeliveryTrip = {
-  id: string;
-  status: string;
-  actual_start_at: string | null;
-  actual_end_at?: string | null;
-  loads: { id?: string; load_number: string; status?: string; origin?: string | null; destination?: string | null } | null;
-};
-function stopFromSnapshot(snapshot: DriverOperationalSnapshot, stop: DriverOperationalSnapshot['stops'][number]): DriverStop {
-  const now = snapshot.cachedAt;
-  return {
-    id: stop.id, tenant_id: snapshot.tenantId, dispatch_trip_id: snapshot.tripId,
-    client_id: stop.client?.id ?? null, stop_order: stop.order ?? 0, status: stop.status,
-    destination: stop.destination, latitude: stop.latitude, longitude: stop.longitude, notes: stop.notes,
-    actual_arrival_at: stop.actualArrivalAt, actual_departure_at: stop.actualDepartureAt,
-    created_at: now, updated_at: now, delivery_window_end: null, delivery_window_start: null,
-    estimated_departure_at: null, planned_arrival_at: null, risk_level: null, risk_reason: null,
-    service_time_minutes: null,
-    clients: stop.client ? { company_name: stop.client.name, phone: null, mobile: null, email: null } : null,
-    dispatch_stop_documents: [],
-  };
-}
-function tripFromSnapshot(snapshot: DriverOperationalSnapshot): DeliveryTrip {
-  const load = snapshot.loads[0];
-  return { id: snapshot.tripId, status: snapshot.trip.status, actual_start_at: snapshot.trip.actualStartAt,
-    actual_end_at: snapshot.trip.actualEndAt, loads: load ? { id: load.id, load_number: load.loadNumber,
-      status: load.status, origin: load.origin, destination: load.destination } : null };
-}
-
 export default function DriverDeliveries() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -81,7 +54,8 @@ export default function DriverDeliveries() {
       .finally(() => { if (active) setSnapshotResolved(true); });
     return () => { active = false; };
   }, [currentTenant?.id, selectedTripId, user?.id]);
-  const snapshotMatches = !!operationalSnapshot && (!selectedTripId || operationalSnapshot.tripId === selectedTripId);
+  const snapshotMatches = !!operationalSnapshot && operationalSnapshot.tenantId === currentTenant?.id
+    && operationalSnapshot.actorId === user?.id && (!selectedTripId || operationalSnapshot.tripId === selectedTripId);
   const cachedDriver = snapshotMatches ? { id: operationalSnapshot.trip.driver.id,
     name: operationalSnapshot.trip.driver.name, tenant_id: operationalSnapshot.tenantId, active: true } : null;
   const driver = driverQuery.data ?? cachedDriver;
@@ -100,7 +74,8 @@ export default function DriverDeliveries() {
   const tripQuery = selectedTripId ? specificTripQuery : autoTripQuery;
   const liveTrip = tripQuery.data as DeliveryTrip | null | undefined;
   const storedTrip = snapshotMatches ? tripFromSnapshot(operationalSnapshot) : null;
-  const trip = liveTrip ?? storedTrip;
+  const trip = isOnline && liveTrip === null && !tripQuery.error ? null : liveTrip ?? storedTrip;
+  const snapshotForTrip = snapshotMatches && operationalSnapshot.tripId === trip?.id ? operationalSnapshot : null;
   const submissionRef = useRef<ReturnType<typeof createDeliverySubmission> | null>(null);
   const [submissionLocked, setSubmissionLocked] = useState(false);
   const [lastEventId, setLastEventId] = useState<string | null>(null);
@@ -113,7 +88,7 @@ export default function DriverDeliveries() {
     queryFn:() => replayPendingDeliverySubmissions(currentTenant!.id,user!.id),
   });
   useEffect(() => {
-    if (!outboxReplayQuery.data) return;
+    if (!outboxReplayQuery.data) { setPendingStopIds(new Set()); return; }
     setPendingStopIds(new Set(outboxReplayQuery.data.pendingStopIds));
     if (outboxReplayQuery.data.confirmed || outboxReplayQuery.data.cleaned) {
       toast({title:outboxReplayQuery.data.confirmed ? 'Envio pendente confirmado' : 'Anexos pendentes recuperados'});
@@ -121,9 +96,54 @@ export default function DriverDeliveries() {
     }
   }, [outboxReplayQuery.data,qc,toast]);
 
-  const [detailStop, setDetailStop] = useState<DriverStop | null>(null);
-  const [eventCatalogStop, setEventCatalogStop] = useState<DriverStop | null>(null);
-  const [eventForm, setEventForm] = useState<DeliveryEventSelection | null>(null);
+  const stopsQuery = useQuery({
+    queryKey: ['driver_delivery_stops', currentTenant?.id, driver?.id, trip?.id, user?.id],
+    queryFn: async ({ signal }) => {
+      if (!trip?.id) return [];
+      const { data, error } = await supabase
+        .from('dispatch_stops')
+        .select('*, clients(company_name, phone, mobile, email), dispatch_stop_documents(fiscal_documents(invoice_number, reference_number))')
+        .eq('dispatch_trip_id', trip.id).eq('tenant_id', currentTenant!.id)
+        .order('stop_order', { ascending: true }).abortSignal(signal);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isOnline && !!trip?.id && !!currentTenant?.id && !!driver?.id,
+  });
+
+  const cachedStops = useMemo<DriverStop[]>(() => snapshotMatches && operationalSnapshot.tripId === trip?.id
+    ? operationalSnapshot.stops.map(stop => stopFromSnapshot(operationalSnapshot, stop)) : [],
+  [operationalSnapshot, snapshotMatches, trip?.id]);
+  const effectiveStops = useMemo<DriverStop[]>(() => {
+    const stops = (stopsQuery.data ?? cachedStops).filter(stop =>
+      stop.tenant_id === currentTenant?.id && stop.dispatch_trip_id === trip?.id);
+    const queued = operationalCommands.commands.filter(command => command.aggregateId === trip?.id);
+    return stops.map(stop => {
+      const arrival = queued.find(command => command.kind === 'arrival'
+        && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
+        && command.payload.stop_id === stop.id);
+      const departure = queued.find(command => command.kind === 'departure'
+        && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
+        && command.payload.stop_id === stop.id);
+      return {...stop,
+        status:arrival && ['pending','planned','arriving'].includes(stop.status)?'arrived':stop.status,
+        actual_arrival_at:arrival&&!stop.actual_arrival_at?arrival.createdAt:stop.actual_arrival_at,
+        actual_departure_at:departure&&!stop.actual_departure_at?departure.createdAt:stop.actual_departure_at};
+    });
+  }, [cachedStops, currentTenant?.id, operationalCommands.commands, stopsQuery.data, trip?.id]);
+  const stopContextRefreshing = stopsQuery.isFetching || (isOnline && !!(tripQuery.isFetching || driverQuery.isFetching));
+  const stopContextError = stopsQuery.isError || (isOnline && !!(tripQuery.error || driverQuery.error));
+  const selection = useDriverDeliverySelection({
+    scope: [currentTenant?.id, user?.id, driver?.id, trip?.id], stops: effectiveStops, pendingStopIds,
+    refreshing: stopContextRefreshing, error: stopContextError,
+    tripStarted: !!trip && isDriverTripStarted(trip.status, trip.actual_start_at),
+    authoritative: stopsQuery.data !== undefined && !stopsQuery.isFetching && !stopsQuery.isError,
+  });
+  const { context: selectionContext, latestContext, detailStop, eventCatalogStop, eventForm, currentFormStop,
+    pageHeading, openDetail, openCatalog, closeDetail, closeCatalog, closeForm, restoreFocus, assertCurrentStop } = selection;
+  useEffect(() => {
+    submissionRef.current = null; setSubmissionLocked(false); setLastEventId(null);
+  }, [selectionContext]);
   const draft = useDriverDeliveryEventDraft();
   const eventDefinition = getDriverDeliveryEvent(eventForm?.eventKey ?? '');
 
@@ -148,8 +168,8 @@ export default function DriverDeliveries() {
     queryFn: () => resolveReceiptScanQualityPolicy(currentTenant!.id, eventForm!.stop.client_id ?? null, eventForm!.stop.id),
   });
 
-  const cachedStopProducts = eventForm?.stop.id && snapshotMatches
-    ? operationalSnapshot.deliveryItemsByStop?.[eventForm.stop.id] ?? [] : [];
+  const cachedStopProducts = eventForm?.stop.id && snapshotForTrip
+    ? snapshotForTrip.deliveryItemsByStop?.[eventForm.stop.id] ?? [] : [];
   const allStopProducts = productsQuery.data ?? cachedStopProducts;
   const stopProducts = getDriverDeliveryEvent(eventForm?.eventKey ?? '')?.category === 'finalizador'
     ? allStopProducts.filter(item => !isDocumentTerminal(item.documentStatus)) : allStopProducts;
@@ -158,41 +178,6 @@ export default function DriverDeliveries() {
     const q = draft.returnedItems[p.id] || 0;
     return sum + q * p.price;
   }, 0);
-  const stopsQuery = useQuery({
-    queryKey: ['driver_delivery_stops', currentTenant?.id, driver?.id, trip?.id],
-    queryFn: async () => {
-      if (!trip?.id) return [];
-      const { data, error } = await supabase
-        .from('dispatch_stops')
-        .select('*, clients(company_name, phone, mobile, email), dispatch_stop_documents(fiscal_documents(invoice_number, reference_number))')
-        .eq('dispatch_trip_id', trip.id).eq('tenant_id', currentTenant!.id)
-        .order('stop_order', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: isOnline && !!trip?.id && !!currentTenant?.id && !!driver?.id,
-  });
-
-  const cachedStops = useMemo<DriverStop[]>(() => snapshotMatches
-    ? operationalSnapshot.stops.map(stop => stopFromSnapshot(operationalSnapshot, stop)) : [],
-  [operationalSnapshot, snapshotMatches]);
-  const effectiveStops = useMemo<DriverStop[]>(() => {
-    const stops = stopsQuery.data ?? cachedStops;
-    const queued = operationalCommands.commands.filter(command => command.aggregateId === trip?.id);
-    return stops.map(stop => {
-      const arrival = queued.find(command => command.kind === 'arrival'
-        && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
-        && command.payload.stop_id === stop.id);
-      const departure = queued.find(command => command.kind === 'departure'
-        && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
-        && command.payload.stop_id === stop.id);
-      return {...stop,
-        status:arrival && ['pending','planned','arriving'].includes(stop.status)?'arrived':stop.status,
-        actual_arrival_at:arrival&&!stop.actual_arrival_at?arrival.createdAt:stop.actual_arrival_at,
-        actual_departure_at:departure&&!stop.actual_departure_at?departure.createdAt:stop.actual_departure_at};
-    });
-  }, [cachedStops, operationalCommands.commands, stopsQuery.data, trip?.id]);
-
   const deliveryItemsSnapshotQuery = useQuery<Record<string, DriverDeliveryItem[]>>({
     queryKey: ['driver_delivery_items_snapshot', currentTenant?.id, user?.id, trip?.id,
       (stopsQuery.data ?? []).map(stop => stop.id).join(',')],
@@ -220,42 +205,12 @@ export default function DriverDeliveries() {
     }))),
   });
 
-  useEffect(() => {
-    if (!currentTenant?.id || !user?.id || !driver || !liveTrip || !stopsQuery.data || stopsQuery.isError) return;
-    void (async () => {
-      const existing = await driverOperationalSnapshotStore.read(currentTenant.id, user.id, liveTrip.id);
-      const liveItems = deliveryItemsSnapshotQuery.data;
-      const next: DriverOperationalSnapshot = {
-        version: 1, tenantId: currentTenant.id, actorId: user.id, tripId: liveTrip.id,
-        cachedAt: new Date().toISOString(),
-        trip: { id: liveTrip.id, status: liveTrip.status, actualStartAt: liveTrip.actual_start_at,
-          actualEndAt: liveTrip.actual_end_at ?? null, driver: { id: driver.id, name: driver.name ?? 'Motorista' },
-          vehicle: existing?.trip.vehicle ?? null },
-        loads: existing?.loads ?? (liveTrip.loads?.id ? [{ id: liveTrip.loads.id,
-          loadNumber: liveTrip.loads.load_number, status: liveTrip.loads.status ?? 'unknown',
-          origin: liveTrip.loads.origin ?? null, destination: liveTrip.loads.destination ?? null,
-          volumeCount: null, palletCount: null, weightKg: null }] : []),
-        stops: stopsQuery.data.map(stop => ({ id: stop.id, order: stop.stop_order ?? null, status: stop.status,
-          destination: stop.destination ?? null, latitude: stop.latitude == null ? null : Number(stop.latitude),
-          longitude: stop.longitude == null ? null : Number(stop.longitude), notes: stop.notes ?? null,
-          client: stop.clients ? { id: stop.client_id ?? null, name: stop.clients.company_name } : null,
-          actualArrivalAt: stop.actual_arrival_at ?? null, actualDepartureAt: stop.actual_departure_at ?? null })),
-        documents: existing?.documents ?? [],
-        deliveryItemsByStop: liveItems ?? existing?.deliveryItemsByStop,
-        deliveryFiscalSnapshotsByStop: deliveryFiscalSnapshotQuery.data ?? existing?.deliveryFiscalSnapshotsByStop,
-        instructions: [...new Set(stopsQuery.data.map(stop => stop.notes?.trim()).filter((note): note is string => !!note))],
-        checklist: existing?.checklist ?? { pre: { id: null, boundaryId: null, checkedItems: [] },
-          post: { id: null, boundaryId: null, checkedItems: [] } },
-        journey: existing?.journey ?? { events: [], lastStartId: null, lastEndId: null },
-        occurrences: existing?.occurrences ?? [],
-        cargo: existing?.cargo ?? null,
-      };
-      await driverOperationalSnapshotStore.put(next);
-      setOperationalSnapshot(next);
-    })().catch(() => { /* Live reads remain usable even when IndexedDB is unavailable. */ });
-  }, [currentTenant?.id, deliveryFiscalSnapshotQuery.data, deliveryItemsSnapshotQuery.data, driver, liveTrip, stopsQuery.data, stopsQuery.isError, user?.id]);
+  useDriverDeliverySnapshotPersistence({
+    tenantId: currentTenant?.id, actorId: user?.id, driver, trip: liveTrip, stops: stopsQuery.data,
+    error: stopsQuery.isError, deliveryItems: deliveryItemsSnapshotQuery.data,
+    fiscalSnapshots: deliveryFiscalSnapshotQuery.data, onSnapshot: setOperationalSnapshot,
+  });
   const { tab, setTab, search, setSearch, filteredStops, completedStops, enRouteCount } = useDriverDeliveryStopsView(effectiveStops, pendingStopIds);
-  const currentFormStop = effectiveStops.find(stop => stop.id===eventForm?.stop.id && !pendingStopIds.has(stop.id));
   useEffect(() => {
     if (!isOnline || !trip?.id) return;
     const channel = supabase.channel(`driver_deliveries_${trip.id}`).on('postgres_changes',
@@ -265,20 +220,27 @@ export default function DriverDeliveries() {
   }, [isOnline,trip?.id,qc]);
 
   const resetForm = () => {
-    setEventForm(null);
+    closeForm();
     draft.reset();
     submissionRef.current = null;
     setSubmissionLocked(false);
   };
 
+  const selectEvent = (event: DeliveryEventSelection) => {
+    if (!selection.selectEvent(event)) return;
+    draft.reset(); submissionRef.current = null; setSubmissionLocked(false);
+  };
   const submitEvent = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (context: string) => {
+      const assertCurrent = () => assertCurrentStop(context, eventForm?.stop.id, !!submissionRef.current);
+      assertCurrent();
       if (!eventForm || !trip || !currentTenant) throw new Error('Sem viagem ou evento selecionado.');
       if (!submissionRef.current && (!currentFormStop || isStopTerminal(currentFormStop.status))) {
         throw new Error('A parada foi encerrada ou reatribuída. Atualize a viagem antes de enviar.');
       }
       if (eventForm.eventKey === 'chegada_no_cliente') {
         const location=await getCurrentDriverLocation();
+        assertCurrent();
         const arrival=await operationalCommands.submit({kind:'arrival',aggregateId:trip.id,payload:{trip_id:trip.id,
           stop_id:eventForm.stop.id,latitude:location.latitude,longitude:location.longitude,accuracy_m:location.accuracyM}});
         return {arrival:true as const,queued:arrival.queued};
@@ -296,11 +258,12 @@ export default function DriverDeliveries() {
           allocated_quantity: item.qty,
         }));
         const fiscalSnapshot=deliveryFiscalSnapshotQuery.data?.[eventForm.stop.id]
-          ?? (operationalSnapshot?.tripId===trip.id?operationalSnapshot.deliveryFiscalSnapshotsByStop?.[eventForm.stop.id]:undefined);
+          ?? (snapshotMatches && operationalSnapshot?.tripId===trip.id?operationalSnapshot.deliveryFiscalSnapshotsByStop?.[eventForm.stop.id]:undefined);
         if(def.category==='finalizador'&&!fiscalSnapshot)throw new Error('O snapshot fiscal desta parada não está disponível. Conecte-se antes de confirmar.');
         const deliveryLocation=def.requiresReceipt ? await getCurrentDriverLocation() : null;
+        const stopAtSubmission = assertCurrent();
         submissionRef.current = createDeliverySubmission({tenantId:currentTenant.id,actorId:user!.id,tripId:trip.id,stopId:eventForm.stop.id,
-          expectedStatus:currentFormStop!.status,eventKey:def.key,photos:draft.photos,receiptScan:draft.receiptScan,signatureDataUrl:draft.signatureDataUrl,details:{
+          expectedStatus:stopAtSubmission!.status,eventKey:def.key,photos:draft.photos,receiptScan:draft.receiptScan,signatureDataUrl:draft.signatureDataUrl,details:{
             event_subtype:def.key,event_label:def.label,notes:reason,return_reason:draft.returnReason.trim() || null,
             receiver_name:draft.receiverName.trim() || null,receiver_document:draft.receiverDoc.trim() || null,
             latitude:deliveryLocation?.latitude ?? null,longitude:deliveryLocation?.longitude ?? null,
@@ -315,20 +278,23 @@ export default function DriverDeliveries() {
       }
       setSubmissionLocked(true);
       setSearchParams({trip:trip.id},{replace:true});
-      try { return await submissionRef.current.submit(); }
+      const attempt = submissionRef.current;
+      try { return await attempt.submit(); }
       catch (error) {
-        if (submissionRef.current.canRevise) {
+        if (context === latestContext.current && submissionRef.current === attempt && attempt.canRevise) {
           submissionRef.current=null; setSubmissionLocked(false);
           await invalidateDeliveryQueries(qc);
         }
         throw error;
       }
     },
-    onSuccess: async result => {
+    onSuccess: async (result, context) => {
+      if (context !== latestContext.current) return;
       if(result&&'arrival' in result){
         toast({title:result.queued?'Chegada salva no aparelho':'Chegada registrada',description:result.queued?'A entrega já pode ser preenchida e a chegada será sincronizada primeiro.':undefined});
         if(!result.queued)await invalidateDeliveryQueries(qc);
-        resetForm();setEventCatalogStop(null);return;
+        if (context !== latestContext.current) return;
+        resetForm();closeCatalog();return;
       }
       if (result?.queued) {
         setPendingStopIds(previous => new Set(previous).add(result.stop_id));
@@ -337,15 +303,15 @@ export default function DriverDeliveries() {
           return;
         }
         toast({title:'Registro salvo no aparelho',description:'Você pode prosseguir. A confirmação da operação permanece pendente até a conexão voltar.'});
-        resetForm(); setEventCatalogStop(null);
+        resetForm(); closeCatalog();
         return;
       }
       if (result) setLastEventId(result.operational_event_id);
       toast({title:result ? 'Evento registrado e enviado à operação' : 'Chegada registrada'});
-      resetForm(); setEventCatalogStop(null);
+      resetForm(); closeCatalog();
       await invalidateDeliveryQueries(qc);
     },
-    onError: error => toast({title:'Envio não confirmado',description:deliveryErrorMessage(error),variant:'destructive'}),
+    onError: (error, context) => { if (context === latestContext.current) toast({title:'Envio não confirmado',description:deliveryErrorMessage(error),variant:'destructive'}); },
   });
 
   const hasCachedOperation = snapshotMatches;
@@ -390,18 +356,18 @@ export default function DriverDeliveries() {
   const quantitiesValid = Object.entries(draft.returnedItems).every(([id,qty]) => Number.isFinite(qty) && qty>=0
     && stopProducts.some(item => item.id===id && qty<=item.qty));
   const hasDeliveryItemSnapshot = !eventForm?.stop.id || productsQuery.data !== undefined
-    || Object.prototype.hasOwnProperty.call(operationalSnapshot?.deliveryItemsByStop ?? {}, eventForm.stop.id);
+    || !!snapshotForTrip && Object.prototype.hasOwnProperty.call(snapshotForTrip.deliveryItemsByStop ?? {}, eventForm.stop.id);
   const deliveryItemsError = productsQuery.error ?? (!isOnline && !hasDeliveryItemSnapshot
     ? new Error('Os documentos desta parada ainda não foram salvos no aparelho. Conecte-se antes de confirmar a entrega.') : null);
   const deliveryItemsLoading = productsQuery.isLoading && !hasDeliveryItemSnapshot;
   const requiresFiscalSnapshot = def?.category === 'finalizador';
   const hasFiscalSnapshot = !eventForm?.stop.id || !!deliveryFiscalSnapshotQuery.data?.[eventForm.stop.id]
-    || !!operationalSnapshot?.deliveryFiscalSnapshotsByStop?.[eventForm.stop.id];
+    || !!snapshotForTrip?.deliveryFiscalSnapshotsByStop?.[eventForm.stop.id];
   const fiscalSnapshotError = deliveryFiscalSnapshotQuery.error ?? (!isOnline && !hasFiscalSnapshot
     ? new Error('O snapshot fiscal desta parada ainda não foi salvo no aparelho. Conecte-se antes de confirmar a entrega.') : null);
   const fiscalSnapshotLoading = deliveryFiscalSnapshotQuery.isLoading && !hasFiscalSnapshot;
   const canSubmit = !!def && isDriverTripStarted(trip.status,trip.actual_start_at)
-    && !!currentFormStop && !isStopTerminal(currentFormStop.status) && !stopsQuery.isFetching
+    && !!currentFormStop && !isStopTerminal(currentFormStop.status) && !stopContextRefreshing && !stopContextError
     && (!mappedOutcome || !!currentFormStop.actual_arrival_at)
     && (!def.requiresReceiver || draft.receiverName.trim().length>=2)
     && (!def.requiresReceipt || (!isOnline || (!receiptQualityPolicyQuery.isPending && !receiptQualityPolicyQuery.error)))
@@ -418,7 +384,7 @@ export default function DriverDeliveries() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold">Entregas e Coletas</h1>
+        <h1 ref={pageHeading} tabIndex={-1} className="text-lg font-bold">Entregas e Coletas</h1>
         <p className="text-xs text-muted-foreground">
           Carga {trip?.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
         </p>
@@ -443,20 +409,29 @@ export default function DriverDeliveries() {
         pendingStopIds={pendingStopIds}
         onSearchChange={setSearch}
         onTabChange={setTab}
-        onOpenStop={setDetailStop}
+        onOpenStop={openDetail}
       />
 
       <DriverDeliveryEventCatalogSheet
         stop={eventCatalogStop}
-        onClose={() => setEventCatalogStop(null)}
+        loading={stopContextRefreshing}
+        refreshError={stopContextError}
+        onRefresh={stopsQuery.refetch}
+        actionsDisabled={stopContextRefreshing || stopContextError || !!eventCatalogStop && pendingStopIds.has(eventCatalogStop.id)}
+        onCloseAutoFocus={restoreFocus}
+        onClose={() => closeCatalog()}
         onSelect={(selection) => {
-          setEventForm(selection);
-          setEventCatalogStop(null);
+          selectEvent(selection);
+          closeCatalog();
         }}
       />
 
       <DriverDeliveryEventFormSheet
         selection={eventForm}
+        stopsLoading={stopContextRefreshing}
+        stopsError={stopContextError}
+        refetchStops={stopsQuery.refetch}
+        onCloseAutoFocus={restoreFocus}
         definition={def}
         draft={draft}
         currentStop={currentFormStop}
@@ -478,20 +453,22 @@ export default function DriverDeliveries() {
         receiptQualityPolicyError={isOnline ? receiptQualityPolicyQuery.error : null}
         refetchReceiptQualityPolicy={receiptQualityPolicyQuery.refetch}
         onClose={resetForm}
-        onSubmit={() => submitEvent.mutate()}
+        onSubmit={() => submitEvent.mutate(selectionContext)}
         notify={toast}
       />
 
       <DriverDeliveryDetailSheet
         stop={detailStop}
-        onClose={() => setDetailStop(null)}
-        onOpenCatalog={(stop) => {
-          setEventCatalogStop(stop);
-          setDetailStop(null);
-        }}
+        loading={stopContextRefreshing}
+        refreshError={stopContextError}
+        onRefresh={stopsQuery.refetch}
+        actionsDisabled={stopContextRefreshing || stopContextError || !!detailStop && pendingStopIds.has(detailStop.id)}
+        onCloseAutoFocus={restoreFocus}
+        onClose={() => closeDetail()}
+        onOpenCatalog={openCatalog}
         onSelectEvent={(selection) => {
-          setEventForm(selection);
-          setDetailStop(null);
+          selectEvent(selection);
+          closeDetail();
         }}
       />
     </div>

@@ -16,6 +16,7 @@ dist-ssr
 *.local
 coverage
 .codex-build-audit/
+.local-staging/
 .sites-*/
 .deploy-*/
 .codex-publish/
@@ -38,3 +39,4 @@ supabase/migration_history/*.zip
 *.njsproj
 *.sln
 *.sw?
+.execution-logs/

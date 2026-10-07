@@ -31,6 +31,7 @@ vi.mock('@/lib/driver/driverDeliveryOfflineStore',async(importOriginal)=>{
 vi.mock('@/components/ui/sheet',()=>({
  Sheet:({open,children}:{open:boolean;children:ReactNode})=>open?<section>{children}</section>:null,
  SheetContent:({children}:{children:ReactNode})=><div>{children}</div>,
+ SheetDescription:({children}:{children:ReactNode})=><p>{children}</p>,
  SheetHeader:({children}:{children:ReactNode})=><header>{children}</header>,SheetTitle:({children}:{children:ReactNode})=><h2>{children}</h2>,
 }));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:mock.from,
@@ -67,7 +68,7 @@ beforeEach(async()=>{
  });
  mock.from.mockImplementation((table:string)=>{
   if(table!=='dispatch_stops')throw new Error('Unexpected direct driver table read '+table);
-  const filters:Record<string,unknown>={};const query={select:()=>query,eq:(key:string,value:unknown)=>{filters[key]=value;return query;},order:()=>query,
+  const filters:Record<string,unknown>={};const query={select:()=>query,eq:(key:string,value:unknown)=>{filters[key]=value;return query;},order:()=>query,abortSignal:()=>query,
    then:(resolve:(value:unknown)=>unknown)=>serial(async()=>({data:(await db.query(`select s.*,jsonb_build_object('company_name','Cliente QA') clients,
     '[]'::jsonb dispatch_stop_documents from dispatch_stops s where dispatch_trip_id=$1 and tenant_id=$2 order by stop_order`,
     [filters.dispatch_trip_id,filters.tenant_id])).rows,error:null})).then(resolve)};return query;

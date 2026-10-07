@@ -24,7 +24,7 @@ it('applies cancellation credit once in the real forecast while preserving bank 
   await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
   const payer=randomUUID(),original=randomUUID();
   await db.query("insert into clients(id,tenant_id,company_name,active) values($1,$2,'Crédito para previsão',true)",[payer,i.tenant]);
-  await db.query("insert into receivables(id,tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,$3,1000,0,'pending','Origem recebida',current_date+5)",[original,i.tenant,payer]);
+  await db.query("insert into receivables(id,tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,$3,1000,0,'pending','Origem recebida',(current_timestamp at time zone $$America/Sao_Paulo$$)::date+5)",[original,i.tenant,payer]);
   const context=(await db.query<{v:{revision:string}}> ('select public._receivable_financial_snapshot($1,$2) v',[i.tenant,original])).rows[0].v;
   const day=(await db.query<{v:string}>("select (clock_timestamp() at time zone 'America/Sao_Paulo')::date::text v")).rows[0].v;
   await db.query('select public.apply_receivable_financial_command($1)',[{version:1,tenant_id:i.tenant,actor_id:i.operator,request_id:randomUUID(),receivable_id:original,expected_revision:context.revision,action:'receive',amount_cents:60000,effective_date:day,bank_account_id:i.account,method:'pix',reason:'Recebimento real na fixture de previsão'}]);
@@ -36,8 +36,8 @@ it('applies cancellation credit once in the real forecast while preserving bank 
   expect((await db.query<{v:unknown}>('select finance_private.release_cancelled_receipts($1,$2,$3) v',[i.tenant,origin,observation])).rows[0].v).toBe(null);
   await db.query("update finance_fiscal_receivable_origins set state='cancelled' where id=$1",[origin]);
   const credit=(await db.query<{id:string}>('select id from finance_customer_credits where receivable_id=$1',[original])).rows[0].id;
-  const target=(await db.query<{id:string}>("insert into receivables(tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,500,0,'pending','Destino do crédito',current_date+5) returning id",[i.tenant,payer])).rows[0].id;
-  const collect=async()=>cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,current_date-1,current_date+30) v',[i.tenant])).rows[0].v);
+  const target=(await db.query<{id:string}>("insert into receivables(tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,500,0,'pending','Destino do crédito',(current_timestamp at time zone $$America/Sao_Paulo$$)::date+5) returning id",[i.tenant,payer])).rows[0].id;
+  const collect=async()=>cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date-1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date+30) v',[i.tenant])).rows[0].v);
   let collection=await collect();expect(collection.unassigned_credit_cents).toBe('60000');
   const capture=(await db.query<{v:{snapshot_id:string}}> ('select finance_private.record_cash_forecast_snapshot($1) v',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),cutoff:collection.cutoff,period_end:collection.period_end,source_revision:collection.revision,title:'Antes da aplicação do crédito',reason:'Preservar previsão anterior à decisão'}])).rows[0].v;
   const preserved=async()=>(await db.query('select to_jsonb(s) v from finance_private.cash_forecast_snapshots s where id=$1',[capture.snapshot_id])).rows;
@@ -52,7 +52,7 @@ it('applies cancellation credit once in the real forecast while preserving bank 
   const reviewAgenda=async()=>{const c=await collect();await db.query('select finance_private.record_cash_forecast_agenda($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),economic_key:'receivable:'+target,action:'set',expected_on:c.period_end,expected_revision:c.revision,cutoff:c.cutoff,period_end:c.period_end,reason:'Conferir expectativa sobre o saldo restante'}]);};
   await reviewAgenda();collection=await collect();
   expect(projectCollectedCashForecast(collection,collection).projection!.scheduled.confirmed_in_cents).toBe('10000');
-  const second=(await db.query<{id:string}>("insert into receivables(tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,200,0,'pending','Segundo destino do crédito',current_date+5) returning id",[i.tenant,payer])).rows[0].id;
+  const second=(await db.query<{id:string}>("insert into receivables(tenant_id,client_id,amount,received_amount,status,description,due_date) values($1,$2,200,0,'pending','Segundo destino do crédito',(current_timestamp at time zone $$America/Sao_Paulo$$)::date+5) returning id",[i.tenant,payer])).rows[0].id;
   const secondPreview=(await db.query<{v:{revision:string,eligible:boolean}}> ('select finance_private.customer_credit_application_context($1,$2,$3,$4,null) v',[i.tenant,credit,second,'20000'])).rows[0].v;
   expect(secondPreview.eligible).toBe(true);
   await db.query('select finance_private.record_customer_credit_application($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),credit_id:credit,receivable_id:second,application_id:null,action:'apply',amount_cents:'20000',expected_revision:secondPreview.revision,reason:'Vincular saldo remanescente ao segundo título'}]);

@@ -1,0 +1,19 @@
+{
+  "startedAtUTC": "2026-09-28T18:01:20.365Z",
+  "completedAtUTC": "2026-09-28T18:01:25.934Z",
+  "sourceSha": "4850412c19bec6cc4134fb48e1f9e3b4c1ee65fd",
+  "approvalSha256": "501f7c02e647c5c4e6e69267812067cb0a184524f44f9db2a4e5b1853152a649",
+  "restoreInputSha256": "e0b9aebb35a3ac26c9b1ba2bd044c1bb25468a6f85a059d08e40b197a466f303",
+  "container": "supabase_db_agvlog-local-staging",
+  "state": "baseline-restored-comparison-pending",
+  "applicationReady": false,
+  "forwardsApplied": 0,
+  "counts": {
+    "publicTables": 327,
+    "publicTablesWithoutRls": 0,
+    "buckets": 8,
+    "cronJobs": 0,
+    "vaultSecrets": 0,
+    "httpQueue": 0
+  }
+}

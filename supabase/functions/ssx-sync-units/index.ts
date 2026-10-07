@@ -41,6 +41,7 @@ import {
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000];
 const CACHE_TTL_MS = 60 * 60_000;
 const ADMIN_SKIP_MS = 10 * 60_000;
+const MISSING_STABLE_IDENTITY_ERROR = "SSX Tracking returned vehicle positions without TrackedUnitIntegrationCode";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -115,9 +116,18 @@ Deno.serve(async (req) => {
 
     // ===== Cache check =====
     const lastSyncAt = settings.last_units_sync_at;
+    const missingStableIdentity = account.status === "degraded"
+      && account.last_error === MISSING_STABLE_IDENTITY_ERROR;
     if (!force && lastSyncAt) {
       const elapsed = Date.now() - new Date(lastSyncAt).getTime();
       if (elapsed < CACHE_TTL_MS) {
+        if (missingStableIdentity) {
+          return jsonResponse({
+            success: false, error: MISSING_STABLE_IDENTITY_ERROR,
+            error_class: "missing_stable_identity",
+            next_sync_available_at: new Date(new Date(lastSyncAt).getTime() + CACHE_TTL_MS).toISOString(),
+          }, 409);
+        }
         return jsonResponse({
           success: true, skipped: true, reason: "Units synced recently",
           last_sync_at: lastSyncAt,
@@ -254,6 +264,39 @@ Deno.serve(async (req) => {
       if (!unit || seenCodes.has(unit.external_code)) continue;
       seenCodes.add(unit.external_code);
       normalized.push({ ...unit, raw_item: raw });
+    }
+
+    const vehicleRows = vehicleResult.items.length - skippedNonVehicle;
+    if (sourceMode === "tracking_discovery" && vehicleRows > 0
+      && skippedMissingStableCode === vehicleRows && normalized.length === 0) {
+      // A nonempty provider response yielded no stable unit identity. Do not
+      // upsert units or advance last_units_sync_at; retry after the cache TTL
+      // or when an administrator explicitly forces another attempt.
+      const { error: accountWriteError } = await supabase.from("integration_accounts").update({
+        status: "degraded", last_error: MISSING_STABLE_IDENTITY_ERROR,
+        updated_at: new Date().toISOString(),
+      }).eq("id", integration_account_id);
+      if (accountWriteError) throw accountWriteError;
+      await logIntegration(supabase, {
+        tenant_id: account.tenant_id, integration_account_id,
+        action: "ssx_sync_units", endpoint: vehicleResult.endpoint,
+        status_code: vehicleResult.statusCode, success: false,
+        error_message: MISSING_STABLE_IDENTITY_ERROR,
+        duration_ms: duration,
+        metadata: {
+          method: sourceMode, vehicles_received: vehicleResult.items.length,
+          skipped_non_vehicle: skippedNonVehicle,
+          skipped_missing_stable_code: skippedMissingStableCode,
+          normalized_count: 0,
+        },
+      });
+      return jsonResponse({
+        success: false, error: MISSING_STABLE_IDENTITY_ERROR,
+        error_class: "missing_stable_identity",
+        vehicles_received: vehicleResult.items.length,
+        skipped_non_vehicle: skippedNonVehicle,
+        skipped_missing_stable_code: skippedMissingStableCode,
+      }, 409);
     }
 
     // Build tracker enrichment maps (keyed by multiple identifiers)

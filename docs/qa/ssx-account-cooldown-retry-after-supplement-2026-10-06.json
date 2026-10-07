@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "kind": "independent-supplement-entry-not-combined-registry",
+  "baseSha": "a19399268f77831dbe45f9ca61021b311b474639",
+  "migration": "supabase/migrations/20261006155532_align_ssx_cooldown_retry_after_contract.sql",
+  "boundSeconds": 86400,
+  "boundOrigin": [
+    "ssxPost existing cap86400",
+    "finish_ssx_sync_checkpoint_v1 existing bound86400",
+    "record_ssx_poll_error_v1 previous one-calendar-day bound"
+  ],
+  "functions": [
+    {
+      "name": "record_ssx_account_cooldown_v1",
+      "signature": "uuid,uuid,timestamptz,timestamptz,text",
+      "args": 5,
+      "from": "interval '1 hour'",
+      "to": "interval '24 hours'",
+      "beforeMd5": "1beba355817d8d2f84bc2b03ebbd8e1a",
+      "afterMd5": "ad385a5fa7b2db14364b3d6ef4de3922"
+    },
+    {
+      "name": "record_ssx_poll_error_v1",
+      "signature": "uuid,uuid,uuid,uuid,uuid,timestamptz,text,timestamptz,jsonb",
+      "args": 9,
+      "from": "interval '1 day'",
+      "to": "interval '24 hours'",
+      "beforeMd5": "192986fdf6b499ad98e4190bb22752ab",
+      "afterMd5": "744cf7391b0a9d8f9287d307ef347ef1"
+    }
+  ],
+  "remoteApplied": false,
+  "dataChanges": false,
+  "aclChanges": false,
+  "dependency": "Integrate after a193 polling controls; parent must append to reviewed combined supplemental inventory",
+  "reviewedForward": {
+    "version": "20261006155532",
+    "filename": "20261006155532_align_ssx_cooldown_retry_after_contract.sql",
+    "sha256": "3d900ef761181caf6d1ff49cd05dc518607550e3b9e8cf48d97f3e0cd3b93f57"
+  }
+}

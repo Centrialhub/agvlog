@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,26 +14,31 @@ const mocks = vi.hoisted(() => ({
   history: vi.fn(),
   submit: vi.fn(),
   commands: [] as Array<Record<string, unknown>>,
+  tenant: 'tenant-a', actor: 'actor-a', online: false, pending: false,
+  driverData: null as Record<string, unknown> | null,
+  driverError: null as unknown, driverSuccess: false,
+  statusLoading: false, statusError: true,
+  tripResult: { data: null, error: { message: 'offline' } } as { data: unknown; error: unknown },
 }));
 
-vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant-a' } }) }));
-vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'actor-a' } }) }));
+vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: mocks.tenant } }) }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: mocks.actor } }) }));
 vi.mock('@/hooks/useCurrentDriver', () => ({
-  useCurrentDriver: () => ({ data: null, isError: true, isPending: false, refetch: vi.fn() }),
-  useActiveTrip: () => ({ data: null, isError: true, isPending: false, refetch: vi.fn() }),
+  useCurrentDriver: () => ({ data: mocks.driverData, isError: !mocks.pending && !mocks.driverSuccess, isPending: mocks.pending, isSuccess: mocks.driverSuccess, error: mocks.driverError, refetch: vi.fn() }),
+  useActiveTrip: () => ({ data: null, isError: !mocks.pending, isPending: mocks.pending, refetch: vi.fn() }),
 }));
 vi.mock('@/hooks/useDriverJourneyContext', () => ({
-  useDriverJourneyContext: () => ({ data: null, isError: true, isPending: false, refetch: vi.fn() }),
+  useDriverJourneyContext: () => ({ data: null, isError: !mocks.pending, isPending: mocks.pending, refetch: vi.fn() }),
 }));
 vi.mock('@/hooks/useChecklistStatus', () => ({ useChecklistStatus: () => ({
   preCompleted: false, postCompleted: false, preCheckedCount: 0, postCheckedCount: 0,
   preTotalCount: 8, postTotalCount: 5, preItems: [], postItems: [], pre: null, post: null,
-  preBoundaryId: null, postBoundaryId: 'journey-start', isLoading: false, isFetching: false,
-  isError: true, refetch: vi.fn(),
+  preBoundaryId: null, postBoundaryId: 'journey-start', isLoading: mocks.statusLoading, isFetching: false,
+  isError: mocks.statusError, refetch: vi.fn(),
 }) }));
 vi.mock('@/hooks/useDriverOperationalOffline', () => ({ useDriverOperationalOffline: () => ({
   submit: mocks.submit, recover: vi.fn(), pending: mocks.commands.length, commands: mocks.commands,
-  syncing: false, online: false,
+  syncing: false, online: mocks.online,
 }) }));
 vi.mock('@/hooks/useDriverOperationalEventHistory', () => ({
   useDriverOperationalEventHistory: (input: unknown) => {
@@ -51,7 +56,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: {
   from: () => {
     const query = {
       select: () => query, eq: () => query, order: () => query,
-      maybeSingle: async () => ({ data: null, error: { message: 'offline' } }),
+      maybeSingle: async () => mocks.tripResult,
       then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: null, error: { message: 'offline' } }).then(resolve),
     };
     return query;
@@ -84,6 +89,10 @@ let client: QueryClient;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.commands = [];
+  mocks.tenant = 'tenant-a'; mocks.actor = 'actor-a'; mocks.online = false; mocks.pending = false;
+  mocks.driverData = null; mocks.driverError = null; mocks.driverSuccess = false;
+  mocks.statusLoading = false; mocks.statusError = true;
+  mocks.tripResult = { data: null, error: { message: 'offline' } };
   mocks.read.mockResolvedValue(snapshot);
   mocks.readLatest.mockResolvedValue(snapshot);
   mocks.put.mockResolvedValue(undefined);
@@ -143,4 +152,169 @@ describe('authenticated auxiliary driver routes reopened offline', () => {
     await screen.findByText('Avaria salva antes de ficar offline');
     expect(mocks.readLatest).toHaveBeenNthCalledWith(2, 'tenant-a', 'actor-a');
   });
+});
+
+describe('checklist availability and session scope', () => {
+  function paused() {
+    mocks.pending = true; mocks.statusLoading = true; mocks.statusError = false;
+  }
+  it('finishes local loading and explains missing cache while offline queries stay pending', async () => {
+    paused(); mocks.readLatest.mockResolvedValue(null);
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+    expect(screen.queryByText('Carregando checklist…')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+  it('waits for the local read to finish before declaring a cold cache unavailable', async () => {
+    paused(); let resolve!: (value: null) => void;
+    mocks.readLatest.mockReturnValue(new Promise<null>(done => { resolve = done; }));
+    show('/driver/checklist', <DriverChecklist />);
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando checklist…');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    resolve(null);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+  });
+  it('finishes offline loading after a local storage read error', async () => {
+    paused(); mocks.readLatest.mockRejectedValue(new Error('local storage failed'));
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+  });
+  it('does not use a different trip snapshot for a direct link', async () => {
+    paused(); show('/driver/checklist?trip=trip-other', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it.each(['tenant', 'actor'] as const)('rejects a saved snapshot from another %s', async key => {
+    paused(); mocks[key] = 'other';
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+    expect(mocks.readLatest).toHaveBeenCalledWith(mocks.tenant, mocks.actor);
+  });
+  it.each(['tenant', 'actor'] as const)('removes old context immediately on %s switch and blocks pending local reads', async key => {
+    paused(); const page = show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('button', { name: 'Salvar Pré-Viagem' })).toBeEnabled();
+    mocks[key] = 'other'; mocks.readLatest.mockReturnValue(new Promise(() => {}));
+    page.rerender(<QueryClientProvider client={client}><MemoryRouter><DriverChecklist /></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+  it('loads a valid offline checklist and submits its existing revision and boundary to the queue', async () => {
+    paused(); show('/driver/checklist', <DriverChecklist />);
+    const button = await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
+    expect(button).toBeEnabled(); fireEvent.click(screen.getAllByRole('checkbox')[2]); fireEvent.click(button);
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1));
+    expect(mocks.submit).toHaveBeenCalledWith({ kind: 'checklist', aggregateId: 'trip-a', payload: {
+      trip_id: 'trip-a', kind: 'pre', checklist_payload: { checked_items: [0, 1, 2], total_items: 8,
+        expected_checklist_id: 'check-pre', expected_boundary_id: null, expected_boundary_request_id: null },
+    } });
+  });
+  it('does not offer writes using a partial live context without loaded checklist data', async () => {
+    mocks.pending = true; mocks.statusLoading = true; mocks.statusError = false; mocks.read.mockResolvedValue(null);
+    mocks.driverData = { id: 'driver-a', active: true }; mocks.tripResult = { data: { id: 'trip-a', status: 'in_transit' }, error: null };
+    client.setQueryData(['driver_checklist_trip', 'tenant-a', 'driver-a', 'trip-a'], mocks.tripResult.data);
+    show('/driver/checklist?trip=trip-a', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+  it('keeps the loader for an online fetch with no local snapshot', async () => {
+    paused(); mocks.online = true; mocks.readLatest.mockResolvedValue(null);
+    show('/driver/checklist', <DriverChecklist />);
+    await waitFor(() => expect(mocks.readLatest).toHaveBeenCalled());
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando checklist…');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+  it('reports an online load error without offering writes', async () => {
+    mocks.online = true; mocks.readLatest.mockResolvedValue(null);
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it('does not bypass an explicit driver revocation with a saved snapshot', async () => {
+    mocks.driverError = { code: '42501', message: 'revoked' };
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar');
+    await waitFor(() => expect(mocks.readLatest).toHaveBeenCalled());
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it('rejects a snapshot when a successful identity lookup no longer finds an active driver', async () => {
+    mocks.driverSuccess = true;
+    show('/driver/checklist', <DriverChecklist />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it.each(['low', 'medium', 'high', 'unexpected', '__proto__'])('translates occurrence severity %s', async severity => {
+    mocks.readLatest.mockResolvedValue({ ...snapshot, occurrences: snapshot.occurrences.map(event => ({ ...event, severity })) });
+    show('/driver/issues', <DriverIssues />);
+    await screen.findByText('Avaria salva antes de ficar offline');
+    const label = new Map([['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta']]).get(severity) ?? 'Não informada';
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(severity)).not.toBeInTheDocument();
+  });
+});
+
+describe('checklist queue replay with the real memory outbox service', () => {
+  it('keeps a checklist request across reopen and confirms it exactly once after reconnect', async () => {
+    const { createMemoryDriverOfflineOutbox } = await import('@/lib/driver/driverOfflineOutbox');
+    const { createDriverOperationalCommandService } = await vi.importActual<typeof import('@/lib/driver/driverOperationalOffline')>('@/lib/driver/driverOperationalOffline');
+    const tenant = '20000000-0000-4000-8000-000000000001';
+    const actor = '10000000-0000-4000-8000-000000000003';
+    const trip = '80000000-0000-4000-8000-000000000001';
+    const request = 'a0000000-0000-4000-8000-000000000001';
+    const outbox = createMemoryDriverOfflineOutbox();
+    let online = false;
+    const send = vi.fn(async () => ({ version: 1, confirmed: true, replayed: false,
+      tenant_id: tenant, actor_id: actor, request_id: request, command: 'checklist', trip_id: trip,
+      entity_id: 'b0000000-0000-4000-8000-000000000001' }));
+    const createService = () => createDriverOperationalCommandService({ outbox, send, uuid: () => request,
+      now: () => new Date('2026-10-06T12:00:00Z'), isOnline: () => online });
+    const command = { kind: 'checklist' as const, aggregateId: trip, payload: { trip_id: trip, kind: 'pre' as const,
+      checklist_payload: { checked_items: [0, 1, 2], total_items: 8, expected_checklist_id: 'pre-revision', expected_boundary_id: null } } };
+    expect(await createService().submit(tenant, actor, command)).toMatchObject({ id: request, queued: true });
+    expect(send).not.toHaveBeenCalled();
+    expect(await outbox.list(tenant, actor)).toHaveLength(1);
+    // A fresh service represents reopening the app; the saved request is reused.
+    const reopened = createService(); online = true;
+    expect(await reopened.recover(tenant, 'other-actor')).toEqual({ confirmed: 0, pending: 0 });
+    expect(await reopened.recover('other-tenant', actor)).toEqual({ confirmed: 0, pending: 0 });
+    expect(send).not.toHaveBeenCalled();
+    expect(await reopened.recover(tenant, actor)).toEqual({ confirmed: 1, pending: 0 });
+    expect(await reopened.recover(tenant, actor)).toEqual({ confirmed: 0, pending: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: request, payload: command.payload }));
+  });
+});
+
+it('blocks saves when an online refresh fails even if a snapshot exists', async () => {
+  mocks.online = true;
+  show('/driver/checklist', <DriverChecklist />);
+  await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
+  expect(screen.getByRole('alert')).toHaveTextContent('Nenhuma marcação será salva até atualizar');
+  expect(screen.getByRole('button', { name: 'Salvar Pré-Viagem' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Salvar Pós-Viagem' })).toBeDisabled();
+});
+
+it('uses a successfully loaded empty checklist instead of restoring older checked items', async () => {
+  mocks.pending = true; mocks.statusError = false; mocks.statusLoading = false;
+  mocks.driverData = { id: 'driver-a', active: true }; mocks.readLatest.mockResolvedValue(snapshot);
+  mocks.tripResult = { data: { id: 'trip-a', status: 'in_transit' }, error: null };
+  client.setQueryData(['driver_checklist_trip', 'tenant-a', 'driver-a', 'trip-a'], mocks.tripResult.data);
+  mocks.put.mockImplementation(async next => { mocks.read.mockResolvedValue(next); });
+  show('/driver/checklist?trip=trip-a', <DriverChecklist />);
+  await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
+  expect(screen.getByText(/0\/8 itens/)).toBeInTheDocument();
+  expect(screen.getAllByRole('checkbox')[0]).not.toBeChecked();
+  await waitFor(() => expect(mocks.put).toHaveBeenCalledTimes(1));
+  expect(mocks.put).toHaveBeenCalledWith(expect.objectContaining({ checklist: {
+    pre: { id: null, boundaryId: null, checkedItems: [] },
+    post: { id: null, boundaryId: 'journey-start', checkedItems: [] },
+  } }));
+});
+
+it('treats a partial saved checklist as unavailable instead of fabricating empty values', async () => {
+  mocks.pending = true; mocks.statusLoading = true; mocks.statusError = false;
+  mocks.readLatest.mockResolvedValue({ ...snapshot, checklist: { pre: snapshot.checklist.pre } });
+  show('/driver/checklist', <DriverChecklist />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(mocks.submit).not.toHaveBeenCalled();
 });

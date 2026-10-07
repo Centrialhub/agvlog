@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "capturedAtUtc": "2026-09-28T18:58:56.625Z",
+  "sourceSha": "573f2f32a584f3d2997bd2ec5254623fe511bde2",
+  "purpose": "Review of CLI lint exit semantics and the restricted workflow correction; no database execution",
+  "supabaseCliVersion": "2.116.0",
+  "officialSource": {
+    "url": "https://raw.githubusercontent.com/supabase/cli/v2.116.0/apps/cli/src/legacy/commands/db/lint/lint.handler.ts",
+    "sha256": "8ff98b0eb84b338bcc73d30ba04f7a195645290eb54d63bca1e394fdd628dec8",
+    "defaultFailOn": "none",
+    "defaultAtLine": 135,
+    "failureDecisionLines": [
+      201,
+      216
+    ]
+  },
+  "cliHelp": {
+    "flag": "--fail-on",
+    "choices": [
+      "none",
+      "warning",
+      "error"
+    ],
+    "verified": true
+  },
+  "workflow": {
+    "path": ".github/workflows/quality.yml",
+    "lintCommandsFound": 1,
+    "command": "./node_modules/.bin/supabase db lint --local --level error --fail-on error",
+    "change": "Add explicit error exit threshold; retain all schemas and findings"
+  },
+  "verification": {
+    "workflowCommandChecked": true,
+    "gitDiffCheckPassed": true,
+    "sqlExecuted": false,
+    "ciExecuted": false
+  },
+  "applicationReady": false
+}

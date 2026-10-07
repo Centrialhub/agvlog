@@ -64,9 +64,14 @@ export function useOverrideFreightValue() {
 
       return { ok: true };
     },
-    onSuccess: () => {
+    // The document update may commit before a later audit insert fails.
+    // Refresh every source consumer in both outcomes so stale automatic values
+    // cannot supersede a persisted manual override.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['load_documents'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['nfse_load_docs'] });
     },
   });
 }

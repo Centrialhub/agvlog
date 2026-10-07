@@ -24,6 +24,9 @@ import { useClients } from '@/hooks/useClients';
 import { isPortalInviteEmail, PORTAL_PERMISSION_FIELDS, type CreatePortalInviteResponse, type PortalPermissionKey } from '@/lib/portal/portalAccessInvite';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { edgeFunctionErrorMessage } from '@/lib/supabase/edgeFunctionError';
+import { DriverAccessControls } from '@/components/drivers/DriverAccessControls';
+import { driverUsernameFromEmail } from '@/lib/auth/driverCredentials';
+import { Link } from 'react-router-dom';
 import { roleLabels, roleIcons, StatCard, RoleInfo } from '@/components/team/TeamSummaryCards';
 type AppRole = Enums<'app_role'>;
 type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
@@ -38,6 +41,7 @@ interface EdgeUserSummary {
 
 interface EdgeUsersResponse {
   users?: EdgeUserSummary[];
+  retired_user_ids?: string[];
   error?: string;
 }
 
@@ -137,7 +141,8 @@ export default function TeamManagement() {
       const list = fnData?.users || [];
       for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
 
-      return memberships.map(m => ({
+      const retired = new Set(fnData?.retired_user_ids ?? []);
+      return memberships.filter(m => !retired.has(m.user_id)).map(m => ({
         ...m,
         profile_name:
           profileMap.get(m.user_id)?.full_name ||
@@ -296,7 +301,7 @@ export default function TeamManagement() {
                               {m.profile_name || m.profile_email || 'Usuário sem nome'}
                             </p>
                             {m.profile_email ? (
-                              <p className="text-xs text-muted-foreground">{m.profile_email}</p>
+                              <p className="text-xs text-muted-foreground">{driverUsernameFromEmail(m.profile_email) ? `Usuário: ${driverUsernameFromEmail(m.profile_email)}` : m.profile_email}</p>
                             ) : (
                               <p className="text-xs text-muted-foreground font-mono">{m.user_id.slice(0, 8)}...</p>
                             )}
@@ -768,7 +773,6 @@ function InviteDialog({
   open,
   onOpenChange,
   tenantId,
-  drivers,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -792,6 +796,7 @@ function InviteDialog({
 
   const handleCreateAccount = async () => {
     if (!tenantId || !email) return;
+    if (role === 'driver') { toast.info('Crie o acesso na tela de Motoristas.'); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke<CreateMemberResponse>('create-team-member', {
@@ -813,6 +818,7 @@ function InviteDialog({
   const [userId, setUserId] = useState('');
   const handleAddById = async () => {
     if (!tenantId || !userId) return;
+    if (role === 'driver') { toast.info('Crie o acesso na tela de Motoristas.'); return; }
     setLoading(true);
     try {
       const { error } = await supabase.from('tenant_memberships').insert({
@@ -850,6 +856,7 @@ function InviteDialog({
             Convide uma nova conta ou vincule um usuário existente à sua empresa.
           </DialogDescription>
         </DialogHeader>
+        <p className="text-sm text-muted-foreground">Para motoristas, crie usuário e senha na tela de <Link className="underline" to="/drivers">Motoristas</Link>.</p>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'create' | 'existing')}>
           <TabsList className="w-full">
@@ -874,19 +881,11 @@ function InviteDialog({
                 <SelectContent>
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
-                  <SelectItem value="driver">Motorista — app do motorista</SelectItem>
                   
                 </SelectContent>
               </Select>
             </div>
 
-            {role === 'driver' && drivers.length > 0 && (
-              <div className="rounded-md bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">
-                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de motorista na página de Motoristas.
-                </p>
-              </div>
-            )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button onClick={handleCreateAccount} disabled={loading || !isCreateValid}>
@@ -903,7 +902,6 @@ function InviteDialog({
                 <SelectContent>
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
-                  <SelectItem value="driver">Motorista — app do motorista</SelectItem>
                   
                 </SelectContent>
               </Select>
@@ -1028,7 +1026,7 @@ function EditMemberDialog({
             />
           </div>
 
-          <div className="space-y-2">
+          {member?.role === 'driver' && tenantId ? <DriverAccessControls key={`${tenantId}:${member.user_id}`} tenantId={tenantId} userId={member.user_id} /> : <div className="space-y-2">
             <Label>E-mail</Label>
             <Input
               type="email"
@@ -1041,7 +1039,7 @@ function EditMemberDialog({
             <Button type="button" variant="outline" size="sm" disabled={resettingPassword || !email} onClick={handlePasswordReset}>
               {resettingPassword ? 'Enviando...' : 'Enviar redefinição de senha'}
             </Button>
-          </div>
+          </div>}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>

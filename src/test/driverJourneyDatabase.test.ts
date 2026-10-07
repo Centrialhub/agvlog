@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { preTripChecklistPayload } from '../../e2e/fixtures/driverChecklist';
 
 // Real PostgreSQL/PLpgSQL execution against a minimal schema. This complements,
 // but does not replace, the full Supabase pgTAP/RLS and concurrent-session suite.
@@ -199,6 +200,18 @@ describe('journey RPC executed by PostgreSQL', () => {
     expect(stored.rows[0].payload).toMatchObject({checked_items:[0,2],total_items:8});
     await expect(save('pre',{checked_items:[1],expected_checklist_id:null})).rejects.toMatchObject({code:'40001'});
     await expect(save('pre',{checked_items:[],expected_checklist_id:id})).resolves.toHaveProperty('rows');
+  });
+
+  it('accepts the E2E pre-trip checklist fixture through the published RPC contract', async () => {
+    await db.exec('set role authenticated');
+    const saved = await save('pre', preTripChecklistPayload());
+    await db.exec('reset role');
+    const event = await db.query<{event_type:string;payload:{checked_items:number[];total_items:number}}>(
+      'select event_type,payload from public.dispatch_events where id=$1', [saved.rows[0].driver_save_checklist]);
+    expect(event.rows).toEqual([{
+      event_type:'checklist_pre',
+      payload:{...preTripChecklistPayload(),journey_driver_id:driverId},
+    }]);
   });
 
   it('rejects a draft belonging to a previous shift boundary', async () => {

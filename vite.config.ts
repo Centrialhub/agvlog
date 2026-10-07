@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { componentTagger } from "lovable-tagger";
+import { driverShellAssetFiles, driverDependencyModules, isDriverOrAuthModule } from "./scripts/lib/pwaAssetGraph";
 import { publicRuntimeConfigIssues } from "./src/config/publicRuntimeConfig";
 
 const normalizedId = (id: string) => id.replace(/\\/g, "/");
@@ -49,27 +50,15 @@ const manualChunks = (id: string) => {
   return undefined;
 };
 
-const pwaDriverAssetManifest = (): Plugin => ({
+const pwaDriverAssetManifest = (supabaseOrigin: string | null): Plugin => ({
   name: 'pwa-driver-asset-manifest',
   generateBundle(_options,bundle){
     const chunks=Object.values(bundle).filter((item):item is Extract<typeof item,{type:'chunk'}>=>item.type==='chunk');
-    const byFile=new Map(chunks.map(chunk=>[chunk.fileName,chunk]));
-    const selected=new Set<string>();
-    const include=(fileName:string)=>{
-      if(selected.has(fileName))return;selected.add(fileName);
-      const chunk=byFile.get(fileName);if(!chunk)return;
-      chunk.imports.forEach(include);
-    };
-    for(const chunk of chunks){
-      const isDriver=chunk.moduleIds.some(id=>{
-        const moduleId=normalizedId(id);
-        return moduleId.includes('/pages/driver/')||moduleId.includes('/components/driver/')||moduleId.endsWith('/components/layout/DriverLayout.tsx');
-      });
-      const isAuth=chunk.moduleIds.some(id=>normalizedId(id).endsWith('/pages/Auth.tsx'));
-      if(chunk.isEntry||isDriver||isAuth)include(chunk.fileName);
-    }
-    for(const item of Object.values(bundle))if(item.type==='asset'&&item.fileName.endsWith('.css'))selected.add(item.fileName);
-    const driverAssets=JSON.stringify([...selected].sort().map(file=>`/${file}`));
+    const css=Object.values(bundle).filter(item=>item.type==='asset'&&item.fileName.endsWith('.css')).map(item=>item.fileName);
+    const byModule=new Map(chunks.flatMap(chunk=>chunk.moduleIds.map(id=>[id,chunk.fileName] as const)));
+    const driverRoots=[...byModule.keys()].filter(isDriverOrAuthModule);
+    const driverFiles=driverDependencyModules(driverRoots,id=>this.getModuleInfo(id)).flatMap(id=>byModule.has(id)?[byModule.get(id)!]:[]);
+    const driverAssets=JSON.stringify(driverShellAssetFiles(chunks,css,driverFiles).map(file=>`/${file}`));
     const workerTemplate=readFileSync(path.resolve(__dirname,'public/sw.js'),'utf8');
     if(!workerTemplate.includes('__AGVLOG_BUILD_HASH__'))throw new Error('Service worker build token is missing.');
     const digest=createHash('sha256');
@@ -87,7 +76,7 @@ const pwaDriverAssetManifest = (): Plugin => ({
     this.emitFile({type:'asset',fileName:'driver-build.json',source:JSON.stringify({
       version:process.env.npm_package_version??'development',release,buildHash,builtAt,
     })});
-    this.emitFile({type:'asset',fileName:'release.json',source:JSON.stringify({release,buildHash,builtAt})});
+    this.emitFile({type:'asset',fileName:'release.json',source:JSON.stringify({release,buildHash,builtAt,supabaseOrigin})});
     this.emitFile({type:'asset',fileName:'sw.js',source:workerTemplate.replace(/__AGVLOG_BUILD_HASH__/g,buildHash)});
   },
 });
@@ -99,6 +88,10 @@ export default defineConfig(({ mode }) => {
   if (process.env.VERCEL === "1" && configurationIssues.length > 0) {
     throw new Error(`Invalid Vercel public build configuration: ${configurationIssues.join(", ")}`);
   }
+  const supabaseOrigin = configurationIssues.includes("missing_supabase_url")
+    || configurationIssues.includes("invalid_supabase_url")
+    ? null
+    : new URL(buildEnvironment.VITE_SUPABASE_URL as string).origin;
 
   return ({
   server: {
@@ -108,7 +101,7 @@ export default defineConfig(({ mode }) => {
       overlay: false,
     },
   },
-  plugins: [react(), pwaDriverAssetManifest(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), pwaDriverAssetManifest(supabaseOrigin), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

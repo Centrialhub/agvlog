@@ -16,7 +16,8 @@ const App = () => (
       <Sonner />
       <GlobalAlert />
       <AuthProvider>
-        <BrowserRouter>
+        {/* Commit navigation immediately so lazy pages show their loading fallback. */}
+        <BrowserRouter useTransitions={false}>
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>

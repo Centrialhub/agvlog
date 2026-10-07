@@ -1,0 +1,13 @@
+# Extração de snapshots após gate F02
+
+Owner CodexMerge, tarefa driver-stops-snapshot-extraction-20261007. Base ef7acbd810b4445f131e7de335e0c181b086b4fd/tree18de6230ab990a74908cea7495406a042135df2d congelada e preservada. O gate local de ef7 falhou quality porque DriverStops tinha478linhas contra cap434 existente. Types/lint/pipeline/lock/repository/baseline da execução parcial passaram; oito shards/coverage/build não foram executados após a falha. Nenhum PASS completo foi atribuído a ef7.
+
+Extraídos estados e quatro efeitos de leitura/persistência de snapshots para useDriverStopsSnapshots, mantendo ordem, dependências, guards, escopo tenant/ator/viagem/motorista, descarte de respostas tardias e tratamento de erros de F02. Transformação mecânica usa tenantId/userId e booleanos das queries como props com tipos concretos. DriverStops conserva queries/Realtime, projeção da fila, mutations e render. Guard explícito de cachedSnapshot não nulo mantém a condição equivalente na fronteira do hook e o narrowing TypeScript. Imports sem uso removidos.
+
+DriverStops:478→390linhas; hook121linhas. scripts/code-quality-baseline.json/cap434 e os testes existentes não foram alterados. Sem alteração SQL/Edge/fiscal/dependências/config/thresholds. Nota e dois arquivos runtime são o único delta desta reserva; fonte F02 e ef7, serviço/árvore servida e réplica permanecem intactos.
+
+Validação local antes do commit:46/46UTC e46/46America/Sao_Paulo nos quatro arquivos de regressão F02/component/snapshots/serviço offline, lint max-warnings0, types e quality original. Logs, exits, timestamps e hashes antes/depois em C:/Users/Thomaz/Documents/Codex/2026-10-01/task/merge-20261006/stops-snapshot-extraction/validation.json. Dependências offline próprias, Node22.23.2/npm10.9.4, transporte/snapshot local ou memória. Não equivale a teste nativo de RPC/RLS/IndexedDB/SW nem a homologação integral.
+
+Após commit/freeze, handoff externo conterá SHA/tree/bundle e validação exata própria. Gates locais completos do sucessor serão executados em checkout de testes do mesmo SHA, separado da fonte congelada. Revisor exclusivo mantém matriz nativa/F02 no SHA final; o resultado histórico ef7/ad5 não é herdado automaticamente. Nenhum commit autorreferente de logs nesta árvore.
+
+Publicação suspensa por instrução07/10 até novo alinhamento. Não houve enqueue/integrate/push/deploy/migrations/alteração de automações/origins/acessos ou banco/serviços compartilhados. Operação do coordenador07016a75 permanece separada e não instalada. Falha anterior, fontes, históricos e bundles são preservados; próximos ajustes só em reserva própria.

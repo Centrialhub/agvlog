@@ -1,0 +1,354 @@
+{
+  "schema_version": 1,
+  "kind": "observation_not_release_gate",
+  "project_ref": "qcvnsdrbcchaxvawcngk",
+  "hash_normalization": "SHA-256 of UTF-8 source after CRLF-to-LF normalization; terminal newline preserved",
+  "live_bundles": [
+    {
+      "slug": "agvlog-pipeline-run",
+      "function_id": "c00cb6bf-777f-4524-b30f-af817f77ff5e",
+      "version": 153,
+      "updated_at_utc": "2026-09-24T14:34:28.928Z",
+      "bundle_ezbr_sha256": "059dcace57a3ce977482cef9864fb173fe76d7e38ec5e29dd08dc5185ce8ad26",
+      "files": [
+        {
+          "path": "supabase/functions/agvlog-pipeline-run/index.ts",
+          "sha256": "e72258c3434f2fd06b5c9b0d5c0e274087807f442127d420883e3d28101e37c8"
+        },
+        {
+          "path": "supabase/functions/_shared/cron-auth.ts",
+          "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+        },
+        {
+          "path": "supabase/functions/_shared/capabilities.ts",
+          "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+        },
+        {
+          "path": "supabase/functions/_shared/active-tenant.ts",
+          "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-sync-checkpoint.ts",
+          "sha256": "d943ecadd3b80e5e4617d709b50828834f950ef72e05a0b91db2dd8d10614d44"
+        },
+        {
+          "path": "supabase/functions/agvlog-pipeline-run/deno.json",
+          "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+        }
+      ],
+      "verify_jwt_live": false,
+      "verify_jwt_candidate_config": false,
+      "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/agvlog-pipeline-run/"
+    },
+    {
+      "slug": "ssx-sync-governance",
+      "function_id": "abb352b1-74ea-4653-af5a-38cf1650e327",
+      "version": 14,
+      "updated_at_utc": "2026-09-24T14:37:08.502Z",
+      "bundle_ezbr_sha256": "90829b3bf6d186e4251ae2354ea19cc78ef9b69ac50af7c0aba999a4f607c560",
+      "files": [
+        {
+          "path": "supabase/functions/ssx-sync-governance/index.ts",
+          "sha256": "3384117512f7a4014d6b120464315c594580dcb94ee621e567f881521a78823d"
+        },
+        {
+          "path": "supabase/functions/_shared/cron-auth.ts",
+          "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+        },
+        {
+          "path": "supabase/functions/_shared/capabilities.ts",
+          "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-governance/snapshot-normalization.ts",
+          "sha256": "7db46a73bbbeccc7f7b1268fd92841ecbe5befc9c6ab0df82a7e7a3afa2c955b"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-governance/unit-identity.ts",
+          "sha256": "2f67f2011c1536f58cb2d36c16a4f817fabe6aba67eae92f4367b95db4b10f0a"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-response-diagnostics.ts",
+          "sha256": "5fa207865b10d0aee7e6ffc2549fda9f722500792bccbed37f13599aa3fb80c6"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-sync-checkpoint.ts",
+          "sha256": "05ea002729c606717a076ed20ac496fa1bd256cff8440830550dae84692004b8"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-utils.ts",
+          "sha256": "1cf0c99523e75c3856d9da30a1b6cb4216f1e016d53117691b24ca607902430e"
+        },
+        {
+          "path": "supabase/functions/_shared/active-tenant.ts",
+          "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-governance/deno.json",
+          "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+        }
+      ],
+      "verify_jwt_live": false,
+      "verify_jwt_candidate_config": false,
+      "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-governance/"
+    },
+    {
+      "slug": "ssx-sync-units",
+      "function_id": "8b6cf270-4924-497c-8305-46080b711fb6",
+      "version": 146,
+      "updated_at_utc": "2026-09-23T17:56:33.147Z",
+      "bundle_ezbr_sha256": "436076443f5ac0d44aee9b1fb1e154e57a29e0f237ed731bf25a61e588b14991",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/active-tenant.ts",
+          "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+        },
+        {
+          "path": "supabase/functions/_shared/capabilities.ts",
+          "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+        },
+        {
+          "path": "supabase/functions/_shared/cron-auth.ts",
+          "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-utils.ts",
+          "sha256": "c5af60226dd25720c6af1808484f5d65340a9dfe99856b1f1ffefde7e2bfdd96"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-units/deno.json",
+          "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-units/index.ts",
+          "sha256": "2cd99c4aea6c364023752a6560eca559035bfb9d5fbd8c9242e1110c9b14e615"
+        }
+      ],
+      "verify_jwt_live": false,
+      "verify_jwt_candidate_config": false,
+      "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-units/"
+    },
+    {
+      "slug": "ssx-sync-rule-violations",
+      "function_id": "056d068e-e4e2-4f60-b1aa-3268afd5d416",
+      "version": 13,
+      "updated_at_utc": "2026-09-23T17:56:33.147Z",
+      "bundle_ezbr_sha256": "719a48a23c3e6c7ab999c30a87a5336eab4e760d1e0074f5a4158b447ea72cbd",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/active-tenant.ts",
+          "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+        },
+        {
+          "path": "supabase/functions/_shared/capabilities.ts",
+          "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+        },
+        {
+          "path": "supabase/functions/_shared/cron-auth.ts",
+          "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-utils.ts",
+          "sha256": "c5af60226dd25720c6af1808484f5d65340a9dfe99856b1f1ffefde7e2bfdd96"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+          "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+          "sha256": "53bbd87af95b7bcdb9fc64bbc26343ceb043f3dcfccaccb43860360f3b16ea91"
+        }
+      ],
+      "verify_jwt_live": false,
+      "verify_jwt_candidate_config": false,
+      "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-rule-violations/",
+      "verified_source_commit": "17a7592dca01f31b1aa7b63340fbaf28bb116347",
+      "verified_source_commit_note": "All seven live per-file LF SHA-256 values match the published main ancestor at this commit (also previously verified at e797c40acc8bd5565d77191bc01f213ff004be3a). Pinning main ancestry keeps regeneration independent of PR squash/branch deletion. Source provenance does not approve rollout."
+    }
+  ],
+  "candidate_files": [
+    {
+      "path": "supabase/functions/_shared/active-tenant.ts",
+      "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+    },
+    {
+      "path": "supabase/functions/_shared/capabilities.ts",
+      "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+    },
+    {
+      "path": "supabase/functions/_shared/cors.ts",
+      "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+    },
+    {
+      "path": "supabase/functions/_shared/cron-auth.ts",
+      "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+    },
+    {
+      "path": "supabase/functions/_shared/ssx-response-diagnostics.ts",
+      "sha256": "5fa207865b10d0aee7e6ffc2549fda9f722500792bccbed37f13599aa3fb80c6"
+    },
+    {
+      "path": "supabase/functions/_shared/ssx-sync-checkpoint.ts",
+      "sha256": "bee327f35d73282d7a4248db56697e8c8107cea2a02137ee1f76f6eef1f86d2f"
+    },
+    {
+      "path": "supabase/functions/_shared/ssx-utils.ts",
+      "sha256": "ba9b4126aed1aeb3dc7ade9a3164676897bbcedb0f32ac7c3898d64e42e315d1"
+    },
+    {
+      "path": "supabase/functions/agvlog-pipeline-run/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "path": "supabase/functions/agvlog-pipeline-run/index.ts",
+      "sha256": "e669baa9aab171b57ef2bf9fea8d8d92ecd26d05e8cad9b21e264f9ce03c1a97"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-governance/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-governance/index.ts",
+      "sha256": "b0ac73a93f7610e010a49c40d8f50041e3bb2740fe5578ad20d22f9a93cfd441"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-governance/snapshot-normalization.ts",
+      "sha256": "7db46a73bbbeccc7f7b1268fd92841ecbe5befc9c6ab0df82a7e7a3afa2c955b"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-governance/unit-identity.ts",
+      "sha256": "2f67f2011c1536f58cb2d36c16a4f817fabe6aba67eae92f4367b95db4b10f0a"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+      "sha256": "5636a3c2c0e51024a77da1396a828f598acca30fc839fe35f71404e69e79804b"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-units/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-units/index.ts",
+      "sha256": "afb578c625d1f672675c2d4388140479ca222045cb30993a54a0dd0f3da7f6dd"
+    }
+  ],
+  "shared_helper_conflict": {
+    "path": "supabase/functions/_shared/ssx-sync-checkpoint.ts",
+    "live_pipeline_wait_ms": 250,
+    "live_governance_wait_ms": 1000,
+    "candidate_resolution": "waitSsxTurn requires an explicit 250 or 1000 ms argument; governance calls 1000 ms; pipeline does not call waitSsxTurn"
+  },
+  "candidate_divergences": [
+    {
+      "path": "supabase/functions/_shared/ssx-sync-checkpoint.ts",
+      "reason": "explicit pacing parameter resolves the one-line conflict between live bundles"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-governance/index.ts",
+      "reason": "passes 1000 ms explicitly to the shared pacing helper"
+    },
+    {
+      "path": "supabase/functions/agvlog-pipeline-run/index.ts",
+      "reason": "Separate safety fix: governance requires confirmed unit sync; tracking_discovery counters are validated and retained in checkpoints; missing stable identity, 409, deferred and legacy zero cache remain failed runs without governance."
+    },
+    {
+      "path": "supabase/functions/ssx-sync-units/index.ts",
+      "reason": "Separate safety fix: all vehicle positions rejected for missing stable identity return 409 and a failed aggregate log, preserve prior mappings and last_units_sync_at, and do not retry the provider automatically within the existing recent-success TTL after such a failure."
+    },
+    {
+      "path": "supabase/functions/_shared/ssx-utils.ts",
+      "reason": "Based on the governance v14 helper (Retry-After parsing and timer cleanup), with an explicit candidate safety fix: capture 429 status and Retry-After before consuming the body and retain them if body reading fails. Other body-read failures keep prior network-error semantics. This candidate helper differs from the helpers observed in governance, units and violations; the pipeline bundle does not include it. Deploy only reconciled affected bundles."
+    },
+    {
+      "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+      "reason": "Separate safety fix: cursor read errors stop before provider calls; HTTP 429 is recognized even with non-JSON bodies; a longer Retry-After is durably encoded as rate_limited:<seconds>, preserving the legacy rate_limited code for 15 minutes or less. Candidate delay is bounded to 15 minutes..24 hours."
+    }
+  ],
+  "notes": [
+    "Common cron-auth, capabilities, cors and active-tenant modules match all four live bundles and the candidate.",
+    "The live pipeline checkpoint wait export is unused by its entrypoint.",
+    "No production deploy or database write was performed.",
+    "A legacy pipeline_units cache containing only upserted:0 does not prove an empty source and is rejected until a valid fresh/manual result or cache with counters is available.",
+    "Administration discovery is not enabled or forced by this reconciliation.",
+    "These source observations were captured at different times; recheck all active versions immediately before promotion.",
+    "Rule violation cooldown does not provide a lease: concurrent invocations before the first acknowledgment can still reach the provider.",
+    "Rollback constraint: live violations v13 does not understand rate_limited:<seconds>. Do not restore that reader while a new-format cooldown remains active; prepare and test a compatible rollback bundle or another reviewed procedure that preserves the remaining deadline."
+  ],
+  "candidate_base_commit": "169b22e1956356ad2f2a5d032954e61031506ba1",
+  "working_tree_snapshot": {
+    "state": "uncommitted",
+    "identity": "candidate_files SHA-256 values",
+    "captured_at_utc": "2026-09-26T22:35:46.806Z"
+  },
+  "local_recovery_cache": {
+    "files_verified": 32,
+    "ignored_by_git": true,
+    "scope": "Current worktree on this host only; ignored files are not included in Git commits or managed worktree archives.",
+    "verification": "Each source file matched its live per-file SHA-256 after LF normalization."
+  },
+  "first_recorded_at_utc": "2026-09-26T21:30:34.000Z",
+  "updated_at_utc": "2026-09-26T22:48:46.277Z",
+  "compatible_rollback_preparation": {
+    "slug": "ssx-sync-rule-violations",
+    "status": "local_candidate_not_deployed",
+    "manifest": "docs/qa/ssx-violations-compatible-rollback-manifest-2026-09-26.json",
+    "manifest_lf_sha256": "923ec248eaf770b8f4f63ad7dcf03e430cb5cbd084aebded0bc560a1f0e672de",
+    "generator": "scripts/prepare-ssx-violations-rollback.mjs",
+    "limitation": "Requires staging rehearsal and active-version recheck; does not provide a lease or undo persisted events."
+  },
+  "versioned_source_snapshots": {
+    "directory": "docs/qa/edge-source-snapshots-2026-09-26",
+    "format": "UTF-8 source in .txt files named by SHA-256 after CRLF-to-LF normalization; terminal newline preserved",
+    "slugs": [
+      "agvlog-pipeline-run",
+      "ssx-sync-governance",
+      "ssx-sync-units"
+    ],
+    "source_references": 25,
+    "unique_files": 15,
+    "canonical_utf8_bytes": 169399,
+    "generator": "scripts/prepare-observed-edge-recovery.mjs",
+    "purpose": "Reconstruct each historical bundle separately without the ignored cache or a PR-only Git commit. Source identity is not rollout approval; historical bugs and persisted-state compatibility require staging review.",
+    "prepared_packages": [
+      {
+        "slug": "agvlog-pipeline-run",
+        "observed_version": 153,
+        "manifest_sha256": "570a848e393ab677e12b1a6eeaca0e383cd9731673106f0cb527b4761a195f15",
+        "files_verified": 7
+      },
+      {
+        "slug": "ssx-sync-governance",
+        "observed_version": 14,
+        "manifest_sha256": "d81b0dd123ecd0b32f0e3284b17e5cafe1888a7156d943040805346110d2a846",
+        "files_verified": 11
+      },
+      {
+        "slug": "ssx-sync-units",
+        "observed_version": 146,
+        "manifest_sha256": "b356484d0e424316050bc89460e01c43bafb24f55c02f557943feb2775d27e7a",
+        "files_verified": 7
+      }
+    ]
+  }
+}

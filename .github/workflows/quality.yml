@@ -10,12 +10,12 @@ permissions:
 
 concurrency:
   group: quality-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -40,6 +40,9 @@ jobs:
       - name: Verify migration and Edge release contract
         run: npm run supabase:release:check
 
+      - name: Verify reviewed CI baseline candidate manifest
+        run: npm run supabase:baseline-candidate:check
+
       - name: Test pipeline contracts
         run: npm run test:pipeline
 
@@ -61,8 +64,8 @@ jobs:
       - name: Edge Function syntax
         run: npm run edge:syntax
 
-      - name: Unit and integration coverage
-        run: npm run test:coverage
+      - name: Coverage for release-critical pure modules
+        run: npm run test:coverage -- src/test/DriverLoadsComponent.test.tsx src/test/ingestionSafety.test.ts src/test/loadKanbanColumn.test.ts src/test/nfeAccessKey.test.ts src/test/portalCsvSecurity.test.ts src/test/routeConsistency.test.ts src/test/stopConsolidation.test.ts
 
       - name: Production build and bundle budget
         run: npm run build:check
@@ -76,8 +79,36 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  unit-tests:
+    name: Unit and integration tests (${{ matrix.shard }}/8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          # Rollback runtime tests reconstruct the verified live bundle from its pinned commit.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test shard
+        run: npm run test -- --shard=${{ matrix.shard }}/8
+
   database-and-e2e:
-    needs: validate
+    needs: [validate]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -95,19 +126,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Start isolated Supabase stack
-        run: ./node_modules/.bin/supabase start
+      - name: Restore externally reviewed private baseline
+        env:
+          AGVLOG_REVIEWED_BASELINE_DIRECTORY: ${{ vars.AGVLOG_REVIEWED_BASELINE_DIRECTORY }}
+          AGVLOG_REVIEWED_BASELINE_SHA256: ${{ vars.AGVLOG_REVIEWED_BASELINE_SHA256 }}
+        run: bash scripts/ci-reviewed-baseline.sh
 
-      - name: Reset migrations and deterministic E2E seed
+      - name: Set temporary credentials for the restored synthetic fixture
         shell: bash
         run: |
-          ./node_modules/.bin/supabase db reset --local
-          ./node_modules/.bin/supabase status -o env > /tmp/agvlog-supabase.env
+          umask 077
+          ./node_modules/.bin/supabase status --workdir .local-staging -o env > /tmp/agvlog-supabase.env
           source /tmp/agvlog-supabase.env
+          [[ "$API_URL" = http://127.0.0.1:55321 ]] || exit 1
+          : "${SERVICE_ROLE_KEY:?The isolated local Storage fixture key is required}"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
           {
             echo "VITE_SUPABASE_URL=$API_URL"
             echo "VITE_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
             echo "VITE_SUPABASE_PROJECT_ID=local"
+            echo "VITE_APP_RELEASE=$GITHUB_SHA"
+            echo "E2E_LOCAL_STORAGE_SERVICE_KEY=$SERVICE_ROLE_KEY"
           } >> "$GITHUB_ENV"
           echo "AGVLOG_LOCAL_DB_URL=$DB_URL" >> "$GITHUB_ENV"
           E2E_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '/+' '_-')Aa1"
@@ -133,22 +172,26 @@ jobs:
           echo "E2E_PASSWORD=$E2E_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Database lint
-        run: ./node_modules/.bin/supabase db lint --local --level error
+        run: ./node_modules/.bin/supabase db lint --local --workdir .local-staging --network-id agvlog-local-staging-loopback --level error --fail-on error
 
       - name: Baseline and migration verification
         run: psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/verify/baseline_contract.sql
 
       - name: pgTAP security and RLS contracts
-        run: ./node_modules/.bin/supabase test db
+        run: ./node_modules/.bin/supabase test db --local --workdir .local-staging --network-id agvlog-local-staging-loopback
 
       - name: Install Playwright Chromium
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Desktop, tablet and mobile E2E
-        run: npm run e2e
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/full
+        run: npm run e2e -- --workers=1 --retries=0 --output=test-results/full
 
       - name: Critical journeys three consecutive times
-        run: npm run e2e:critical:3
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/critical-repeat
+        run: npm run e2e:critical:3 -- --workers=1 --retries=0 --output=test-results/critical-repeat
 
       - name: Upload E2E evidence
         if: always()
@@ -163,4 +206,4 @@ jobs:
 
       - name: Stop isolated Supabase stack
         if: always()
-        run: ./node_modules/.bin/supabase stop --no-backup
+        run: ./node_modules/.bin/supabase stop --project-id agvlog-local-staging --workdir .local-staging --no-backup

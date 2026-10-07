@@ -12,8 +12,8 @@ afterAll(async()=>db?.close());
 it('labels current identities while preserving original amounts, revision and snapshot hash',async()=>{
  await db.exec('begin');try{
  const client=randomUUID(),title=randomUUID();await db.query("insert into clients(id,tenant_id,company_name,active) values($1,$2,'Fornecedor original',true)",[client,i.tenant]);
- await db.query("insert into receivables(id,tenant_id,client_id,amount,received_amount,status,due_date,description,invoice_number) values($1,$2,$3,150,0,'pending',current_date+10,'Descarga conferida','NF123')",[title,i.tenant,client]);
- const p=(await financeAs<{v:{revision:string,cutoff:string,period_end:string}}>(db,i.operator,"select preview_finance_cash_forecast($1,current_date-1,current_date+30,null) v",[i.tenant])).rows[0].v;
+ await db.query("insert into receivables(id,tenant_id,client_id,amount,received_amount,status,due_date,description,invoice_number) values($1,$2,$3,150,0,'pending',(current_timestamp at time zone $$America/Sao_Paulo$$)::date+10,'Descarga conferida','NF123')",[title,i.tenant,client]);
+ const p=(await financeAs<{v:{revision:string,cutoff:string,period_end:string}}>(db,i.operator,"select preview_finance_cash_forecast($1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date-1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date+30,null) v",[i.tenant])).rows[0].v;
  const saved=(await financeAs<{v:{snapshot_id:string,content_hash:string}}>(db,i.operator,'select record_finance_cash_forecast($1) v',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),cutoff:p.cutoff,period_end:p.period_end,source_revision:p.revision,title:'Conferencia de nomes',reason:'Preservar valores originais da previsao'}])).rows[0].v;
  const page=async()=>(await financeAs<{v:{rows:Array<{source_id:string,nominal_cents:string,display:{basis:string,party_name:string,description:string,document_number:string}}>}}>(db,i.operator,"select get_finance_cash_forecast_sources($1,$2,$3,$4,'origins',1,$5) v",[i.tenant,p.cutoff,p.period_end,saved.snapshot_id,p.revision])).rows[0].v;
  cashForecastSourcesSchema.parse(await page());

@@ -190,7 +190,7 @@ export default function PortalShipments() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Link to={`/portal/shipments/${r.fiscal_document_id}`}>
+                      <Link to={`/portal/shipments/${r.fiscal_document_id}`} aria-label={`Abrir detalhes da nota ${r.invoice_number || r.fiscal_document_id}`}>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </Link>
                     </TableCell>

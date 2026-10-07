@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { accounts, fixtureIds } from "./fixtures/accounts";
+import { confirmFixtureDeparture } from "./fixtures/tripDeparture";
+import { cleanupSyntheticManualLoad } from "./fixtures/loadCleanup";
 import { loginThroughUi, passwordToken } from "./fixtures/session";
 
 type Session = Awaited<ReturnType<typeof passwordToken>>;
@@ -31,21 +33,22 @@ test("operator creates a load and mutates composition/status only through audite
   const session = await passwordToken(request, accounts.operator);
   const loadId = crypto.randomUUID();
   const loadNumber = `E2E-RPC-${loadId.slice(0, 8)}`;
-
-  const created = await request.post(`${session.backendUrl}/rest/v1/loads`, {
-    headers: apiHeaders(session, "return=representation"),
-    data: {
-      id: loadId,
-      tenant_id: fixtureIds.tenantA,
-      load_number: loadNumber,
-      origin: "Montes Claros/MG",
-      destination: "Janaúba/MG",
-      status: "planned",
-    },
-  });
-  expect(created.ok(), await created.text()).toBeTruthy();
+  let itemId: string | null = null;
 
   try {
+    const created = await request.post(`${session.backendUrl}/rest/v1/loads`, {
+      headers: apiHeaders(session, "return=representation"),
+      data: {
+        id: loadId,
+        tenant_id: fixtureIds.tenantA,
+        load_number: loadNumber,
+        origin: "Montes Claros/MG",
+        destination: "Janaúba/MG",
+        status: "planned",
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+
     const itemCreated = await rpc(request, session, "upsert_load_item_v3", {
       p_tenant_id: fixtureIds.tenantA,
       p_load_id: loadId,
@@ -57,7 +60,8 @@ test("operator creates a load and mutates composition/status only through audite
       p_status: "pending",
     });
     expect(itemCreated.ok(), await itemCreated.text()).toBeTruthy();
-    const itemId = await itemCreated.json() as string;
+    itemId = await itemCreated.json() as string;
+    expect(itemId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
     const recalculated = await request.get(
       `${session.backendUrl}/rest/v1/loads?id=eq.${loadId}&select=id,total_pallet_count,total_weight_kg,total_volume_m3,status`,
@@ -102,10 +106,18 @@ test("operator creates a load and mutates composition/status only through audite
       p_item_id: itemId,
     });
     expect(deleted.ok(), await deleted.text()).toBeTruthy();
+    expect(await deleted.json(), "Canonical item deletion must be confirmed").toBe(true);
   } finally {
-    await rpc(request, session, "delete_load_safely", {
-      _tenant_id: fixtureIds.tenantA,
-      _load_id: loadId,
+    await test.step("Remove and verify the isolated manual load", async () => {
+      try {
+        await cleanupSyntheticManualLoad(request, session, {
+          tenantId: fixtureIds.tenantA, loadId, loadNumber, itemId,
+        });
+      } catch (error) {
+        // A cleanup failure must fail the run without replacing a primary
+        // assertion that was already thrown by the operational journey.
+        expect.soft(error, "Synthetic load cleanup failed; investigate the isolated fixture").toBeUndefined();
+      }
     });
   }
 });
@@ -137,6 +149,7 @@ test("driver records canonical expense and delivery outcome with recoverable eve
   });
   expect(stopCreated.ok(), await stopCreated.text()).toBeTruthy();
 
+  await confirmFixtureDeparture(request, session);
   const started = await rpc(request, session, "driver_start_trip", { _trip_id: fixtureIds.tripA });
   expect(started.ok(), await started.text()).toBeTruthy();
 
@@ -147,13 +160,6 @@ test("driver records canonical expense and delivery outcome with recoverable eve
     _accuracy_m: 10,
   });
   expect(arrived.ok(), await arrived.text()).toBeTruthy();
-
-  const checklist = await rpc(request, session, "driver_save_checklist", {
-    _trip_id: fixtureIds.tripA,
-    _kind: "pre",
-    _payload: { tires: true, lights: true, source: "e2e" },
-  });
-  expect(checklist.ok(), await checklist.text()).toBeTruthy();
 
   const expenseContextResponse = await rpc(request, session, "get_expense_creation_context", {
     _tenant_id: fixtureIds.tenantA,
@@ -409,14 +415,17 @@ test("@critical client portal APIs expose tenant A data and reject tenant B iden
 
 test("driver load failures render an actionable retry instead of an empty list", async ({ page }) => {
   await loginThroughUi(page, accounts.driver);
-  await page.route("**/rest/v1/loads?*", (route) => route.abort("failed"));
+  await page.route("**/rest/v1/rpc/list_driver_loads_page_v1", (route) => route.abort("failed"));
   await page.goto("/driver/loads");
 
   await expect(page.getByRole("alert")).toContainText("Não foi possível carregar suas cargas", { timeout: 20_000 });
   await expect(page.getByText("Nenhuma carga encontrada")).toHaveCount(0);
 
-  await page.unroute("**/rest/v1/loads?*");
+  await page.unroute("**/rest/v1/rpc/list_driver_loads_page_v1");
+  const recovery = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/rpc/list_driver_loads_page_v1') && response.request().method() === 'POST');
   await page.getByRole("button", { name: "Tentar novamente" }).click();
+  expect((await recovery).ok(), 'The retried reader must return successfully').toBeTruthy();
+  await page.getByRole('textbox', { name: 'Buscar carga' }).fill('E2E-LOAD-A-001');
   await expect(page.getByText("Carga E2E-LOAD-A-001")).toBeVisible({ timeout: 20_000 });
 });
 

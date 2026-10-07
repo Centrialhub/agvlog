@@ -8,7 +8,7 @@ import ImportedNotesSummary from '@/pages/ImportedNotesSummary';
 
 type Row = Record<string, unknown>;
 const state = vi.hoisted(() => ({ rows: {} as Record<string, Row[]>, requests: [] as URL[], failTable: '' }));
-vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant' } }) }));
+vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant', timezone: 'America/Sao_Paulo' } }) }));
 vi.mock('@/hooks/useClients', () => ({ useClients: () => ({ data: [] }) }));
 vi.mock('@/hooks/useCompanyProfile', () => ({ useCompanyProfile: () => ({ data: null }) }));
 vi.mock('@/hooks/useAlertStore', () => ({ useScopedAlerts: () => ({ confirmAction: vi.fn() }) }));
@@ -67,7 +67,7 @@ const note = (id: string, overrides: Row = {}): Row => ({
   invoice_number: '12345', remitter: 'ACME', client_id: 'client', supplier_id: 'supplier',
   origin_city: 'Montes Claros', recipient_city: 'Janauba', issue_date: '2026-08-21',
   control_lot: 'LOTE-1', dynamic_lot: 'DIN-1', imported_at: null,
-  created_at: new Date('2026-08-31T12:00:00').toISOString(), ...overrides,
+  created_at: '2026-08-31T15:00:00Z', ...overrides,
 });
 beforeEach(() => {
   state.rows = { fiscal_documents: [note('legacy')], cte_documents: [], nfse_documents: [] };
@@ -101,14 +101,15 @@ describe('imported notes filters', () => {
 
   it('uses imported_at when present, without falling back to a conflicting creation date', async () => {
     state.rows.fiscal_documents = [
-      note('reimported', { created_at: '2026-08-01T12:00:00Z', imported_at: new Date('2026-08-31T12:00:00').toISOString() }),
+      note('reimported', { created_at: '2026-08-01T12:00:00Z', imported_at: '2026-08-31T15:00:00Z' }),
       note('older-import', { imported_at: '2026-08-01T12:00:00Z' }),
     ];
     expect(await findNotes({ importFrom: '2026-08-31', importTo: '2026-08-31' })).toEqual(['reimported']);
   });
 
   it('includes the whole local day, including fractional seconds, but excludes adjacent days', async () => {
-    state.rows.fiscal_documents = ['2026-08-30T23:59:59.999', '2026-08-31T00:00:00', '2026-08-31T23:59:59.999', '2026-09-01T00:00:00']
+    state.rows.fiscal_documents = ['2026-08-30T23:59:59.999-03:00', '2026-08-31T00:00:00-03:00',
+      '2026-08-31T23:59:59.999-03:00', '2026-09-01T00:00:00-03:00']
       .flatMap((date, i) => [note(`legacy-${i}`, { created_at: new Date(date).toISOString() }),
         note(`imported-${i}`, { imported_at: new Date(date).toISOString() })]);
     expect(await findNotes({ importFrom: '2026-08-31', importTo: '2026-08-31' }))
@@ -149,6 +150,22 @@ describe('imported notes filters', () => {
 
 describe('imported notes summary page', () => {
   function renderPage() { return render(<Wrapper><MemoryRouter><ImportedNotesSummary /></MemoryRouter></Wrapper>); }
+
+  it('shows the filtered import day in the tenant calendar at the UTC boundary', async () => {
+    state.rows.fiscal_documents = [
+      note('boundary', { created_at: '2026-09-01T02:59:59.999Z' }),
+      note('outside', { invoice_number: '67890', created_at: '2026-09-01T03:00:00Z' }),
+    ];
+    renderPage();
+    await screen.findByText('12345');
+    expect(screen.getByText('67890')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Importação de'), { target: { value: '2026-08-31' } });
+    fireEvent.change(screen.getByLabelText('Importação até'), { target: { value: '2026-08-31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    await waitFor(() => expect(screen.queryByText('67890')).not.toBeInTheDocument());
+    fireEvent.click(await screen.findByRole('row', { name: /12345/ }));
+    expect(screen.getByText('Data importação').parentElement).toHaveTextContent('31/08/2026');
+  });
 
   it('searches by date and invoice, then clears the filters', async () => {
     state.rows.fiscal_documents.push(note('other', { invoice_number: '67890', created_at: '2026-08-01T12:00:00Z' }));

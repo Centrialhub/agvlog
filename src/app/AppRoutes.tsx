@@ -38,6 +38,7 @@ const DeliveryReceipts = lazy(() => import("@/pages/DeliveryReceipts"));
 const TripCargoCustody = lazy(() => import("@/pages/TripCargoCustody"));
 const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
 const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
+const OperationalDriverChat = lazy(() => import("@/pages/OperationalDriverChat"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
 const IngestionReports = lazy(() => import("@/pages/IngestionReports"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
@@ -153,6 +154,7 @@ export function AppRoutes() {
       <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
       <Route path="/operations-control" element={<ProtectedRoute><OperationsControl /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
+      <Route path="/driver-chat" element={<ProtectedRoute roles={["owner", "admin", "operator"]}><OperationalDriverChat /></ProtectedRoute>} />
       <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
       <Route path="/ingestion-reports" element={<ProtectedRoute><IngestionReports /></ProtectedRoute>} />
       <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />

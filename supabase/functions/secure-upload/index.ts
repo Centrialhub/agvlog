@@ -264,7 +264,7 @@ Deno.serve(withFiscalCors(async (request) => {
     const financialScope=isFinancialReceiptFolder(bucket,folder);
     if(kind==='financial'&&!financialScope)return response(400,{error:'finance_invalid_receipt_folder'});
     const financialAccess=async()=>{const access=await callerClient.rpc('get_finance_access',{_tenant_id:tenantId});return !access.error&&access.data===true;};
-    if(financialScope&&!await financialAccess())return response(403,{error:'finance_access_denied'});
+    if(financialScope&&!expenseReceipt&&!await financialAccess())return response(403,{error:'finance_access_denied'});
     if(statementOriginal){
       const access=await callerClient.rpc("get_finance_access",{_tenant_id:tenantId});
       if(access.error||access.data!==true)return response(403,{error:"finance_access_denied"});

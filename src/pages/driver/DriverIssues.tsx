@@ -34,11 +34,8 @@ const ISSUE_TYPES = [...TEMPLATE_TYPES, ...GENERIC_TYPES].map(v => ({
   label: EVENT_TYPE_LABELS[v] || v,
 }));
 
-const SEVERITY_OPTIONS = [
-  { value: 'low', label: 'Baixa' },
-  { value: 'medium', label: 'Média' },
-  { value: 'high', label: 'Alta' },
-];
+const SEVERITY_LABELS = new Map([['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta']]);
+const SEVERITY_OPTIONS = Array.from(SEVERITY_LABELS, ([value, label]) => ({ value, label }));
 
 function pendingOccurrence(
   command: DriverOfflineEnvelope<Json>,
@@ -437,7 +434,7 @@ export default function DriverIssues() {
                     <p className="text-sm font-medium">{typeLabel}</p>
                     <div className="flex items-center gap-1">
                       {queued && <Badge variant="outline" className="text-[10px]">Pendente</Badge>}
-                      <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{evt.severity}</Badge>
+                      <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{SEVERITY_LABELS.get(evt.severity) ?? 'Não informada'}</Badge>
                     </div>
                   </div>
                   {evt.description && <p className="text-xs text-muted-foreground">{evt.description}</p>}

@@ -163,6 +163,7 @@ describe('Supabase baseline contract', () => {
     // These endpoints deliberately forward the user's JWT, not service_role.
     // Their focused tests also assert the effective ACLs and caller context.
     const callerJwtFunctions = new Set([
+      'driver_get_load_fiscal_file',
       'authorize_secure_upload_cleanup_v1',
       'evaluate_trip_live_status_v1',
       'prepare_trip_route_v1',

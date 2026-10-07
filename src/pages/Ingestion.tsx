@@ -53,18 +53,11 @@ import { useTenant } from '@/hooks/useTenant';
 import { useDrivers as useOperatorDrivers } from '@/hooks/useDrivers';
 import { useAuth } from '@/hooks/useAuth';
 import { useItemPreparationWrites } from '@/hooks/useItemPreparationWrites';
-import { prepareOrderItems } from '@/lib/ingestion/prepareOrderItems';
+import { createConfirmedOrderLoad, prepareOrderItems } from '@/lib/ingestion/prepareOrderItems';
+import { getEdgeFunctionErrorMessage } from '@/lib/ingestion/edgeFunctionError';
 import type { RouteDestination } from '@/hooks/useOperationalRoutes';
 
 type PersistedValidatedDocument = ValidatedDocument & { _savedId?: string };
-
-interface EdgeFunctionErrorLike {
-  message?: unknown;
-  context?: {
-    clone?: () => { json: () => Promise<unknown> };
-    json?: () => Promise<unknown>;
-  };
-}
 
 interface OrtExtractionDocument extends Partial<Omit<OrtReviewDocument, 'documentKind' | 'fileName' | 'items'>> {
   documentKind?: string;
@@ -88,14 +81,6 @@ interface IngestionFileBuffer {
 
 function getErrorMessage(error: unknown, fallback = 'Erro inesperado'): string {
   return formatFiscalDocumentError(error,fallback);
-}
-
-function getResponseMessage(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const candidate = body as { error?: unknown; message?: unknown };
-  if (typeof candidate.error === 'string' && candidate.error.trim()) return candidate.error;
-  if (typeof candidate.message === 'string' && candidate.message.trim()) return candidate.message;
-  return null;
 }
 
 function toJson(value: unknown): Json {
@@ -128,36 +113,6 @@ function getPersistedDocumentId(doc: ValidatedDocument): string | undefined {
 
 function useDrivers() {
   return useOperatorDrivers();
-}
-
-async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
-  const candidate = error && typeof error === 'object' ? error as EdgeFunctionErrorLike : {};
-  const fallback = typeof candidate.message === 'string' && candidate.message
-    ? candidate.message
-    : 'Erro ao chamar a função de extração da ORT.';
-  const context = candidate.context;
-
-  try {
-    if (context && typeof context.clone === 'function') {
-      const cloned = context.clone();
-      const body = await cloned.json().catch((): null => null);
-      const message = getResponseMessage(body);
-      if (message) return message;
-    }
-    if (context && typeof context.json === 'function') {
-      const body = await context.json().catch((): null => null);
-      const message = getResponseMessage(body);
-      if (message) return message;
-    }
-  } catch {
-    // Keep the original Supabase message when the response body is unavailable.
-  }
-
-  if (/non-2xx/i.test(fallback)) {
-    return 'A extração da ORT retornou erro no servidor, mas sem detalhe legível. Tente novamente e, se persistir, verifique os créditos/limites da IA do workspace.';
-  }
-
-  return fallback;
 }
 
 export default function Ingestion() {
@@ -1420,7 +1375,7 @@ export default function Ingestion() {
             throw new Error(`Somente ${docIds.length} de ${suggestion.documents.length} NF(s) ficaram disponíveis para vínculo. Carga não criada para evitar romaneio sem notas.`);
           }
 
-          const createdLoad = await createLoad.mutateAsync({
+          const createdLoad = await createConfirmedOrderLoad(suggestion.orders,createdOrderIds,()=>createLoad.mutateAsync({
             destination: suggestion.region,
             vehicle_id: assignment?.vehicleId || null,
             driver_id: assignment?.driverId || null,
@@ -1431,7 +1386,7 @@ export default function Ingestion() {
               return detectedMethods[0] || null;
             })(),
             status: 'planned',
-          });
+          }));
 
           const loadId = createdLoad.id;
           const loadNumber = createdLoad.load_number;

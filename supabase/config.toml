@@ -190,3 +190,9 @@ verify_jwt = false
 
 [functions.finance-payable-xml]
 verify_jwt = true
+
+[functions.manage-driver-access]
+verify_jwt = true
+
+[functions.driver-fiscal-file]
+verify_jwt = true

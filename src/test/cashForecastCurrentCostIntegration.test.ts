@@ -19,7 +19,7 @@ it('forecasts only the revised open complement and removes its outstanding value
  const source=await seedOpenComplementPublicScenario(db);
  for(const n of ['20260911085400_finance_payable_revision_approval','20260911083307_finance_unloading_open_complement_public_boundary','20260911090910_finance_open_complement_approval_final_preflight'])await db.exec(read(n));
  await installCashForecastCollectorSources(db);
- const dates=(await db.query<{cutoff:string,end:string}>("select (current_date-1)::text cutoff,current_date::text end")).rows[0];
+ const dates=(await db.query<{cutoff:string,end:string}>("select ((current_timestamp at time zone $$America/Sao_Paulo$$)::date-1)::text cutoff,(current_timestamp at time zone $$America/Sao_Paulo$$)::date::text end")).rows[0];
  const collect=async()=>cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,$2,$3) v',[i.tenant,dates.cutoff,dates.end])).rows[0].v);
  const first=await collect();expect(first.origins.find(x=>x.source_id===source.payable_id)).toMatchObject({valid:true,nominal_cents:'5000',fulfilled_cents:'0'});
  const base=()=>({version:1,tenant_id:i.tenant,request_id:randomUUID(),reason:'Conferir obrigacao vigente e preservar a previsao'});

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
@@ -18,6 +18,9 @@ import type { Vehicle } from '@/hooks/useVehicles';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { canSelectDocumentForNewLoad, getNewLoadCreationErrorMessage, isIssuedLoadDocument } from '@/lib/loads/newLoadDocumentSelection';
 import { useLoadCreation } from '@/hooks/useLoadCreation';
+import { useCivilDay } from '@/hooks/useCivilDay';
+import { APP_TIME_ZONE, fmtDateTimeInTimeZone } from '@/lib/utils/formatDate';
+import { documentImportTimestamp, matchesNewLoadImportDate, newLoadImportDateRange } from '@/lib/loads/newLoadImportDateFilters';
 
 type DriverOption = { id: string; name: string; user_id: string | null };
 type AvailableFiscalDocument = {
@@ -39,6 +42,7 @@ type AvailableFiscalDocument = {
   cte_emitted_outbound_id: string | null;
   nfse_emitted_at: string | null;
   created_at: string;
+  imported_at: string | null;
   clients: { company_name: string } | null;
   loads: { id: string; load_number: string } | null;
 };
@@ -51,7 +55,7 @@ interface Props {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
-const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
+const emptyDocFilters = { invoice: '', client: '', neighborhood: '', importFrom: '', importTo: '', importToday: false };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, visibleRecentDocCount: DOC_PAGE_SIZE, scrollTop: 0, recentScrollTop: 0 };
 const NEW_LOAD_SESSION_ONLY_KEY = 'agvlog:new-load-doc-session-only';
 const NEW_LOAD_SESSION_PREF_KEY = 'agvlog:new-load-doc-session-preference';
@@ -80,6 +84,9 @@ function useDebouncedValue<T>(value: T, delay: number) {
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const { currentTenant } = useTenant();
+  const timeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const today = useCivilDay(timeZone);
+  const filterId = useId();
   const { data: clients = [] } = useClients();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -91,6 +98,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [driverAutoSuggested, setDriverAutoSuggested] = useState(false);
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('new_load_doc_filters', defaultDocPreference);
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
+  const importFrom = docFilters.importToday ? today : docFilters.importFrom;
+  const importTo = docFilters.importToday ? today : docFilters.importTo;
+  const importDateRange = useMemo(() => newLoadImportDateRange(importFrom, importTo, timeZone), [importFrom, importTo, timeZone]);
   const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<AvailableFiscalDocument | null>(null);
@@ -130,12 +140,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const selectedDriver = form.driver_id ? drivers.find(driver => driver.id === form.driver_id) : null;
   const driverHasAppAccess = !!selectedDriver?.user_id;
 
-  const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
+  const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs, isPending: isPendingFiscalDocs, isError: isErrorFiscalDocs, refetch: refetchFiscalDocs } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, deleted_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, deleted_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, created_at, imported_at, clients!fiscal_documents_client_id_fkey(company_name), loads!fiscal_documents_load_id_fkey(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .is('deleted_at', null)
@@ -159,6 +169,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const linkedLoadById = useMemo(() => new Map(linkedLoads.map(load => [load.id, load])), [linkedLoads]);
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
+
+  const isDocAvailabilityBlocked = isDocsUpdating || isPendingFiscalDocs || isErrorFiscalDocs;
 
   const getLinkedLoad = (doc: AvailableFiscalDocument) => doc.loads || (doc.load_id ? linkedLoadById.get(doc.load_id) : null) || null;
 
@@ -187,12 +199,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     return () => window.clearTimeout(timeout);
   }, [currentDocPreference, saveDocPreference, sessionOnlyPreference]);
 
+  const importFilteredDocs = useMemo(() => fiscalDocs.filter(doc => matchesNewLoadImportDate(doc, importDateRange)), [fiscalDocs, importDateRange]);
+
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
-    const docs = fiscalDocs.filter((doc) => {
+    const docs = importFilteredDocs.filter((doc) => {
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
@@ -204,12 +218,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
     return docs.sort((a, b) => docSort === 'alpha'
       ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
-      : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  }, [debouncedDocFilters, docSort, fiscalDocs]);
+      : (Date.parse(documentImportTimestamp(b)) || 0) - (Date.parse(documentImportTimestamp(a)) || 0));
+  }, [debouncedDocFilters, docSort, importFilteredDocs]);
 
-  const recentDocs = useMemo(() => [...fiscalDocs].sort((a, b) => docSort === 'alpha'
+  const recentDocs = useMemo(() => [...importFilteredDocs].sort((a, b) => docSort === 'alpha'
     ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
-    : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()), [docSort, fiscalDocs]);
+    : (Date.parse(documentImportTimestamp(b)) || 0) - (Date.parse(documentImportTimestamp(a)) || 0)), [docSort, importFilteredDocs]);
 
   const selectableFilteredDocs = useMemo(() => filteredDocs.filter(canSelectDocumentForNewLoad), [filteredDocs]);
 
@@ -252,9 +266,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       return;
     }
     setVisibleDocCount(DOC_PAGE_SIZE);
+    setVisibleRecentDocCount(DOC_PAGE_SIZE);
     setDocScrollTop(0);
+    setRecentDocScrollTop(0);
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
-  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood]);
+    window.requestAnimationFrame(() => recentDocListRef.current?.scrollTo({ top: 0 }));
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, importFrom, importTo, timeZone]);
 
   const recalculateModalHeight = () => {
     const viewportHeight = window.innerHeight || 720;
@@ -416,6 +433,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: AvailableFiscalDocument) => {
+    if (isDocAvailabilityBlocked || createLoad.isPending) return;
     if (!canSelectDocumentForNewLoad(doc)) {
       toast({
         title: 'NF já vinculada',
@@ -453,6 +471,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const selectFilteredDocs = () => {
+    if (isDocAvailabilityBlocked || createLoad.isPending || selectableFilteredDocs.length === 0) return;
     const nextIds = new Set([...Array.from(selectedDocIds), ...selectableFilteredDocs.map(doc => doc.id)]);
     const nextSnapshots = selectableFilteredDocs.reduce((acc, doc) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
     setSelectedDocIds(nextIds);
@@ -487,6 +506,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const handleSave = async () => {
+    if (isDocAvailabilityBlocked || createLoad.isPending) return;
     try {
       const notes = [
         form.notes,
@@ -577,6 +597,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         {createLoad.pending.length > 0 && <div className="flex items-center justify-between gap-3 border-b px-5 py-3 text-sm">
           <span>Há uma criação sem confirmação nesta sessão.</span>
           <Button disabled={createLoad.isPending} onClick={() => void handleRecover()}>Recuperar criação</Button>
+        </div>}
+        {isErrorFiscalDocs && <div role="alert" className="flex items-center justify-between gap-3 border-b px-5 py-3 text-sm text-destructive">
+          <p>Não foi possível atualizar a disponibilidade das notas. As seleções foram mantidas. Atualize antes de selecionar ou criar.</p>
+          <Button type="button" variant="outline" disabled={isFetchingFiscalDocs} onClick={() => void refetchFiscalDocs()}>Atualizar notas</Button>
         </div>}
         {selectedDocs.some(isIssuedLoadDocument) && <p className="px-5 text-sm text-muted-foreground">Os dados fiscais das notas já emitidas serão preservados ao vincular a carga.</p>}
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
@@ -689,7 +713,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Checkbox checked={sessionOnlyPreference} onCheckedChange={checked => toggleSessionOnlyPreference(checked === true)} className="h-3.5 w-3.5" />
                   Usar apenas nesta sessão
@@ -703,21 +727,21 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>
                   Reorganizar layout
                 </Button>
-                {selectableFilteredDocs.length > 0 && (
-                  <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}>
-                    Selecionar filtradas
-                  </Button>
-                )}
-                {selectedDocIds.size > 0 && (
-                  <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={clearDocSelection}>
-                    Limpar
-                  </Button>
-                )}
+                <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}
+                  disabled={isDocAvailabilityBlocked || selectableFilteredDocs.length === 0 || createLoad.isPending}
+                  title="Seleciona todas as notas disponíveis nos filtros, inclusive além da página visível">
+                  Selecionar todos
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={clearDocSelection}
+                  disabled={selectedDocIds.size === 0 || createLoad.isPending}
+                  title="Remove todas as seleções, inclusive notas fora dos filtros atuais">
+                  Desmarcar todos
+                </Button>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="relative">
-                <button type="button" onClick={() => setRecentDocsOpen(true)} className="absolute left-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground" title="Abrir notas recentes">
+                <button type="button" onClick={() => setRecentDocsOpen(true)} className="absolute left-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground" title="Abrir notas recentes" aria-label="Abrir notas recentes">
                   <Search className="h-4 w-4" />
                 </button>
                 <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-9 h-9" />
@@ -725,6 +749,25 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
+            <fieldset className="space-y-2 rounded-md border border-border p-2">
+              <legend className="px-1 text-xs font-medium">Data de importação do XML</legend>
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div className="space-y-1">
+                  <Label htmlFor={`${filterId}-import-from`} className="text-xs">Importação de</Label>
+                  <Input id={`${filterId}-import-from`} type="date" value={importFrom} className="h-9" aria-describedby={`${filterId}-import-help`} aria-invalid={!!importDateRange.error}
+                    onChange={e => setDocFilters(f => ({ ...f, importFrom: e.target.value, importTo, importToday: false }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`${filterId}-import-to`} className="text-xs">Importação até</Label>
+                  <Input id={`${filterId}-import-to`} type="date" value={importTo} className="h-9" aria-describedby={`${filterId}-import-help`} aria-invalid={!!importDateRange.error}
+                    onChange={e => setDocFilters(f => ({ ...f, importFrom, importTo: e.target.value, importToday: false }))} />
+                </div>
+                <Button type="button" variant={docFilters.importToday ? 'default' : 'outline'} size="sm" className="h-9" aria-pressed={docFilters.importToday}
+                  onClick={() => setDocFilters(f => ({ ...f, importFrom: '', importTo: '', importToday: true }))}>Importados hoje</Button>
+              </div>
+              <p id={`${filterId}-import-help`} className="text-[11px] text-muted-foreground">Considera a entrada do XML no sistema, não a emissão ou o faturamento da NF. Fuso da empresa: {timeZone}.</p>
+              {importDateRange.error && <p role="alert" className="text-xs text-destructive">{importDateRange.error}</p>}
+            </fieldset>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearDocFilters}>
                 Limpar filtros
@@ -740,13 +783,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             {selectedDocs.length > 0 && (
               <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
                 <div className="font-medium text-primary">Seleções mantidas: {selectedDocs.length} NF(s) · {loadPreview.pallets} pal · {loadPreview.weight.toLocaleString('pt-BR')} kg</div>
+                <p className="mt-1 text-[11px] text-muted-foreground">Os filtros não removem notas já selecionadas. Para usar somente o período atual, clique em Desmarcar todos antes de Selecionar todos.</p>
                 <div className="mt-1 truncate text-[11px] text-muted-foreground">
                   {selectedDocsPreview.map((doc) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
                 </div>
               </div>
             )}
             <div key={docsLayoutKey} ref={docListRef} className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount, setDocScrollTop)}>
-              {filteredDocs.length === 0 ? (
+              {importDateRange.error ? null : filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
                 <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs">
@@ -785,7 +829,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                       applyDocSelection(doc);
                       setPreviewDoc(doc);
                     }}
-                    disabled={isLinked}
+                    disabled={isLinked || (!isSelected && isDocAvailabilityBlocked) || createLoad.isPending}
                     aria-label={isLinked ? `NF ${doc.invoice_number || 'sem número'} já vinculada à carga ${linkedLoad?.load_number || 'atual'}` : undefined}
                     className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -793,6 +837,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
                        <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
+                       <span className="block text-[11px] text-muted-foreground">Importado em {fmtDateTimeInTimeZone(documentImportTimestamp(doc), timeZone)}</span>
                     </span>
                   </button>
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
@@ -817,7 +862,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <div className="text-xs font-medium">Pré-visualização da NF {previewDoc.invoice_number || '—'}</div>
                     <div className="text-[11px] text-muted-foreground">Confira os dados que serão preenchidos automaticamente.</div>
                   </div>
-                  <Button size="sm" onClick={() => applyDocSelection(previewDoc)} disabled={!canSelectDocumentForNewLoad(previewDoc)}>Confirmar nota</Button>
+                  <Button size="sm" onClick={() => applyDocSelection(previewDoc)} disabled={isDocAvailabilityBlocked || createLoad.isPending || !canSelectDocumentForNewLoad(previewDoc)}>Confirmar nota</Button>
                 </div>
                 {previewValidationIssues.length > 0 && (
                   <div className="space-y-1 rounded-md border border-warning/30 bg-warning/10 p-2">
@@ -848,13 +893,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createLoad.isPending || createLoad.pending.length > 0 || !!createLoad.error}>Criar</Button>
+            <Button onClick={handleSave} disabled={isDocAvailabilityBlocked || createLoad.isPending || createLoad.pending.length > 0 || !!createLoad.error}>Criar</Button>
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">
-              <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
+              <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle><DialogDescription>Notas de entrada no período de importação escolhido em Criar Carga.</DialogDescription></DialogHeader>
               <div key={`recent-${docsLayoutKey}`} ref={recentDocListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount, setRecentDocScrollTop)}>
-                {recentDocs.length === 0 ? (
+                {importDateRange.error ? <p role="alert" className="text-sm text-destructive">{importDateRange.error}</p> : recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
                 ) : visibleRecentDocs.map((doc) => {
                   const isSelected = selectedDocIds.has(doc.id);
@@ -865,7 +910,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <button
                       key={doc.id}
                       type="button"
-                      disabled={isLinked}
+                      disabled={isLinked || (!isSelected && isDocAvailabilityBlocked) || createLoad.isPending}
                       aria-label={isLinked ? `NF ${doc.invoice_number || 'sem número'} já vinculada à carga ${linkedLoad?.load_number || 'atual'}` : undefined}
                       onClick={() => {
                         if (isSelected) {
@@ -883,6 +928,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
                           <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
+                          <div className="text-xs text-muted-foreground">Importado em {fmtDateTimeInTimeZone(documentImportTimestamp(doc), timeZone)}</div>
                         </div>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
                           {actionLabel}
@@ -906,6 +952,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{getLinkedLoad(detailsDoc)?.load_number || 'Não vinculada'}</div></div>
                   <div><span className="text-muted-foreground">Status:</span><div className="font-medium">{detailsDoc.status || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Data de importação:</span><div className="font-medium">{fmtDateTimeInTimeZone(documentImportTimestamp(detailsDoc), timeZone)}</div></div>
                   <div><span className="text-muted-foreground">Cliente:</span><div className="font-medium">{detailsDoc.clients?.company_name || detailsDoc.recipient || '—'}</div></div>
                   <div><span className="text-muted-foreground">Fornecedor:</span><div className="font-medium">{detailsDoc.remitter || '—'}</div></div>
                   <div><span className="text-muted-foreground">Bairro:</span><div className="font-medium">{detailsDoc.recipient_neighborhood || '—'}</div></div>

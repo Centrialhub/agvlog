@@ -14,7 +14,7 @@ export async function loginThroughUi(page: Page, account: Account) {
   assertE2ePassword(account);
   await page.goto("/auth");
   await page.getByLabel("Email").fill(account.email);
-  await page.getByLabel("Senha").fill(account.password);
+  await page.getByLabel("Senha", { exact: true }).fill(account.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).not.toHaveURL(/\/auth(?:\?|$)/, { timeout: 20_000 });
 }

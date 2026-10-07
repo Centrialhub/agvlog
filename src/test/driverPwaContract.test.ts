@@ -41,7 +41,7 @@ describe('driver PWA contract', () => {
   it('emits a build manifest containing the lazy driver routes and their imports',()=>{
     const config=readFileSync(join(process.cwd(),'vite.config.ts'),'utf8');
     expect(config).toContain("name: 'pwa-driver-asset-manifest'");
-    expect(config).toContain("moduleId.includes('/pages/driver/')");
+    expect(config).toContain("driverShellAssetFiles(chunks,css,driverFiles)");
     expect(config).toContain("fileName:'driver-shell-assets.json'");
     expect(config).toContain("fileName:'driver-build.json'");
     expect(config).toContain("createHash('sha256')");

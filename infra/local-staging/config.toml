@@ -1,0 +1,81 @@
+# Empty infrastructure only. The application catalog has NOT been restored.
+# Reviewed against Supabase CLI 2.116.0; do not copy the production config here.
+project_id = "agvlog-local-staging"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55322
+shadow_port = 55320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+# Historical migration replay is invalid. A reviewed baseline is still pending.
+[db.migrations]
+enabled = false
+schema_paths = []
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 55323
+api_url = "http://127.0.0.1"
+openai_api_key = ""
+
+# Local mail capture only; no external SMTP credentials.
+[local_smtp]
+enabled = true
+port = 55324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.s3_protocol]
+enabled = false
+
+[storage.analytics]
+enabled = false
+
+[storage.vector]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5175"
+additional_redirect_urls = ["http://127.0.0.1:5175"]
+enable_signup = false
+enable_anonymous_sign_ins = false
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+
+[auth.sms]
+enable_signup = false
+
+# Requires the reviewed application function before it can be enabled.
+[auth.hook.custom_access_token]
+enabled = false
+
+# No application functions or integration secrets are provisioned at bootstrap.
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false

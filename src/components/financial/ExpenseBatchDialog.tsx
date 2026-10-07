@@ -32,6 +32,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
   const setSaved=(update:SetStateAction<typeof saved>)=>{const next=typeof update==='function'?update(currentSaved.current):update;currentSaved.current=next;publishSaved(next);};
   const uploadBusy=uploadCount>0;const setUploadBusy=(value:boolean)=>setUploadCount(count=>Math.max(0,count+(value?1:-1)));
   const sending=useRef(false),body=useRef<HTMLDivElement>(null);
+  const returnFocusTo=useRef<HTMLElement|null>(null);
   const [detailsExpanded,setDetailsExpanded]=useState(true),[focusTarget,setFocusTarget]=useState<{id:string;field:string}|null>(null);
   const [error,setError]=useState(''),[storageFailed,setStorageFailed]=useState(false),[review,setReview]=useState(false);
   const [sharedMovement,setSharedMovement]=useState<FinanceOption|null>(null);
@@ -66,7 +67,9 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
     finally{sending.current=false;setBusy(false);}
   }
   return <Dialog open onOpenChange={open=>{if(!open&&!busy&&!uploadBusy)onClose();}}>
-    <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-6xl" onInteractOutside={e=>{if(busy||uploadBusy)e.preventDefault();}}>
+    <DialogContent
+      onOpenAutoFocus={()=>{returnFocusTo.current=document.activeElement instanceof HTMLElement?document.activeElement:null;}}
+      onCloseAutoFocus={event=>{if(returnFocusTo.current?.isConnected){event.preventDefault();returnFocusTo.current.focus();}}} className="max-h-[94vh] overflow-y-auto sm:max-w-6xl" onEscapeKeyDown={event=>{if(event.target instanceof Element&&event.target.closest('[data-finance-option-picker]'))event.preventDefault();}} onInteractOutside={e=>{if(busy||uploadBusy)e.preventDefault();}}>
       <DialogHeader><DialogTitle>Conferir gastos em lote</DialogTitle><DialogDescription>Registre cada gasto e vincule os valores aos envios existentes. Este lançamento não realiza pagamentos.</DialogDescription></DialogHeader>
       <div className="space-y-4" ref={body}>
         <fieldset disabled={locked} className="space-y-4">

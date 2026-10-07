@@ -66,8 +66,9 @@ it('rejects missing or null source identity even for privileged malformed insert
 it('records real financial payment and refund projections without an extra payment',async()=>{
  await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
  const f=await createFinancialScenario(db),m=randomUUID();
- await db.query("insert into finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,created_by) values($1,$2,$3,'in','receipt',1000,current_date,'Recebimento','QA',$4)",[m,i.tenant,f.bank,i.operator]);
- const p=await financialCommand(db,await financialPayload(db,f.receivable,{amount_cents:1000,movement_id:m}));
+ const payload=await financialPayload(db,f.receivable,{amount_cents:1000,movement_id:m});
+ await db.query("insert into finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,created_by) values($1,$2,$3,'in','receipt',1000,$5::date,'Recebimento','QA',$4)",[m,i.tenant,f.bank,i.operator,payload.effective_date]);
+ const p=await financialCommand(db,payload);
  const before=await events(f.receivable);expect(before.some(r=>r.new_data?.received_amount===10)).toBe(true);
  await financialCommand(db,reversalPayload(await financialPayload(db,f.receivable),p.payment_id!));
  expect((await events(f.receivable)).at(-1)?.new_data?.received_amount).toBe(0);

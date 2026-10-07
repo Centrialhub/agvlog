@@ -1,0 +1,79 @@
+{
+  "formatVersion": 1,
+  "purpose": "CI-only baseline candidate; no production schema or SQL content",
+  "liveObservation": {
+    "projectRef": "qcvnsdrbcchaxvawcngk",
+    "observedDateUtc": "2026-09-26",
+    "migrationCount": 896,
+    "maxVersion": "20260924155758"
+  },
+  "requiresFreshLiveLedgerCheck": true,
+  "supabaseCliVersion": "2.116.0",
+  "forwards": [
+    {
+      "version": "20260926183928",
+      "filename": "20260926183928_restore_portal_list_contracts.sql",
+      "sha256": "0ed694fa9391dd98220d24eb2a804c6b3341006def05bbab3fc320243d0ff68f"
+    },
+    {
+      "version": "20260926184015",
+      "filename": "20260926184015_restrict_incident_personnel_reads.sql",
+      "sha256": "828fbed9fb367d18c0d7acfe70242bcaababa5c9179876275aa02d33ccf2f39e"
+    },
+    {
+      "version": "20260926185847",
+      "filename": "20260926185847_enforce_fiscal_document_load_tenant.sql",
+      "sha256": "b68201dfc3dd7a5b7781bffe4c7cb7a357163b5879e5d4cb835388ce564543dd"
+    },
+    {
+      "version": "20260926185848",
+      "filename": "20260926185848_restore_fiscal_freight_rpcs.sql",
+      "sha256": "b7174cd91cb0f06dff079e6b34c657a8d7fa2238b03ace68208aaa8608ff3484"
+    },
+    {
+      "version": "20260926190513",
+      "filename": "20260926190513_restore_address_candidate_recording_rpc.sql",
+      "sha256": "6dd46b16d0a81ebbbb8abc27c8eb144282a7ceb3291c48731c50666de4a109f3"
+    },
+    {
+      "version": "20260926190732",
+      "filename": "20260926190732_restore_inventory_public_rpcs.sql",
+      "sha256": "d2f9a5512951236a58db5e082ed47d706576054ac9a0d97790f28565623a61ac"
+    },
+    {
+      "version": "20260926190733",
+      "filename": "20260926190733_restore_team_access_public_rpcs.sql",
+      "sha256": "11657ea1934116abb6c8f0902ea32dc77bf234701296d3170e92b42004912734"
+    },
+    {
+      "version": "20260926191248",
+      "filename": "20260926191248_restore_portal_occurrence_command_rpcs.sql",
+      "sha256": "610798294275a2a65b97df8aad1f07f71d405dcc5191e36d912541ac7d52accb"
+    },
+    {
+      "version": "20260926191257",
+      "filename": "20260926191257_restore_ssx_mapping_conflict_review_rpcs.sql",
+      "sha256": "008404c51db0bb2516d9e804d6185da54ac78b296f015e1069fe1c014250c24c"
+    },
+    {
+      "version": "20260926191456",
+      "filename": "20260926191456_restore_client_mdfe_documents_v1.sql",
+      "sha256": "9f65d8c6e76bf20c6d851d8013cbc5f69b0a550df6970f49848e72fdc59e517c"
+    },
+    {
+      "version": "20260926191500",
+      "filename": "20260926191500_restore_delete_load_item_v4.sql",
+      "sha256": "af05a0056720f133599ea4bdb9f6f35e3595b2c4a05afce7fbf16e4c04ebee33"
+    },
+    {
+      "version": "20260926191625",
+      "filename": "20260926191625_restore_operator_route_reader.sql",
+      "sha256": "a2c4e1d63fcf27a4bb5088a2dc95339c2e98875d518404df52b21be54ea7af1d"
+    },
+    {
+      "version": "20260926191630",
+      "filename": "20260926191630_restore_productivity_report_reader.sql",
+      "sha256": "c5f72b28c8cd1ed0986976ae619a2f37ba13a6e570badeef1495f91883e74794"
+    }
+  ]
+}

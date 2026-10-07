@@ -14,7 +14,7 @@ it('collects available credit after a recorded refund once and preserves the ori
   await db.exec(readFileSync('supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql','utf8'));
   const {credit,target,day}=await seedCustomerCreditRefundSource(db);
   const outgoing=(await db.query<{v:{movement_id:string}}>('select public.record_finance_movement($1) v',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,direction:'out',nature:'refund',amount_cents:20000,occurred_on:day,description:'Devolução já registrada para previsão',beneficiary_name:'Crédito para previsão',beneficiary_document:'11222333000181',reason:'Saída existente conferida antes da vinculação'}])).rows[0].v.movement_id;
-  const collect=async()=>cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,current_date-1,current_date+30) v',[i.tenant])).rows[0].v);
+  const collect=async()=>cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date-1,(current_timestamp at time zone $$America/Sao_Paulo$$)::date+30) v',[i.tenant])).rows[0].v);
   const before=await collect();expect(before.unassigned_credit_cents).toBe('60000');expect(before.recorded_after_cutoff.filter(row=>row.movement_id===outgoing)).toHaveLength(1);
   const bank=async()=>(await db.query('select to_jsonb(b) v from bank_transactions b order by id')).rows;
   const payments=async()=>(await db.query('select to_jsonb(p) v from receivables_payments p order by id')).rows;

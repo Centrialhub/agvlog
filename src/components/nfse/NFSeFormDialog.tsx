@@ -15,6 +15,7 @@ import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
 import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone, onlyDigits } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
+import { useAutomaticInboundFreight } from '@/hooks/useAutomaticInboundFreight';
 import { resolveNFSeServiceValue } from '@/lib/fiscal/nfseServiceValue';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -310,16 +311,18 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const allDocs = useMemo(() => fiscalDocumentsQuery.data ?? [], [fiscalDocumentsQuery.data]);
   const sourceQuery = loadId ? loadDocumentsQuery : fiscalDocumentsQuery;
   const sourceDocuments = loadId ? loadDocuments : allDocs;
+  const automaticDocuments = sourceDocuments.filter(document => itemInputs.some(item => item.fiscal_document_id === document.id) && !manualItemIds.current.has(document.id));
+  const automaticFreight = useAutomaticInboundFreight(automaticDocuments, open && !editing && !sourceQuery.error, sourceQuery.isFetching, sourceQuery.dataUpdatedAt);
   const items = useMemo(() => {
     const byId = new Map(sourceDocuments.map(document => [document.id, document]));
     return itemInputs.map(item => {
       if (!item.fiscal_document_id || manualItemIds.current.has(item.fiscal_document_id)) return item;
-      const freight = resolveNFSeServiceValue(byId.get(item.fiscal_document_id)?.freight_value);
+      const freight = resolveNFSeServiceValue(automaticFreight.values[item.fiscal_document_id] ?? byId.get(item.fiscal_document_id)?.freight_value);
       return { ...item, unit_value: freight, total: +(num(item.quantity) * freight).toFixed(2) };
     });
-  }, [itemInputs, sourceDocuments]);
+  }, [itemInputs, sourceDocuments, automaticFreight.values]);
   const sourceRefreshPending = items.some(item => item.fiscal_document_id)
-    && (sourceQuery.data === undefined || sourceQuery.isFetching || !!sourceQuery.error);
+    && (automaticFreight.pending || sourceQuery.data === undefined || sourceQuery.isFetching || !!sourceQuery.error);
 
   const clientOptions = useMemo(() => {
     return clients
@@ -342,7 +345,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   }, [clientOptions, clientSearchTerm]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setItems([]); manualItemIds.current.clear(); return; }
     setSelectedIds(new Set(initial?.fiscal_document_ids ?? []));
     setClientSearchOpen(false);
     setClientSearchTerm('');
@@ -1025,6 +1028,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
           </TabsContent>
         </Tabs>
 
+        {automaticFreight.errors.length > 0 && <p role="alert" className="text-sm text-destructive">{automaticFreight.errors.join('; ')}</p>}
         {sourceRefreshPending && <p role="status" className="text-sm text-muted-foreground">
           {sourceQuery.error ? 'Não foi possível atualizar os fretes das notas.' : 'Atualizando os fretes das notas.'}
           {sourceQuery.error && <Button variant="outline" onClick={() => void sourceQuery.refetch()}>Atualizar notas</Button>}

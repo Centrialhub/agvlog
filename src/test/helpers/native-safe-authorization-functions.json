@@ -1,0 +1,99 @@
+[
+  {
+    "signature": "auth.jwt()",
+    "sourceSignature": "auth.jwt()",
+    "definition": "CREATE OR REPLACE FUNCTION auth.jwt()\n RETURNS jsonb\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n    coalesce(\n        nullif(current_setting('request.jwt.claim', true), ''),\n        nullif(current_setting('request.jwt.claims', true), '')\n    )::jsonb\n$function$\n",
+    "bodyMd5": "2db09c3fc855ba90e71d3ae28cfadae3",
+    "acl": [
+      "=X/supabase_auth_admin",
+      "supabase_auth_admin=X/supabase_auth_admin",
+      "postgres=X/supabase_auth_admin",
+      "dashboard_user=X/supabase_auth_admin"
+    ],
+    "ownerName": "supabase_auth_admin"
+  },
+  {
+    "signature": "auth.uid()",
+    "sourceSignature": "auth.uid()",
+    "definition": "CREATE OR REPLACE FUNCTION auth.uid()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n  coalesce(\n    nullif(current_setting('request.jwt.claim.sub', true), ''),\n    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')\n  )::uuid\n$function$\n",
+    "bodyMd5": "cdef18c69c4f4cbbced2eaf81e628b49",
+    "acl": [
+      "=X/supabase_auth_admin",
+      "supabase_auth_admin=X/supabase_auth_admin",
+      "dashboard_user=X/supabase_auth_admin"
+    ],
+    "ownerName": "supabase_auth_admin"
+  },
+  {
+    "signature": "private.is_request_tenant_member(uuid)",
+    "sourceSignature": "private.is_request_tenant_member(uuid)",
+    "definition": "CREATE OR REPLACE FUNCTION private.is_request_tenant_member(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select _tenant_id = private.request_tenant_id()\n    and private.user_can_access_tenant(auth.uid(), _tenant_id);\n$function$\n",
+    "bodyMd5": "27bf2e71e1cf52212ac213a23de03dd7",
+    "acl": [
+      "postgres=X/postgres",
+      "authenticated=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  },
+  {
+    "signature": "private.request_tenant_id()",
+    "sourceSignature": "private.request_tenant_id()",
+    "definition": "CREATE OR REPLACE FUNCTION private.request_tenant_id()\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE\n SET search_path TO ''\nAS $function$\ndeclare\n  v_headers jsonb;\n  v_header_raw text;\n  v_claim_raw text;\n  v_raw text;\nbegin\n  begin\n    v_headers := nullif(current_setting('request.headers', true), '')::jsonb;\n  exception\n    when invalid_text_representation then\n      raise exception 'tenant_context_invalid_headers' using errcode = '22023';\n  end;\n\n  v_header_raw := nullif(btrim(v_headers ->> 'x-agvlog-tenant-id'), '');\n  v_claim_raw := nullif(btrim(auth.jwt() ->> 'active_tenant_id'), '');\n\n  if v_header_raw is not null and v_claim_raw is not null and v_header_raw <> v_claim_raw then\n    raise exception 'tenant_context_claim_mismatch' using errcode = '42501';\n  end if;\n\n  if coalesce(auth.jwt() ->> 'role', '') = 'authenticated' and v_claim_raw is null then\n    raise exception 'tenant_context_claim_required' using errcode = '42501';\n  end if;\n\n  v_raw := coalesce(v_header_raw, v_claim_raw);\n  if v_raw is null then\n    raise exception 'tenant_context_required' using errcode = '22023';\n  end if;\n\n  begin\n    return v_raw::uuid;\n  exception\n    when invalid_text_representation then\n      raise exception 'tenant_context_invalid' using errcode = '22023';\n  end;\nend;\n$function$\n",
+    "bodyMd5": "30c8d3e555172654bcb761b0a189eac2",
+    "acl": [
+      "postgres=X/postgres",
+      "authenticated=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  },
+  {
+    "signature": "private.user_can_access_tenant(uuid,uuid)",
+    "sourceSignature": "private.user_can_access_tenant(uuid,uuid)",
+    "definition": "CREATE OR REPLACE FUNCTION private.user_can_access_tenant(_user_id uuid, _tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships tm\n    where tm.user_id = _user_id\n      and tm.tenant_id = _tenant_id\n      and tm.active\n  ) or exists (\n    select 1\n    from public.client_portal_access cpa\n    where cpa.user_id = _user_id\n      and cpa.tenant_id = _tenant_id\n      and cpa.active\n  );\n$function$\n",
+    "bodyMd5": "dce939739de87bf3dbf8be673ba30187",
+    "acl": [
+      "postgres=X/postgres",
+      "authenticated=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  },
+  {
+    "signature": "public.is_tenant_admin(uuid)",
+    "sourceSignature": "is_tenant_admin(uuid)",
+    "definition": "CREATE OR REPLACE FUNCTION public.is_tenant_admin(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships membership\n    where membership.user_id = auth.uid()\n      and membership.tenant_id = _tenant_id\n      and membership.role::text in ('owner', 'admin')\n      and membership.active\n  );\n$function$\n",
+    "bodyMd5": "495068d5fd73ba2559f4a676d1f193b0",
+    "acl": [
+      "authenticated=X/postgres",
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  },
+  {
+    "signature": "public.is_tenant_member(uuid)",
+    "sourceSignature": "is_tenant_member(uuid)",
+    "definition": "CREATE OR REPLACE FUNCTION public.is_tenant_member(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships membership\n    where membership.user_id = auth.uid()\n      and membership.tenant_id = _tenant_id\n      and membership.active\n  );\n$function$\n",
+    "bodyMd5": "9dc8218defa0226b77bcb3d8b6718fcb",
+    "acl": [
+      "authenticated=X/postgres",
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  },
+  {
+    "signature": "public.is_tenant_operator_or_admin(uuid)",
+    "sourceSignature": "is_tenant_operator_or_admin(uuid)",
+    "definition": "CREATE OR REPLACE FUNCTION public.is_tenant_operator_or_admin(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships membership\n    where membership.user_id = auth.uid()\n      and membership.tenant_id = _tenant_id\n      and membership.active\n      and membership.role::text in ('owner', 'admin', 'operator')\n  );\n$function$\n",
+    "bodyMd5": "12a3da73dd45088c8adb6cc208c8b88c",
+    "acl": [
+      "authenticated=X/postgres",
+      "postgres=X/postgres",
+      "service_role=X/postgres"
+    ],
+    "ownerName": "postgres"
+  }
+]

@@ -2,12 +2,17 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { accounts } from "./fixtures/accounts";
+import { waitForRenderedAnimations } from "./fixtures/renderedAnimations";
 import { loginThroughUi } from "./fixtures/session";
 
 async function expectNoSeriousAxeViolations(page: Page, route: string) {
   const response = await page.goto(route);
   expect(response?.status() ?? 200).toBeLessThan(500);
   await expect(page.locator("main, [role=main]").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("main, [role=main]").first().locator('h1').first()).toBeVisible();
+  // Check the rendered page after finite entrance transitions finish. The axe
+  // threshold and serious/critical assertion remain unchanged.
+  await waitForRenderedAnimations(page.locator("main, [role=main]").first());
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -15,6 +20,7 @@ async function expectNoSeriousAxeViolations(page: Page, route: string) {
 
   expect(
     results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? "")),
+    `Serious/critical accessibility violations on ${route}`,
   ).toEqual([]);
 }
 
@@ -36,8 +42,8 @@ test("driver critical workspaces have no serious axe violations", async ({ page 
   await expectNoSeriousAxeViolations(page, "/driver/loads");
   await expectNoSeriousAxeViolations(page, "/driver/expenses");
 
-  await page.getByRole("button", { name: "Nova despesa" }).click();
-  const source = page.getByRole("combobox", { name: "Viagem da despesa" });
+  await page.getByRole("button", { name: "Novo gasto", exact: true }).click();
+  const source = page.getByRole("combobox", { name: "Viagem do gasto" });
   await expect(source).toBeVisible();
   const firstTrip = await source.locator("option").nth(1).getAttribute("value");
   expect(firstTrip).toBeTruthy();

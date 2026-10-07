@@ -1,0 +1,13 @@
+{
+  "startedAtUtc": "2026-09-28T18:48:57.956Z",
+  "completedAtUtc": "2026-09-28T18:49:00.868Z",
+  "sourceSha": "5436bf76e9265441f83a725195048f561c608a9e",
+  "testSha256": "78b92c09f8df4853a4fabcdc3436c1c695fff937c35dfb3974aed862ad2f4ddc",
+  "exitCode": 0,
+  "summary": [
+    "All tests successful.",
+    "Files=1, Tests=114,  1 wallclock secs ( 0.02 usr  0.00 sys +  0.01 cusr  0.01 csys =  0.04 CPU)",
+    "Result: PASS"
+  ],
+  "applicationReady": false
+}

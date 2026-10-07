@@ -1,3 +1,4 @@
+import { parsePollOptions } from "../ssx-poll-positions/poll-policy.ts";
 /**
  * agvlog-pipeline-run — Orchestrates the SSX ingestion pipeline.
  *
@@ -19,6 +20,7 @@ import { isCronRequest } from "../_shared/cron-auth.ts";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { requireActiveTenant } from "../_shared/active-tenant.ts";
+import { checkpointedSync, SsxSyncError } from "../_shared/ssx-sync-checkpoint.ts";
 
 type PipelineMode = "poll" | "full" | "manual" | "sync_units_only" | "aggregate_only";
 type JsonObject = Record<string, unknown>;
@@ -58,6 +60,49 @@ function numberValue(value: unknown, key: string): number {
   return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : 0;
 }
 
+type UnitConfirmation = {
+  upserted: number;
+  source_mode?: string;
+  vehicles_received?: number;
+  normalized_count?: number;
+  skipped_non_vehicle?: number;
+  skipped_missing_stable_code?: number;
+};
+
+function confirmedUnitResult(value: unknown): UnitConfirmation {
+  const row = objectValue(value);
+  const count = row.upserted;
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+    throw new SsxSyncError("unconfirmed_result");
+  }
+  const countKeys = [
+    "vehicles_received", "normalized_count", "skipped_non_vehicle", "skipped_missing_stable_code",
+  ] as const;
+  const hasAnyEvidence = countKeys.some(key => row[key] !== undefined);
+  const hasValidEvidence = countKeys.every(key =>
+    typeof row[key] === "number" && Number.isSafeInteger(row[key]) && row[key] >= 0
+  );
+  if ((row.source_mode === "tracking_discovery" || count === 0 || hasAnyEvidence) && !hasValidEvidence) {
+    throw new SsxSyncError("unconfirmed_result");
+  }
+  const evidence = hasValidEvidence ? {
+    vehicles_received: row.vehicles_received as number,
+    normalized_count: row.normalized_count as number,
+    skipped_non_vehicle: row.skipped_non_vehicle as number,
+    skipped_missing_stable_code: row.skipped_missing_stable_code as number,
+  } : {};
+  if (row.source_mode === "tracking_discovery" && hasValidEvidence
+    && evidence.normalized_count === 0 && evidence.skipped_missing_stable_code > 0
+    && evidence.vehicles_received > evidence.skipped_non_vehicle) {
+    throw new SsxSyncError("missing_stable_identity");
+  }
+  return {
+    upserted: count,
+    ...(typeof row.source_mode === "string" ? { source_mode: row.source_mode } : {}),
+    ...evidence,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -91,15 +136,15 @@ Deno.serve(async (req) => {
       callerId = userData.user.id;
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
+    const parsedOptions = parsePollOptions(body);
+    if (!parsedOptions.ok) return jsonResp({ error: parsedOptions.error }, 400);
+    const { manual_run, force_rediscovery, lookback_minutes } = parsedOptions.options;
+    const supabase = createClient(supabaseUrl, serviceKey);
     const {
       tenant_id,
       integration_account_id,
       pipeline_mode,
-      manual_run = false,
-      force_rediscovery = false,
-      lookback_minutes,
       provider_unit_ids,
     } = body;
 
@@ -226,7 +271,8 @@ Deno.serve(async (req) => {
         if (mode === "full" || mode === "manual") {
           stats.steps_executed.push("reference_catalogs");
           try {
-            const catalogResp = objectValue(await callEdgeFunction(
+            const catalogResp = await checkpointedSync(supabase, account.id, 'pipeline_reference_catalogs', '', async () => {
+            const payload = objectValue(await callEdgeFunction(
               supabaseUrl,
               anonKey,
               authHeader,
@@ -237,9 +283,12 @@ Deno.serve(async (req) => {
               55_000,
               tenant_id,
             ));
+            if (payload.success !== true) throw new SsxSyncError('unconfirmed_result');
+            return { catalogs: objectValue(payload.catalogs) };
+            }, mode === 'manual' ? 0 : 21600);
             const catalogs = objectValue(catalogResp.catalogs);
             stats.reference_catalogs = catalogs
-              ? Object.values(catalogs).reduce(
+              ? Object.values(catalogs).reduce<number>(
                 (sum, value) => sum + (typeof value === "number" ? value : 0),
                 0,
               )
@@ -251,21 +300,27 @@ Deno.serve(async (req) => {
 
         // ===== STEP B: Unit sync (only on full/manual/sync_units_only) =====
         const shouldSyncUnits = mode === "full" || mode === "manual" || mode === "sync_units_only";
+        let unitsReadyForGovernance = false;
         if (shouldSyncUnits) {
           stats.steps_executed.push("sync_units");
           try {
-            const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
+            const syncResp = await checkpointedSync(supabase, account.id, 'pipeline_units', '', async () => {
+            const payload = objectValue(await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
               integration_account_id: account.id,
               force: mode === "manual",
-            },55_000,tenant_id);
-            stats.synced_units += numberValue(syncResp, "upserted");
+            },55_000,tenant_id));
+            if (payload.success !== true) throw new SsxSyncError('unconfirmed_result');
+            return confirmedUnitResult(payload);
+            }, mode === 'manual' || mode === 'sync_units_only' ? 0 : 21600);
+            stats.synced_units += confirmedUnitResult(syncResp).upserted;
+            unitsReadyForGovernance = true;
           } catch (e: unknown) {
             stats.errors.push(`SyncUnits ${account.id}: ${errorMessage(e)}`);
           }
         }
 
         // ===== STEP B2: Governance depends on the refreshed unit catalog =====
-        if (mode === "full" || mode === "manual") {
+        if ((mode === "full" || mode === "manual") && unitsReadyForGovernance) {
           stats.steps_executed.push("governance_snapshots");
           try {
             const governanceResp = objectValue(await callEdgeFunction(
@@ -280,7 +335,7 @@ Deno.serve(async (req) => {
               tenant_id,
             ));
             const snapshots = objectValue(governanceResp.snapshots);
-            stats.governance_snapshots = Object.values(snapshots).reduce(
+            stats.governance_snapshots = Object.values(snapshots).reduce<number>(
               (sum, value) => sum + (typeof value === "number" ? value : 0),
               0,
             );

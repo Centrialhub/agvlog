@@ -18,8 +18,9 @@ describe('SSX governance runtime contract', () => {
       '/Tracking/RuleList/ListRulesByUnitTracked',
       '/Tracking/RuleList/ListUnitTrackedByRule',
     ]) expect(governance).toContain(path);
-    expect(governance).toContain('TrackingUnitIntegrationCode: unitCode');
-    expect(governance).toContain('PropertyName: "TrackedUnitIntegrationCode", Condition: "="');
+    expect(governance).toContain('TrackingUnitIntegrationCode: unit.code');
+    expect(governance).toContain('body: unit.filter ? [unit.filter] : []');
+    expect(governance).toContain('await waitSsxTurn(1000)');
     expect(governance).toContain('body: { RuleIntegrationCode: ruleCode }');
     expect(governance).not.toContain('/v1/Tracking/');
   });

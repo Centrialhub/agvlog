@@ -19,7 +19,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Truck, KeyRound } from 'lucide-react';
+import { DriverAccessControls } from '@/components/drivers/DriverAccessControls';
+import { LegacyDriverAccountsDialog } from '@/components/drivers/LegacyDriverAccountsDialog';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
@@ -95,6 +97,10 @@ export default function Drivers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DriverWithVehicle | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
+  const [accessDriver, setAccessDriver] = useState<DriverWithVehicle | null>(null);
+  const [legacyAccountsOpen, setLegacyAccountsOpen] = useState(false);
+
+  useEffect(() => { setAccessDriver(null); setLegacyAccountsOpen(false); }, [currentTenant?.id, isAdmin]);
 
   const { data: drivers = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['drivers', 'registry', currentTenant?.id, user?.id],
@@ -253,9 +259,12 @@ export default function Drivers() {
           <p className="text-sm text-muted-foreground">Gerencie os motoristas da frota</p>
         </div>
         {isAdmin && (
+          <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setLegacyAccountsOpen(true)}>Excluir contas antigas</Button>
           <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />Novo motorista
           </Button>
+          </div>
         )}
       </div>
 
@@ -383,6 +392,7 @@ export default function Drivers() {
                     {isAdmin && (
                       <TableCell>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" aria-label={`Gerenciar acesso de ${d.name}`} onClick={() => setAccessDriver(d)}><KeyRound className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" aria-label={`Editar motorista ${d.name}`} onClick={() => { setEditing(d); setDialogOpen(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -411,6 +421,8 @@ export default function Drivers() {
       </Card>
 
       <DriverDialog open={dialogOpen} onOpenChange={setDialogOpen} driver={editing} tenantId={currentTenant?.id} userId={user?.id} driverUsers={driverUsers} existingDrivers={drivers} />
+      {isAdmin && currentTenant && accessDriver?.tenant_id === currentTenant.id && <Dialog open onOpenChange={open => { if (!open) setAccessDriver(null); }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso de {accessDriver.name}</DialogTitle><DialogDescription>Gerencie o usuário e a senha do app do motorista.</DialogDescription></DialogHeader><DriverAccessControls key={`${currentTenant.id}:${accessDriver.id}`} tenantId={currentTenant.id} driverId={accessDriver.id} /></DialogContent></Dialog>}
+      {isAdmin && currentTenant && legacyAccountsOpen && <LegacyDriverAccountsDialog key={currentTenant.id} tenantId={currentTenant.id} onClose={() => setLegacyAccountsOpen(false)} />}
     </div>
   );
 }
