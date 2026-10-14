@@ -157,7 +157,10 @@ Deno.serve(async (req) => {
         _candidates: candidates,
       });
       if (error?.message?.includes('address_review_already_resolved')) throw new Error('address_review_already_resolved');
-      if (error?.code === '40001' || error?.code === '23514') throw new Error('address_snapshot_changed');
+      if (error?.code === '40001' || error?.code === '23514'
+        || (error?.code === 'P0001' && error?.message === 'address_subject_changed')) {
+        throw new Error('address_snapshot_changed');
+      }
       if (error) throw new Error('entity_candidates_persistence_failed');
     };
     const { data: cached } = await admin.from('address_geocoding_cache')

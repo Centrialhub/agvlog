@@ -40,6 +40,8 @@ export function DriverChecklistSection({ title, kind, items, tripId, savedItems,
     qc.invalidateQueries({ queryKey: ['driver_events'] }),
   ]);
   const save = useMutation({
+    // Persist locally before transport, including when React Query is offline.
+    networkMode: 'always',
     mutationFn: async () => {
       if (disabled || conflict) throw new Error('Atualize o checklist antes de salvar.');
       return offlineCommands.submit({

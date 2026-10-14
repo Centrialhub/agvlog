@@ -28,7 +28,7 @@ vi.mock('@supabase/supabase-js', () => ({
       if (table === 'integration_logs') return {
         insert: async () => ({ error: null }),
       };
-      if (table !== 'integration_accounts' && table !== 'ssx_rule_violation_cursors') {
+      if (table !== 'integration_accounts' && table !== 'ssx_rule_violation_cursors' && table !== 'ssx_sync_checkpoints') {
         throw new Error(`Unexpected table: ${table}`);
       }
       const query = {
@@ -36,13 +36,38 @@ vi.mock('@supabase/supabase-js', () => ({
         eq: () => query,
         single: async () => ({ data: state.account, error: null }),
         maybeSingle: async () => ({
-          data: state.cursorReadError ? null : state.cursor,
+          data: table === 'ssx_sync_checkpoints' ? {result:{}} : state.cursorReadError ? null : state.cursor,
           error: state.cursorReadError ? { message: 'synthetic read failure' } : null,
         }),
       };
       return query;
     },
     rpc: async (name: string, args: RpcArgs) => {
+      if (name === 'claim_ssx_sync_checkpoint_v1') {
+        return { data: { decision: 'claimed', lease_token: 'synthetic-lease' }, error: null };
+      }
+      if (name === 'finish_ssx_sync_checkpoint_v1') return { data: true, error: null };
+      if (name === 'commit_ssx_rule_violation_window_v3') {
+        if (args._expected_last_position_id !== state.cursor.last_position_id) return { data: { committed: false }, error: null };
+        const items = args._items as Array<Record<string, unknown>>;
+        state.upsertCalls++;
+        for (const item of items) state.violations.set(Number(item.provider_violation_id), item);
+        state.acks.push({ _integration_account_id: args._integration_account_id,
+          _expected_last_position_id: args._expected_last_position_id, _end_position_id: args._end_position_id,
+          _success: true, _error_code: null });
+        state.cursor.last_position_id = String(args._end_position_id);
+        state.cursor.last_error_code = null; state.cursor.updated_at = new Date().toISOString();
+        return { data: { committed: true, upserted: items.length }, error: null };
+      }
+      if (name === 'fail_ssx_rule_violation_window_v2') {
+        if (args._end_position_id !== '0') {
+          state.acks.push({ _integration_account_id: args._integration_account_id,
+            _expected_last_position_id: args._expected_last_position_id, _end_position_id: args._end_position_id,
+            _success: false, _error_code: args._error_code });
+          state.cursor.last_error_code = String(args._error_code); state.cursor.updated_at = new Date().toISOString();
+        }
+        return { data: true, error: null };
+      }
       if (name === 'get_ssx_rule_violation_window_v1') {
         state.windowCalls++;
         return { data: {

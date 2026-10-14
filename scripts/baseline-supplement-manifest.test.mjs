@@ -120,3 +120,15 @@ test('a directory masquerading as a listed migration is rejected before reading 
   await rm(sql); await mkdir(sql);
   await assert.rejects(runBaselineCandidateCommand(root), /must be a regular file/);
 });
+
+test('authorized no-AV supplement is explicitly hash-bound and preserves the preceding stop helper', async () => {
+  const {candidate, followups, supplements}=await inspectBaselineCandidate(process.cwd());
+  const all=[...candidate.forwards,...followups.forwards,...supplements.forwards];
+  assert.equal(all.length,42);
+  assert.equal(all.at(-1).filename,'20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql');
+  const bytes=await readFile(join('supabase/migrations',all.at(-1).filename));
+  assert.equal(digest(bytes),all.at(-1).sha256);
+  assert.equal(all.at(-2).sha256,'220233cb4d54a3685290bc6eb2a81c4ddaef34b75ebc52c5337b6727923dd902');
+  assert.match(bytes.toString(),/receipt_scan_policy_predecessor_mismatch/);
+  assert.match(bytes.toString(),/not_performed/);
+});

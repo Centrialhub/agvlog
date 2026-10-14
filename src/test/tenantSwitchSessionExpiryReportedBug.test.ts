@@ -6,7 +6,8 @@ const source = readFileSync('src/hooks/useTenant.tsx', 'utf8');
 describe('expired session during company switch', () => {
   it('validates the refresh token before persisting the requested company', () => {
     const explicitSwitch = source.slice(source.indexOf('const activateTenantId'));
-    expect(explicitSwitch.indexOf('const validated=await refresh.call(authClient)'))
+    expect(explicitSwitch.indexOf('const validated=await attempt.wait(refresh.call(authClient))')).toBeGreaterThanOrEqual(0);
+    expect(explicitSwitch.indexOf('const validated=await attempt.wait(refresh.call(authClient))'))
       .toBeLessThan(explicitSwitch.indexOf("supabase.rpc('set_active_tenant_context_v1',{_tenant_id:id})"));
   });
 

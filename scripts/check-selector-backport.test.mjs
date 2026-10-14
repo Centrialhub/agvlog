@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname,resolve,relative,isAbsolute} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {test} from 'node:test';
+const repo=process.cwd(),checker=resolve('scripts/check-selector-backport.mjs');
+const provenance='vendor/postcss-selector-parser-6.1.4-agvlog.provenance.json';
+const tarball='vendor/postcss-selector-parser-6.1.4-agvlog.tgz';
+const run=root=>spawnSync(process.execPath,[checker],{cwd:root,encoding:'utf8',windowsHide:true});
+const fixture=t=>{const root=mkdtempSync(join(tmpdir(),'agvlog-selector-identity-'));t.after(()=>{const target=resolve(root),local=relative(resolve(tmpdir()),target);assert.ok(local&&!local.startsWith('..')&&!isAbsolute(local)&&local.startsWith('agvlog-selector-identity-'));rmSync(target,{recursive:true,force:true});});for(const file of['package.json','package-lock.json',provenance,tarball]){mkdirSync(dirname(join(root,file)),{recursive:true});writeFileSync(join(root,file),readFileSync(join(repo,file)));}return root;};
+test('both real consumers resolve the independently approved parser after clean install',()=>{const result=run(repo);assert.equal(result.status,0,result.stderr);const identity=JSON.parse(result.stdout);assert.deepEqual(identity.consumers.map(value=>value.consumer),['postcss-nested','tailwindcss']);assert.ok(identity.consumers.every(value=>value.parserSha256==='ffc898cffcf7b654e4af1d5245c33890f7d9600809de790fd385483ee49c1c68'));});
+test('corrupted vendor bytes are rejected before loading package code',t=>{const root=fixture(t),file=join(root,tarball),bytes=readFileSync(file);bytes[0]^=1;writeFileSync(file,bytes);const result=run(root);assert.notEqual(result.status,0);assert.match(result.stderr,/Selector approved tarball identity mismatch/);});
+test('unsafe provenance path is rejected before any referenced file read',t=>{const root=fixture(t),file=join(root,provenance),identity=JSON.parse(readFileSync(file,'utf8'));identity.tarball='../not-present.fixture';writeFileSync(file,JSON.stringify(identity));const result=run(root);assert.notEqual(result.status,0);assert.match(result.stderr,/Selector approved metadata identity mismatch/);assert.doesNotMatch(result.stderr,/ENOENT/);});
+test('unpatched registry resolution is rejected before loading package code',t=>{const root=fixture(t),file=join(root,'package-lock.json'),lock=JSON.parse(readFileSync(file,'utf8'));const key=Object.keys(lock.packages).find(value=>value.endsWith('/postcss-selector-parser'));lock.packages[key].resolved='https://registry.npmjs.org/postcss-selector-parser/-/postcss-selector-parser-6.1.4.tgz';writeFileSync(file,JSON.stringify(lock));const result=run(root);assert.notEqual(result.status,0);assert.match(result.stderr,/Selector lock identity mismatch/);});

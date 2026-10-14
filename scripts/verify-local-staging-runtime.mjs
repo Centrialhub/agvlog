@@ -20,6 +20,8 @@ const localEnvironment = {
   HOME: process.env.HOME,
   LANG: 'C.UTF-8',
   DOCKER_HOST: 'unix:///var/run/docker.sock',
+  SUPABASE_NO_UPDATE_NOTIFIER: '1',
+  SUPABASE_TELEMETRY_DISABLED: '1',
 };
 let stage = 'platform';
 

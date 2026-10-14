@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { clearConfirmedDriverContext } from '@/lib/tenant/offlineConfirmedTenantContext';
 
 const roleSchema = z.enum(['owner', 'admin', 'operator', 'client', 'driver']);
 const tenantFields = { name: z.string(), plan_key: z.string(), timezone: z.string() };
@@ -57,6 +58,14 @@ export function readTenantMembershipCache(actor: string, now = new Date()): Memb
 export function clearTenantMembershipCache(actor: string | undefined): void {
   if (!actor) return;
   try { localStorage.removeItem(membershipCacheKey(actor)); } catch { /* optional cache */ }
+  clearConfirmedDriverContext(actor);
+}
+
+class MembershipTransportFailure extends Error {
+  constructor() { super('Não foi possível consultar seus acessos sem conexão.'); this.name = 'MembershipTransportFailure'; }
+}
+export function isMembershipTransportFailure(cause: unknown): boolean {
+  return cause instanceof MembershipTransportFailure;
 }
 
 // A single bounded read, including the portal-only fallback. Never call Auth
@@ -70,8 +79,13 @@ export async function readTenantMemberships(signal: AbortSignal): Promise<Member
   try {
     return await Promise.race([
       (async () => {
-        const { data, error } = await supabase.rpc('get_current_memberships_v1').abortSignal(controller.signal);
-        if (error) throw error;
+        const { data, error, status } = await supabase.rpc('get_current_memberships_v1').abortSignal(controller.signal);
+        if (signal.aborted || controller.signal.aborted) throw new DOMException('Membership read cancelled', 'AbortError');
+        if (error) {
+          // Only the SDK's failed-fetch response, never a string in HTTP JSON.
+          if (status === 0 && error.code === '' && /^TypeError:\s*(?:Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed)$/i.test(error.message)) throw new MembershipTransportFailure();
+          throw error;
+        }
         const rows = operationalSchema.parse(data);
         if (rows.length) return rows.map(row => ({ tenant_id: row.tenant_id, role: row.role,
           tenants: { id: row.tenant_id, name: row.tenant_name, plan_key: row.plan_key, timezone: row.timezone } }));

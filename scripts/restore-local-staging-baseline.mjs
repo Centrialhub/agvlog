@@ -15,6 +15,8 @@ const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const localEnvironment = {
   PATH: `${dirname(process.execPath)}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
   HOME: process.env.HOME, LANG: 'C.UTF-8', DOCKER_HOST: 'unix:///var/run/docker.sock',
+  SUPABASE_NO_UPDATE_NOTIFIER: '1',
+  SUPABASE_TELEMETRY_DISABLED: '1',
 };
 
 class RestoreFailure extends Error {

@@ -1,3 +1,4 @@
+import { isDeliveryRetry, type DriverDeliveryRetry } from '@/lib/driver/driverDeliveryRetryPolicy';
 import type { Json } from '@/integrations/supabase/types';
 import type { ReceiptScanResult } from '@/lib/driver/receiptScan';
 import { driverOfflineOutbox, driverOfflineScope, type DriverOfflineEnvelope, type DriverOfflineFile } from '@/lib/driver/driverOfflineOutbox';
@@ -74,6 +75,7 @@ export interface DriverDeliveryOfflineDraft {
     uploadedPaths: string[];
     preparedDetails: Record<string, Json> | null;
     uploads?: DriverDeliveryUploadLedgerEntry[];
+    retry?: DriverDeliveryRetry;
   };
   createdAt: string;
   updatedAt: string;
@@ -169,7 +171,8 @@ function isStoredFile(value: unknown): value is StoredDriverFile {
 function isSynchronization(value:unknown):value is NonNullable<DriverDeliveryOfflineDraft['synchronization']>{
   if(!value||typeof value!=='object')return false;
   const synchronization=value as NonNullable<DriverDeliveryOfflineDraft['synchronization']>;
-  return ['queued','preparing','dispatch_pending','cleanup_pending','needs_attention'].includes(synchronization.stage)
+  return (synchronization.retry === undefined || isDeliveryRetry(synchronization.retry))
+    && ['queued','preparing','dispatch_pending','cleanup_pending','needs_attention'].includes(synchronization.stage)
     &&Array.isArray(synchronization.uploadedPaths)
     &&synchronization.uploadedPaths.every(path=>typeof path==='string'&&path.length>0)
     &&(synchronization.uploads===undefined||Array.isArray(synchronization.uploads)
@@ -297,6 +300,7 @@ function toEnvelope(draft:DriverDeliveryOfflineDraft):DriverOfflineEnvelope<Json
 function fromEnvelope(record:DriverOfflineEnvelope):DriverDeliveryOfflineDraft {
   const payload=record.payload as unknown as DeliveryEnvelopePayload;
   if(payload.version!==1||typeof payload.photoCount!=='number')throw storageError('A entrega na fila unificada é incompatível.');
+  if(payload.synchronization?.retry!==undefined&&!isDeliveryRetry(payload.synchronization.retry))throw storageError('O prazo de sincronização salvo precisa de revisão.');
   const find=(slot:string)=>record.files.find(file=>file.slot===slot);
   const original=find('receipt:original'),processed=find('receipt:processed'),thumbnail=find('receipt:thumbnail'),signature=find('signature');
   const receiptScan=payload.receiptScan?{

@@ -1,0 +1,22 @@
+{
+  "name": "postcss-selector-parser",
+  "version": "6.1.4",
+  "tarball": "vendor/postcss-selector-parser-6.1.4-agvlog.tgz",
+  "sha256": "443d5e49316ae4475d726f146a3798eb8ef810377bff7fe8998f7fba040f1e43",
+  "integrity": "sha512-ZcACqiOJABuTjRzI1DwEtpMMHkbICokllhGxMqfJLq9LYKfpAy0TG51WC2aEZIQWvvXQ1Vx2WR38PPO5VC959g==",
+  "license": "MIT",
+  "upstreamCommit": "https://github.com/postcss/postcss-selector-parser/commit/62b191792df0a0bc56062e5a875bc74aae2a51cd",
+  "upstreamChanges": 3,
+  "privateBackportNotUpstreamRelease": true,
+  "auditCleanClaim": false,
+  "original37FilesExceptDistParserUnchanged": true,
+  "patchedDistParserSha256": "ffc898cffcf7b654e4af1d5245c33890f7d9600809de790fd385483ee49c1c68",
+  "independentReview": "C:/Users/Thomaz/Documents/Codex/2026-10-07/task-4/css-independent-review-20261008/INDEPENDENT-CSS-VERDICT-20261008.md",
+  "reviewedOn": "2026-10-08",
+  "consumerResolution": [
+    "postcss-nested",
+    "tailwindcss"
+  ],
+  "bracesBackportIntegrated": false,
+  "forgeBackportIntegrated": false
+}

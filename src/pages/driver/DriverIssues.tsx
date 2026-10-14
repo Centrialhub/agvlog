@@ -156,6 +156,8 @@ export default function DriverIssues() {
   }, [effectiveDriver?.id, offlineCommands.online, qc]);
 
   const createIssue = useMutation({
+    // Persist locally before transport, including when React Query is offline.
+    networkMode: 'always',
     mutationFn: async () => {
       const report = formatOccurrenceReport(form.event_type, form.details);
       const description = report || form.description || null;

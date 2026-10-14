@@ -86,6 +86,8 @@ export default function DriverJourney() {
     qc.invalidateQueries({ queryKey: ['driver_events'] }),
   ]);
   const addEvent = useMutation({
+    // Persist locally before transport, including when React Query is offline.
+    networkMode: 'always',
     mutationFn: async (eventType: JourneyEventType) => {
       if (!tripId || unavailable || loading) throw new Error('Atualize a viagem e a jornada antes de registrar.');
       const latestQueued = queuedJourney.at(-1);

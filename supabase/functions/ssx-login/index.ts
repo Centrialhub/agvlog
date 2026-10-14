@@ -8,6 +8,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { requestSsxLogin } from "../_shared/ssx-login-request.ts";
 import { isCronRequest } from "../_shared/cron-auth.ts";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
@@ -92,9 +93,11 @@ Deno.serve(async (req) => {
         code: "SSX_CREDENTIAL_REENTRY_REQUIRED",
       }, 409);
     }
-    const backoffUntil = settings.ssx_login_backoff_until
-      ? new Date(settings.ssx_login_backoff_until).getTime()
+    const backoffValue = settings.ssx_login_backoff_until;
+    const parsedBackoff = typeof backoffValue === "string" || typeof backoffValue === "number"
+      ? new Date(backoffValue).getTime()
       : 0;
+    const backoffUntil = Number.isFinite(parsedBackoff) ? parsedBackoff : 0;
     if (!force && backoffUntil > Date.now()) {
       return jsonResp({
         error: 'SSX login temporarily paused after repeated failures',
@@ -162,10 +165,9 @@ Deno.serve(async (req) => {
     let responseText = "";
 
     try {
-      ssxResponse = await fetch(loginUrlWithParams, {
-        method: "POST", headers: { Accept: "application/json" },
-      });
-      responseText = await ssxResponse.text();
+      const result = await requestSsxLogin(loginUrlWithParams, settings.request_timeout_ms);
+      ssxResponse = result.response;
+      responseText = result.text;
     } catch {
       const failure = nextLoginBackoff(settings);
       await supabase.from("integration_accounts").update({

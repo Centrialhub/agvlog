@@ -45,6 +45,7 @@ import { normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
 import { formatFiscalDocumentError } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { matchClientForFiscalDoc } from '@/lib/fiscalDocuments/clientMatcher';
 import { INGESTION_READ_CONCURRENCY, ingestionSelectionError, ortSelectionError } from '@/lib/ingestion/uploadLimits';
+import { canSelectDocumentForNewLoad } from '@/lib/loads/newLoadDocumentSelection';
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -116,7 +117,7 @@ function useDrivers() {
 }
 
 export default function Ingestion() {
-  const { data: existingDocs = [] } = useFiscalDocuments();
+  const { data: existingDocs = [], isError: documentsError, isFetching: documentsFetching, refetch: refetchDocuments } = useFiscalDocuments();
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
@@ -1600,7 +1601,12 @@ export default function Ingestion() {
           <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} readProgress={readProgress} />
           {/* Pending NF-es without load */}
           {(() => {
-            const pending = existingDocs.filter(d => !d.load_id && d.status !== 'cancelled');
+            if (documentsError) return <div role="alert" className="mt-4 rounded border border-destructive/30 p-4 text-sm">
+              <p>Não foi possível atualizar as NF-es disponíveis para agrupamento.</p>
+              <Button variant="outline" disabled={documentsFetching} onClick={() => void refetchDocuments()}>Atualizar NF-es</Button>
+            </div>;
+            const pending = existingDocs.filter(d => d.document_type === 'inbound' && d.status === 'confirmed'
+              && canSelectDocumentForNewLoad(d));
             if (pending.length === 0) return null;
             return (
               <Card className="mt-4 border-warning/30">
@@ -1608,10 +1614,10 @@ export default function Ingestion() {
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <FileText className="h-4 w-4 text-warning" />
-                      <h3 className="text-sm font-semibold">{pending.length} NF-e(s) pendentes sem carga</h3>
+                      <h3 className="text-sm font-semibold">{pending.length} NF-e(s) disponíveis para agrupamento</h3>
                       <span className="text-[10px] text-muted-foreground">Salvas em importações anteriores e ainda não vinculadas a nenhuma carga</span>
                     </div>
-                    <Button size="sm" onClick={() => setResumeOpen(true)} className="shrink-0 gap-1.5">
+                    <Button size="sm" disabled={documentsFetching} onClick={() => setResumeOpen(true)} className="shrink-0 gap-1.5">
                       <FileStack className="h-3.5 w-3.5" />
                       Retomar agrupamento
                     </Button>

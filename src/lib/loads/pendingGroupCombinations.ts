@@ -10,6 +10,7 @@ export interface PendingRouteDoc {
   weight_kg: number | null;
   value: number | null;
   created_at: string;
+  imported_at?: string | null;
   current_delivery_attempt_id?: string | null;
   cte_emitted_at?: string | null;
   cte_emitted_outbound_id?: string | null;

@@ -186,8 +186,14 @@ async function callSsx(
   return { response, endpoint };
 }
 
+// Infer the client from an actual call; ReturnType on the generic createClient
+// declaration loses its default schema parameters.
+function createAdminClient(url: string, serviceKey: string) {
+  return createClient(url, serviceKey);
+}
+
 async function setDriverStatus(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createAdminClient>,
   tenantId: string,
   driverId: string,
   status: string,
@@ -227,7 +233,7 @@ Deno.serve(async (req) => {
     const tenantContextError = requireActiveTenant(req, tenantId);
     if (tenantContextError) return tenantContextError;
 
-    const admin = createClient(supabaseUrl, serviceKey);
+    const admin = createAdminClient(supabaseUrl, serviceKey);
     const role = await getTenantRole(admin, tenantId, userData.user.id);
     if (!role || !["owner", "admin"].includes(role)) return jsonResp({ error: "Forbidden" }, 403);
     const capabilityResponse = await requireIntegrationCapability(admin, tenantId, "ssx");

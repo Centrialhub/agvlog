@@ -9,7 +9,7 @@ import {installPasswordSessionFixture} from './helpers/passwordSessionDatabase';
 import {manualSettlement} from './helpers/expenseCreationDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
 let db:PGlite;
-beforeAll(async()=>{({db}=await expenseMfaDatabase());await installPasswordSessionFixture(db);},30000);
+beforeAll(async()=>{({db}=await expenseMfaDatabase());await installPasswordSessionFixture(db);await db.exec(readFileSync('supabase/migrations/20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql','utf8'));},30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{await db.exec('begin');await expenseMfaActor(db);});
 afterEach(async()=>{await db.exec('rollback');});
@@ -26,19 +26,19 @@ async function setup(){
  return {context,deps:{inspect,scan,upload}};
 }
 describe('receipt gateway with actual password-session authorization SQL; no external requests',()=>{
- it.each(['owner','admin'])('accepts a password-only %s without skipping scan or upload authorization',async role=>{
+ it.each(['owner','admin'])('accepts a password-only %s without AV while retaining upload authorization',async role=>{
   await expenseMfaRole(db,role);const s=await setup();expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(200);
-  expect(s.deps.scan).toHaveBeenCalledOnce();expect(s.deps.upload).toHaveBeenCalledOnce();
+  expect(s.deps.scan).not.toHaveBeenCalled();expect(s.deps.upload).toHaveBeenCalledOnce();
  });
- it('stops a user whose membership is revoked during scanning',async()=>{
-  const s=await setup();s.deps.scan.mockImplementation(async()=>{await db.query('update tenant_memberships set active=false where user_id=$1',[i.operator]);return {available:true,clean:true};});
+ it('stops a user whose membership is revoked between the two caller inspections',async()=>{
+  const s=await setup();const inspect=s.deps.inspect.getMockImplementation()!;s.deps.inspect.mockImplementationOnce(async args=>{const result=await inspect(args);await db.query('update tenant_memberships set active=false where user_id=$1',[i.operator]);return result;});
   expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(403);expect(s.deps.inspect).toHaveBeenCalledTimes(2);expect(s.deps.upload).not.toHaveBeenCalled();
  });
  it('recovers an existing upload after switching from AAL2 to a password-only session',async()=>{
   await expenseMfaRole(db,'admin');await expenseMfaActor(db,i.operator,'aal2');const s=await setup();
   const confirmed=await expenseReceiptUpload(s.context,s.deps);expect(confirmed.status).toBe(200);
   await expenseMfaActor(db);expect(await expenseReceiptUpload(s.context,s.deps)).toEqual(confirmed);
-  expect(s.deps.scan).toHaveBeenCalledTimes(1);expect(s.deps.upload).toHaveBeenCalledTimes(1);
+  expect(s.deps.scan).not.toHaveBeenCalled();expect(s.deps.upload).toHaveBeenCalledTimes(1);
   expect((await db.query<{n:number}>('select count(*)::int n from driver_expenses')).rows[0].n).toBe(0);
  });
  it('uses caller JWT inspection in the deployed handler source',()=>{

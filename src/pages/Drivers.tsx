@@ -2,7 +2,7 @@ import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { useListFilters } from '@/hooks/useListFilters';
 import { matchesSearch } from '@/lib/listFilters';
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -21,12 +21,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, RefreshCw, Truck, KeyRound } from 'lucide-react';
 import { DriverAccessControls } from '@/components/drivers/DriverAccessControls';
+import { CreateDriverAccessDialog } from '@/components/drivers/CreateDriverAccessDialog';
 import { LegacyDriverAccountsDialog } from '@/components/drivers/LegacyDriverAccountsDialog';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { driverAccessRequest, type DriverAccessState } from '@/lib/auth/driverAccess';
 
 type DriverRow = Tables<'drivers'>;
 type DriverVehicle = Pick<Tables<'vehicles'>, 'id' | 'plate' | 'nickname'>;
@@ -99,8 +101,10 @@ export default function Drivers() {
   const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
   const [accessDriver, setAccessDriver] = useState<DriverWithVehicle | null>(null);
   const [legacyAccountsOpen, setLegacyAccountsOpen] = useState(false);
+  const [createAccessOpen, setCreateAccessOpen] = useState(false);
+  const createAccessTrigger = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => { setAccessDriver(null); setLegacyAccountsOpen(false); }, [currentTenant?.id, isAdmin]);
+  useEffect(() => { setAccessDriver(null); setLegacyAccountsOpen(false); setCreateAccessOpen(false); setDialogOpen(false); setEditing(null); }, [currentTenant?.id, user?.id, isAdmin]);
 
   const { data: drivers = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['drivers', 'registry', currentTenant?.id, user?.id],
@@ -262,7 +266,10 @@ export default function Drivers() {
           <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setLegacyAccountsOpen(true)}>Excluir contas antigas</Button>
           <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
-            <Plus className="mr-2 h-4 w-4" />Novo motorista
+            <Plus className="mr-2 h-4 w-4" />Cadastrar motorista
+          </Button>
+          <Button ref={createAccessTrigger} variant="outline" disabled={isLoading || isError || !currentTenant || !user} onClick={() => setCreateAccessOpen(true)}>
+            <KeyRound className="mr-2 h-4 w-4" />Criar conta de acesso
           </Button>
           </div>
         )}
@@ -391,8 +398,8 @@ export default function Drivers() {
                     {ssxEnabled && <TableCell>{syncStatusBadge(d.provider_person_sync_status)}</TableCell>}
                     {isAdmin && (
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" aria-label={`Gerenciar acesso de ${d.name}`} onClick={() => setAccessDriver(d)}><KeyRound className="h-4 w-4" /></Button>
+                        <div className="flex flex-wrap gap-1">
+                          <Button variant="outline" size="sm" aria-label={`${d.user_id ? 'Gerenciar acesso' : 'Criar acesso'} de ${d.name}`} onClick={() => setAccessDriver(d)}><KeyRound className="mr-2 h-4 w-4" />{d.user_id ? 'Gerenciar acesso' : 'Criar acesso'}</Button>
                           <Button variant="ghost" size="icon" aria-label={`Editar motorista ${d.name}`} onClick={() => { setEditing(d); setDialogOpen(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -420,8 +427,9 @@ export default function Drivers() {
         </CardContent>
       </Card>
 
-      <DriverDialog open={dialogOpen} onOpenChange={setDialogOpen} driver={editing} tenantId={currentTenant?.id} userId={user?.id} driverUsers={driverUsers} existingDrivers={drivers} />
-      {isAdmin && currentTenant && accessDriver?.tenant_id === currentTenant.id && <Dialog open onOpenChange={open => { if (!open) setAccessDriver(null); }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso de {accessDriver.name}</DialogTitle><DialogDescription>Gerencie o usuário e a senha do app do motorista.</DialogDescription></DialogHeader><DriverAccessControls key={`${currentTenant.id}:${accessDriver.id}`} tenantId={currentTenant.id} driverId={accessDriver.id} /></DialogContent></Dialog>}
+      {isAdmin && user && currentTenant && (!editing || editing.tenant_id === currentTenant.id) && <DriverDialog key={`${currentTenant.id}:${user.id}`} open={dialogOpen} onOpenChange={setDialogOpen} driver={editing} tenantId={currentTenant.id} userId={user.id} driverUsers={driverUsers} existingDrivers={drivers} />}
+      {isAdmin && user && currentTenant && accessDriver?.tenant_id === currentTenant.id && <Dialog open onOpenChange={open => { if (!open) setAccessDriver(null); }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Acesso de {accessDriver.name}</DialogTitle><DialogDescription>Gerencie o usuário e a senha do app do motorista.</DialogDescription></DialogHeader><DriverAccessControls key={`${currentTenant.id}:${user.id}:${accessDriver.id}`} tenantId={currentTenant.id} driverId={accessDriver.id} /></DialogContent></Dialog>}
+      {isAdmin && user && currentTenant && createAccessOpen && <CreateDriverAccessDialog key={`${currentTenant.id}:${user.id}`} tenantId={currentTenant.id} actorId={user.id} drivers={drivers} returnFocusRef={createAccessTrigger} onClose={() => setCreateAccessOpen(false)} />}
       {isAdmin && currentTenant && legacyAccountsOpen && <LegacyDriverAccountsDialog key={currentTenant.id} tenantId={currentTenant.id} onClose={() => setLegacyAccountsOpen(false)} />}
     </div>
   );
@@ -436,6 +444,27 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
   const [form, setForm] = useState<DriverForm>({});
   const [driverType, setDriverType] = useState<'proprio' | 'terceiro'>('proprio');
   const [loading, setLoading] = useState(false);
+  const saving = useRef(false);
+  const saveContext = useRef({ cancelled: false });
+  useEffect(() => {
+    const context = { cancelled: false };
+    saveContext.current = context; saving.current = false; setLoading(false);
+    return () => { context.cancelled = true; };
+  }, [open, driver?.id, tenantId, userId]);
+  const linkInspection = useQuery({
+    queryKey: ['driver_registry_link_policy', tenantId, userId, driver?.id, driver?.user_id],
+    queryFn: async () => {
+      if (!tenantId || !driver?.user_id) throw new Error('Vínculo de acesso indisponível.');
+      const inspected = await driverAccessRequest<DriverAccessState>({ tenant_id: tenantId, driver_id: driver.id, action: 'inspect', version: 3 });
+      if (inspected.version !== 3 || inspected.driver_id !== driver.id) throw new Error('O serviço não confirmou o vínculo deste motorista.');
+      return inspected;
+    },
+    enabled: open && !!tenantId && !!driver?.user_id,
+    staleTime: 0,
+    retry: false,
+  });
+  const canEditLink = !driver?.user_id || (linkInspection.isSuccess && !linkInspection.isFetching
+    && linkInspection.data.kind === 'legacy' && linkInspection.data.command_pending === false);
 
   useEffect(() => {
     if (open) {
@@ -454,7 +483,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId) return;
+    if (!tenantId || saving.current) return;
     if (driverType === 'proprio') {
       const required: Array<keyof DriverForm> = ['name', 'birth_date', 'naturalidade', 'address_street', 'address_neighborhood', 'address_city', 'cpf', 'cnh_number'];
       const missing = required.filter((k) => !form[k] || String(form[k]).trim() === '');
@@ -467,51 +496,76 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
       toast.error('Nome é obrigatório');
       return;
     }
+    saving.current = true;
+    const context = saveContext.current;
     setLoading(true);
-    // Strip nested/system fields
-    const rest = Object.fromEntries(
-      Object.entries(form).filter(([key]) => !DRIVER_NON_EDITABLE_FIELDS.has(key)),
-    ) as TablesUpdate<'drivers'>;
-    const payload = normalizeEmptyStrings<TablesUpdate<'drivers'>>({
-      ...rest,
-      driver_type: driverType,
-      tenant_id: tenantId,
-      updated_by: userId ?? null,
-    });
-    // Mirror cpf into legacy doc if doc empty
-    if (!payload.doc && payload.cpf) payload.doc = payload.cpf;
-    if (!payload.phone && payload.mobile) payload.phone = payload.mobile;
-
-    if (driver) {
-      const { data: updated, error } = await supabase.from('drivers')
-        .update(payload)
-        .eq('id', driver.id)
-        .eq('tenant_id', tenantId)
-        .eq('updated_at', driver.updated_at)
-        .select('id')
-        .maybeSingle();
-      if (error) { toast.error(error.message); setLoading(false); return; }
-      if (!updated) {
-        toast.error('Este motorista foi alterado por outro usuário. Reabra o formulário para revisar os dados atuais.');
-        queryClient.invalidateQueries({ queryKey: ['drivers'] });
-        setLoading(false);
-        return;
+    try {
+      const requestedLink = form.user_id ?? null;
+      const linkChanged = requestedLink !== (driver?.user_id ?? null);
+      if (driver?.user_id && linkChanged) {
+        try {
+          const current = await linkInspection.refetch({ throwOnError: true });
+          if (context.cancelled) return;
+          if (current.data?.kind !== 'legacy' || current.data.command_pending !== false) {
+            toast.error('O vínculo de acesso deve ser preservado. Use Gerenciar acesso para esta conta.');
+            return;
+          }
+        } catch {
+          if (!context.cancelled) toast.error('Não foi possível confirmar o vínculo. Nenhuma alteração foi salva.');
+          return;
+        }
       }
-      toast.success('Motorista atualizado');
-    } else {
-      const insertPayload: TablesInsert<'drivers'> = {
-        ...payload,
+      // Strip nested/system fields
+      const rest = Object.fromEntries(
+        Object.entries(form).filter(([key]) => key !== 'user_id' && !DRIVER_NON_EDITABLE_FIELDS.has(key)),
+      ) as TablesUpdate<'drivers'>;
+      const payload = normalizeEmptyStrings<TablesUpdate<'drivers'>>({
+        ...rest,
+        driver_type: driverType,
         tenant_id: tenantId,
-        name: String(payload.name).trim(),
-        created_by: userId ?? null,
-      };
-      const { error } = await supabase.from('drivers').insert(insertPayload);
-      if (error) { toast.error(error.message); setLoading(false); return; }
-      toast.success('Motorista criado');
+        updated_by: userId ?? null,
+      });
+      // Ordinary registry edits never replay a copied identity; only an explicit compatible legacy change does.
+      if (linkChanged) payload.user_id = requestedLink;
+      // Mirror cpf into legacy doc if doc empty
+      if (!payload.doc && payload.cpf) payload.doc = payload.cpf;
+      if (!payload.phone && payload.mobile) payload.phone = payload.mobile;
+
+      if (driver) {
+        const { data: updated, error } = await supabase.from('drivers')
+          .update(payload)
+          .eq('id', driver.id)
+          .eq('tenant_id', tenantId)
+          .eq('updated_at', driver.updated_at)
+          .select('id')
+          .maybeSingle();
+        if (context.cancelled) return;
+        if (error) { toast.error(error.message); setLoading(false); return; }
+        if (!updated) {
+          toast.error('Este motorista foi alterado por outro usuário. Reabra o formulário para revisar os dados atuais.');
+          queryClient.invalidateQueries({ queryKey: ['drivers'] });
+          setLoading(false);
+          return;
+        }
+        toast.success('Motorista atualizado');
+      } else {
+        const insertPayload: TablesInsert<'drivers'> = {
+          ...payload,
+          tenant_id: tenantId,
+          name: String(payload.name).trim(),
+          created_by: userId ?? null,
+        };
+        const { error } = await supabase.from('drivers').insert(insertPayload);
+        if (context.cancelled) return;
+        if (error) { toast.error(error.message); setLoading(false); return; }
+        toast.success('Motorista criado');
+      }
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      onOpenChange(false);
+      setLoading(false);
+    } finally {
+      if (!context.cancelled) { saving.current = false; setLoading(false); }
     }
-    queryClient.invalidateQueries({ queryKey: ['drivers'] });
-    onOpenChange(false);
-    setLoading(false);
   };
 
   const req = () => driverType === 'proprio' && (
@@ -539,7 +593,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle>
+          <DialogTitle>{driver ? 'Editar motorista' : 'Cadastrar motorista'}</DialogTitle>
           <DialogDescription>
             {driver
               ? 'Revise os dados pessoais, documentos e vínculos operacionais do motorista.'
@@ -760,6 +814,9 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
           {/* Vínculo de usuário */}
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Vínculo de usuário (app do motorista)</h3>
+            {!canEditLink ? <p role="status" className="text-sm text-muted-foreground">
+              O vínculo da conta de acesso será preservado. Use Gerenciar acesso para consultar ou alterar as credenciais.
+            </p> : <>
             <p className="text-[11px] text-muted-foreground">
               Selecione o usuário que vai operar o app deste motorista. Apenas usuários com papel
               "Motorista" na equipe aparecem aqui. Cada usuário só pode estar vinculado a um motorista.
@@ -781,6 +838,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
                 })}
               </SelectContent>
             </Select>
+            </>}
           </section>
 
           {/* Observações */}

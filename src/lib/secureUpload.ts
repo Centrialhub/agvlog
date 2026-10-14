@@ -36,11 +36,19 @@ export async function uploadSecureFile(request: SecureUploadRequest): Promise<st
   if (error) {
     const source=error as {code?:unknown;status?:unknown;context?:Response|{status?:unknown}};
     let gatewayCode:unknown=source.code;
+    let retryAfterMs:number|undefined;
     if(source.context instanceof Response){
+      const header=source.context.headers.get('retry-after');
+      if(header){
+        const seconds=/^\d+(?:\.\d+)?$/.test(header.trim())?Number(header):NaN;
+        const wait=Number.isFinite(seconds)?seconds*1000:(/^[A-Z][a-z]{2},/.test(header.trim())&&/GMT$/.test(header.trim())?Date.parse(header):NaN)-Date.now();
+        if(Number.isFinite(wait))retryAfterMs=Math.max(0,wait);
+      }
       try{const body=await source.context.clone().json() as {error?:unknown};gatewayCode=body.error??gatewayCode;}catch{/* status remains available */}
     }
     const wrapped=Object.assign(new Error('O upload seguro falhou. Tente novamente ou acione o suporte.'),{
       code:typeof gatewayCode==='string'?gatewayCode:undefined,
+      retryAfterMs,
       status:typeof source.status==='number'?source.status:source.context?.status,
     });
     throw wrapped;

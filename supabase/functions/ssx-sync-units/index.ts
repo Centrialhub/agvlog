@@ -38,6 +38,10 @@ import {
   type AttemptLog,
 } from "../_shared/ssx-utils.ts";
 
+interface DiscoveryAttemptResult extends EndpointAttemptResult {
+  discoveryComplete?: boolean;
+}
+
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000];
 const CACHE_TTL_MS = 60 * 60_000;
 const ADMIN_SKIP_MS = 10 * 60_000;
@@ -155,7 +159,7 @@ Deno.serve(async (req) => {
     );
     let administrationAttempted = false;
     let usedMethod: "administration" | "tracking_discovery" = "tracking_discovery";
-    let vehicleResult: EndpointAttemptResult | null = null;
+    let vehicleResult: DiscoveryAttemptResult | null = null;
     let trackerResult: EndpointAttemptResult | null = null;
 
     if (administrationEnabled && !adminSkipped) {
@@ -547,7 +551,7 @@ Deno.serve(async (req) => {
       updatedSettings.last_successful_format = vehicleResult.successfulFormat || null;
     }
 
-    const discoverySaturated = usedMethod === "tracking_discovery" && (vehicleResult as any).discoveryComplete === false;
+    const discoverySaturated = usedMethod === "tracking_discovery" && vehicleResult.discoveryComplete === false;
     if (writeFailures.length > 0 || discoverySaturated) {
       const reason = discoverySaturated
         ? "SSX discovery returned the maximum 500 positions; catalog is incomplete"
@@ -830,7 +834,7 @@ async function tryAdminTrackerDiscovery(
 
 // ==================== Tracking-Based Opportunistic Discovery ====================
 
-async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccountConfig>): Promise<DiscoveryAttemptResult> {
   // Tracking publishes no complete vehicle catalog. Use one exact, documented
   // v3 request only to discover recent vehicle units; absence never deactivates
   // an existing provider_unit and the caller reports catalog_complete=false.
@@ -842,7 +846,7 @@ async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccount
   const sinceMs = Date.now() - lookbackMinutes * 60_000;
   const untilMs = Date.now();
   const timeFilterProp = config.settings.time_filter_property || "EventDate";
-  const fetchWindow = async (startMs: number, endMs: number, depth = 0): Promise<EndpointAttemptResult> => {
+  const fetchWindow = async (startMs: number, endMs: number, depth = 0): Promise<DiscoveryAttemptResult> => {
     const filters = [
       { PropertyName: timeFilterProp, Condition: "GreaterThanOrEqualTo", Value: new Date(startMs).toISOString() },
       { PropertyName: timeFilterProp, Condition: "LessThan", Value: new Date(endMs).toISOString() },
@@ -853,8 +857,8 @@ async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccount
       timeoutMs: config.requestTimeoutMs, abortOnAuthError: true,
     });
     if (!result.success) return result;
-    if (result.items.length < 500) return { ...result, discoveryComplete: true } as EndpointAttemptResult;
-    if (depth >= 12 || endMs - startMs <= 60_000) return { ...result, discoveryComplete: false } as EndpointAttemptResult;
+    if (result.items.length < 500) return { ...result, discoveryComplete: true };
+    if (depth >= 12 || endMs - startMs <= 60_000) return { ...result, discoveryComplete: false };
     const middle = startMs + Math.floor((endMs - startMs) / 2);
     const [left, right] = await Promise.all([fetchWindow(startMs, middle, depth + 1), fetchWindow(middle, endMs, depth + 1)]);
     if (!left.success) return left;
@@ -865,7 +869,7 @@ async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccount
       items: [...left.items, ...right.items],
       attempts: [...left.attempts, ...right.attempts],
       endpoint: right.endpoint || left.endpoint,
-      discoveryComplete: (left as any).discoveryComplete !== false && (right as any).discoveryComplete !== false,
+      discoveryComplete: left.discoveryComplete !== false && right.discoveryComplete !== false,
     };
   };
   return fetchWindow(sinceMs, untilMs);

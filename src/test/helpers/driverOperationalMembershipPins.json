@@ -1,0 +1,186 @@
+[
+  {
+    "name": "public._assert_driver_owns_trip",
+    "file": "20260830024309_enforce_driver_journey_state_machine.sql",
+    "signature": "public._assert_driver_owns_trip(uuid)",
+    "before": "8a6844c0da1a9c821777a98a28bc6c33",
+    "after": "231524ec634cf3b15583976de958cdac",
+    "definer": true
+  },
+  {
+    "name": "public._lock_driver_journey_trip",
+    "file": "20260830024309_enforce_driver_journey_state_machine.sql",
+    "signature": "public._lock_driver_journey_trip(uuid)",
+    "before": "57fee2509b312474cabdf515f31d959c",
+    "after": "a4fcca8c7b8d3f8a1aa92036e424dff4",
+    "definer": true
+  },
+  {
+    "name": "public.driver_get_journey_context",
+    "file": "20260830024309_enforce_driver_journey_state_machine.sql",
+    "signature": "public.driver_get_journey_context(uuid)",
+    "before": "3464f6d8ded126e91a088530c04fd51b",
+    "after": "8dfa530fabc3bd1d90259e4c7eb57115",
+    "definer": true
+  },
+  {
+    "name": "public._lock_driver_delivery_stop",
+    "file": "20260830050226_enforce_delivery_outcome_atomicity.sql",
+    "signature": "public._lock_driver_delivery_stop(uuid)",
+    "before": "d7a5b4ef7915e70b2a83f0e20e8c6b6d",
+    "after": "045595359a52083accc52c05d531a88a",
+    "definer": false
+  },
+  {
+    "name": "public.driver_register_departure",
+    "file": "20260830042313_harden_driver_stop_departure.sql",
+    "signature": "public.driver_register_departure(uuid,text)",
+    "before": "8df48f28ceb5ce9585afa6a1b69f9cdb",
+    "after": "66f175011f022bfc038d8a40d637dd74",
+    "definer": true
+  },
+  {
+    "name": "public.driver_mark_arrival",
+    "file": "20260831232458_add_gps_driver_arrival_rpc.sql",
+    "signature": "public.driver_mark_arrival(uuid,double precision,double precision,double precision)",
+    "before": "50a90054d9a97982bc2ff0b09b6fc60e",
+    "after": "0f9351ee6444051d6c88ee1b6dbd55d0",
+    "definer": true
+  },
+  {
+    "name": "public.driver_start_trip",
+    "file": "20260831230903_enforce_trip_load_transit_invariant.sql",
+    "signature": "public.driver_start_trip(uuid)",
+    "before": "f1dcc171b5d709ebddc848df5e2c02d7",
+    "after": "3d16e057a332158783f6c706d4129342",
+    "definer": true
+  },
+  {
+    "name": "public.driver_create_operational_occurrence",
+    "file": "20260831232156_remove_trip_load_from_unscoped_driver_occurrences.sql",
+    "signature": "public.driver_create_operational_occurrence(uuid,text,text,text,uuid,uuid)",
+    "before": "8f4e2d92b0aedb84e4848289aab596de",
+    "after": "19abede13bd69e6621552738d7c3167b",
+    "definer": true
+  },
+  {
+    "name": "public.driver_apply_offline_command_v1",
+    "file": "20260910154758_driver_operational_offline_commands.sql",
+    "signature": "public.driver_apply_offline_command_v1(uuid,uuid,text,jsonb)",
+    "before": "0a6ff417857a6a220b42d172a8d70db1",
+    "after": "d397e44409e30889da6fe3b441fddf2a",
+    "definer": true
+  },
+  {
+    "name": "private.require_trip_cargo_actor",
+    "file": "20260910142606_driver_trip_cargo_custody_cycle.sql",
+    "signature": "private.require_trip_cargo_actor(uuid,uuid,boolean)",
+    "before": "2e5d786ae5ed1c66d0581dbcde858bde",
+    "after": "cf597ae1d37ad09182e8b0bfb572591d",
+    "definer": true
+  },
+  {
+    "name": "public.driver_update_trip_cargo_v1",
+    "file": "20260910194438_complete_trip_cargo_seal_lifecycle.sql",
+    "signature": "public.driver_update_trip_cargo_v1(uuid,uuid,uuid,text,jsonb)",
+    "before": "54f27bd013f36ac7e1558cd783ffa3d1",
+    "after": "8b299faeb50682dfa4a852ab1ab8ba04",
+    "definer": true
+  },
+  {
+    "name": "public.current_driver_id",
+    "file": "20260824224152_baseline.sql",
+    "signature": "public.current_driver_id(uuid)",
+    "before": "17f851e6e25c305debbadc890a3b805a",
+    "after": "256237f26eda38c786d226339c3b0977",
+    "definer": true
+  },
+  {
+    "name": "public.driver_owns_trip",
+    "file": "20260824224152_baseline.sql",
+    "signature": "public.driver_owns_trip(uuid)",
+    "before": "7aabb66a69abc3c2ffd256498c654b72",
+    "after": "12412e9d86e1e1d20ce9a5e647ad2113",
+    "definer": true
+  },
+  {
+    "name": "private.driver_can_access_vehicle",
+    "file": "20260828110409_hide_policy_only_driver_helpers_from_data_api.sql",
+    "signature": "private.driver_can_access_vehicle(uuid)",
+    "before": "0c5c3e807045dc5459aef53763d1a5b8",
+    "after": "4f1b08869e66522fca16485308b502dd",
+    "definer": true
+  },
+  {
+    "name": "private.driver_owns_stop",
+    "file": "20260828110409_hide_policy_only_driver_helpers_from_data_api.sql",
+    "signature": "private.driver_owns_stop(uuid)",
+    "before": "eb55bfb45035168764fef91fd1901879",
+    "after": "2522e7f3232f987daf7526d5823b4ef5",
+    "definer": true
+  },
+  {
+    "name": "private._driver_trip_ids",
+    "file": "20260828105626_hide_driver_rls_helpers_from_data_api.sql",
+    "signature": "private._driver_trip_ids()",
+    "before": "acd6b03973b5d995eb5a2c56007a3a64",
+    "after": "383f956020095bd6d54c2ec33095b310",
+    "definer": true
+  },
+  {
+    "name": "private._driver_load_ids",
+    "file": "20260828105626_hide_driver_rls_helpers_from_data_api.sql",
+    "signature": "private._driver_load_ids()",
+    "before": "d0a4663acd96c31551e1e83a38853589",
+    "after": "f01bd009592b5ee321f1912aa082e679",
+    "definer": true
+  },
+  {
+    "name": "private.driver_can_read_vehicle_position",
+    "file": "20260901183111_harden_position_read_contracts.sql",
+    "signature": "private.driver_can_read_vehicle_position(uuid,uuid)",
+    "before": "80ac1ff8a3993ff690a5403465bebae2",
+    "after": "9ff3012b5ea6d86390c221a5335fc739",
+    "definer": true
+  },
+  {
+    "name": "private.can_access_physical_journey",
+    "file": "20260910134223_physical_driver_journeys.sql",
+    "signature": "private.can_access_physical_journey(uuid)",
+    "before": "2953fe42a1e78488505aec90676f7549",
+    "after": "68cab2d3fa255feb73b39c8dee61f83c",
+    "definer": true
+  },
+  {
+    "name": "public.get_current_driver_journey_v1",
+    "file": "20260910143355_driver_physical_journey_payload.sql",
+    "signature": "public.get_current_driver_journey_v1()",
+    "before": "9e520b383a7d76eedabf8e327a7a4b5f",
+    "after": "eff759294a519f0722b59dcc5b7fb6d1",
+    "definer": true
+  },
+  {
+    "name": "public.resolve_delivery_receipt_quality_policy_v1",
+    "file": "20260910181353_add_delivery_receipt_quality_policies.sql",
+    "signature": "public.resolve_delivery_receipt_quality_policy_v1(uuid)",
+    "before": "b4841e4097bca9cdebe8200469f89ed0",
+    "after": "eaef517f15b6d62d19625c66e803c5d4",
+    "definer": true
+  },
+  {
+    "name": "public.publish_driver_app_observability_v1",
+    "file": "20260910193642_driver_app_observability.sql",
+    "signature": "public.publish_driver_app_observability_v1(jsonb)",
+    "before": "fdef126c817c010e1e4dbaa6ccfa3352",
+    "after": "d6beae490337e1813e4395472124e9f6",
+    "definer": true
+  },
+  {
+    "name": "public.disable_driver_app_observability_v1",
+    "file": "20260910193642_driver_app_observability.sql",
+    "signature": "public.disable_driver_app_observability_v1(uuid,uuid)",
+    "before": "133f5d5fe89e6df676c18fa51a53d82a",
+    "after": "df7ff4e5f8d83d09f40ee0426acfd987",
+    "definer": true
+  }
+]

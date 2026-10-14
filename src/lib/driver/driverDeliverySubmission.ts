@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { createDeliverySingleFlight, deliveryErrorMessage, deliveryFailure, deliveryRetryExhausted,
+  deliveryRetryReady, errorCode, isAuthorizationFailure, isRemoteConflict, newDeliveryRetry } from '@/lib/driver/driverDeliveryRetryPolicy';
+export { deliveryErrorMessage } from '@/lib/driver/driverDeliveryRetryPolicy';
 import type { QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
@@ -33,27 +36,9 @@ const queuedResultSchema = z.object({
   needs_attention:z.boolean(), attention_code:z.string().nullable(),
 });
 export type DeliverySubmissionResult = (z.infer<typeof resultSchema> & {queued:false}) | z.infer<typeof queuedResultSchema>;
-const definitiveRemoteConflicts = new Set(['22023','23514','23505','40001','PT409']);
+const submitOnce = createDeliverySingleFlight<DeliverySubmissionResult>();
 let sessionRefresh:Promise<boolean>|null=null;
-
-function errorCode(error:unknown):string|null {
-  if(!error||typeof error!=='object')return null;
-  const value=error as {code?:unknown;status?:unknown;context?:{status?:unknown}};
-  if(typeof value.code==='string'&&value.code)return value.code;
-  const status=typeof value.status==='number'?value.status:value.context?.status;
-  return typeof status==='number'?String(status):null;
-}
-
-function isAuthorizationFailure(error:unknown):boolean {
-  const code=errorCode(error),message=deliveryErrorMessage(error);
-  return code==='401'||code==='42501'||/\b(jwt|token|sess[aã]o)\b.*\b(expir|invalid|ausente)|unauthorized/i.test(message);
-}
-
-function isRemoteConflict(error:unknown):boolean {
-  const code=errorCode(error);
-  return code==='409'||code==='delivery_evidence_hash_mismatch'||code==='delivery_evidence_existing_object_mismatch'
-    ||(code!==null&&definitiveRemoteConflicts.has(code));
-}
+class DeliveryReplaySuperseded extends Error {}
 
 async function refreshSessionCoordinated():Promise<boolean>{
   const refresh=supabase.auth?.refreshSession?.bind(supabase.auth);
@@ -65,13 +50,13 @@ async function refreshSessionCoordinated():Promise<boolean>{
   return sessionRefresh;
 }
 
-async function retryAfterSessionRefresh<T>(operation:()=>Promise<T>,failed:(value:T)=>unknown|null):Promise<T>{
+async function retryAfterSessionRefresh<T>(operation:()=>Promise<T>,failed:(value:T)=>unknown|null,refresh=refreshSessionCoordinated):Promise<T>{
   try{
     const first=await operation();const firstFailure=failed(first);
-    if(!firstFailure||!isAuthorizationFailure(firstFailure)||!await refreshSessionCoordinated())return first;
+    if(!firstFailure||!isAuthorizationFailure(firstFailure)||!await refresh())return first;
     return operation();
   }catch(error){
-    if(!isAuthorizationFailure(error)||!await refreshSessionCoordinated())throw error;
+    if(!isAuthorizationFailure(error)||!await refresh())throw error;
     return operation();
   }
 }
@@ -88,11 +73,6 @@ interface DeliverySubmissionOptions {
 }
 
 export function deliveryOutcome(eventKey: string) { return outcomes[eventKey]; }
-export function deliveryErrorMessage(error: unknown) {
-  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message;
-  return 'Não foi possível confirmar o envio. Tente novamente com os mesmos dados.';
-}
-
 function isKnownOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
@@ -166,24 +146,30 @@ export async function replayPendingDeliverySubmissions(
   let confirmed=0;
   const cleaned=0;
   let rejected=0;
+  let superseded=0;
   const drafts = await offlineStore.list(tenantId, actorId);
   for (const draft of drafts) {
     if(draft.state==='needs_attention'&&draft.attention?.kind!=='authorization'){rejected+=1;continue;}
-    if (await offlineStore.hasPendingPredecessor?.(draft)) continue;
+    if (!deliveryRetryReady(draft.synchronization?.retry) || await offlineStore.hasPendingPredecessor?.(draft)) continue;
     try {
       const result = await createDeliverySubmission(inputFromOfflineDraft(draft), {
         requestId:draft.requestId, offlineStore, durableDraft:draft,
       }).submit();
       if (!result.queued) confirmed+=1;
-    } catch {
-      rejected+=1;
+    } catch (error) {
+      if(error instanceof DeliveryReplaySuperseded)superseded+=1;
+      else rejected+=1;
     }
   }
   const remaining = await offlineStore.list(tenantId, actorId);
   return {
-    confirmed, cleaned, rejected, pending:remaining.length,
+    confirmed, cleaned, rejected, superseded, pending:remaining.length,
     needsAttention:remaining.filter(draft=>draft.state==='needs_attention').length,
     pendingStopIds:[...new Set(remaining.map(draft => draft.stopId))],
+    nextRetryAt:remaining.reduce<number|null>((next,draft)=>{
+      const at=draft.state==='needs_attention'?null:draft.synchronization?.retry?.nextAttemptAt;
+      return at!=null&&at>Date.now()&&(next===null||at<next)?at:next;
+    },null),
   };
 }
 
@@ -239,6 +225,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
   let inFlight: Promise<DeliverySubmissionResult> | null = null;
   let uploads:DriverDeliveryUploadLedgerEntry[] = structuredClone(options.durableDraft?.synchronization?.uploads??[]);
   let uploadFailures=options.durableDraft?.uploadFailures??0;
+  let retry=structuredClone(options.durableDraft?.synchronization?.retry??newDeliveryRetry(options.durableDraft?.uploadFailures??0));
   const createdAt = durableDraft?.createdAt ?? new Date().toISOString();
 
   type PlannedUpload={slot:string;file:File;folder:string;declaredHash?:string};
@@ -260,7 +247,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
   ) {
     if(!durableDraft)throw new Error('O envio não possui registro offline durável.');
     durableDraft={...durableDraft,state,attention,uploadFailures,synchronization:{stage,uploadedPaths:uploadedPaths(),preparedDetails:storedDetails,
-      uploads:structuredClone(uploads)},updatedAt:new Date().toISOString()};
+      uploads:structuredClone(uploads),retry:{...retry}},updatedAt:new Date().toISOString()};
     await offlineStore.save(durableDraft);
   }
 
@@ -273,12 +260,25 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
     canRevise=false;
   }
 
+  async function transport<T>(stage:NonNullable<DriverDeliveryOfflineDraft['synchronization']>['stage'],operation:()=>Promise<T>):Promise<T>{
+    if(deliveryRetryExhausted(retry))throw Object.assign(new Error('Limite de tentativas atingido; o envio salvo requer revisão.'),{code:'delivery_retry_exhausted'});
+    retry={...retry,attempts:retry.attempts+1,nextAttemptAt:null};
+    await persist(stage);
+    return operation();
+  }
+  async function retainFailure(error:unknown,entry?:DriverDeliveryUploadLedgerEntry){
+    const failure=deliveryFailure(retry,error);retry=failure.retry;
+    if(failure.terminal||errorCode(error)==='delivery_retry_exhausted')await markAttention('upload_failure',error,entry);
+    else await persist(prepared?'dispatch_pending':'preparing',prepared,'queued',null);
+  }
+
   function pathMatchesLedger(path:string,entry:DriverDeliveryUploadLedgerEntry):boolean{
     const prefix=`${tenantId}/deliveries/${tripId}/${stopId}/`;
     return path.startsWith(prefix)&&path.endsWith(`/${requestId}-${entry.slot.replace(':','-')}-${entry.sha256}`);
   }
 
   async function ensureDurableDraft() {
+    const resumed=!!durableDraft;
     if (!signatureFile && signatureDataUrl) signatureFile = await signatureFileFromDataUrl(signatureDataUrl);
     const plan=plannedUploads();
     const actual=await Promise.all(plan.map(async item=>({...item,sha256:await deliveryFileHash(item.file)})));
@@ -303,7 +303,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
           qualityConfirmed:receiptScan.qualityConfirmed,
         } : null,
         signature:signatureFile ? {...storeDriverFile(signatureFile),sha256:actual.find(item=>item.slot==='signature')!.sha256} : null,
-        state:'queued',uploadFailures:0,attention:null,synchronization:{stage:'queued',uploadedPaths:[],preparedDetails:null,uploads},
+        state:'queued',uploadFailures:0,attention:null,synchronization:{stage:'queued',uploadedPaths:[],preparedDetails:null,uploads,retry},
         createdAt, updatedAt:now,
       };
     }
@@ -311,8 +311,8 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
       await offlineStore.save(durableDraft);
       durableSaved=true;
     }
-    if(!options.durableDraft)return;
-    if(!uploads.length&&(options.durableDraft.synchronization?.uploadedPaths.length??0)>0){
+    if(!resumed)return;
+    if(!uploads.length&&(durableDraft?.synchronization?.uploadedPaths.length??0)>0){
       await markAttention('local_evidence_conflict',new Error('O envio antigo possui uploads sem vínculo verificável com os arquivos.'));
       throw new Error('O ledger dos anexos precisa de conferência operacional.');
     }
@@ -350,9 +350,9 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
       if(entry.state==='uploaded')continue;
       try{
         const path=await retryAfterSessionRefresh(
-          ()=>uploadSecureFile({tenantId,bucket:'receipts',folder:item.folder,file:item.file,kind:'image',
-            evidence:{requestId,slot:item.slot,sha256:entry.sha256}}),
-          ()=>null,
+          ()=>transport('preparing',()=>uploadSecureFile({tenantId,bucket:'receipts',folder:item.folder,file:item.file,kind:'image',
+            evidence:{requestId,slot:item.slot,sha256:entry.sha256}})),
+          ()=>null,()=>transport('preparing',refreshSessionCoordinated),
         );
         if(!pathMatchesLedger(path,entry)){
           await markAttention('local_evidence_conflict',new Error('O gateway retornou um caminho incompatível com o anexo.'),entry,entry.sha256,path);
@@ -364,7 +364,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
         uploadFailures+=1;
         if(durableDraft?.state!=='needs_attention'&&isAuthorizationFailure(error))await markAttention('authorization',error,entry);
         else if(durableDraft?.state!=='needs_attention'&&isRemoteConflict(error))await markAttention('local_evidence_conflict',error,entry,entry.sha256,entry.path);
-        else if(durableDraft?.state!=='needs_attention')await persist('preparing',null,'queued',null);
+        else if(durableDraft?.state!=='needs_attention')await retainFailure(error,entry);
         throw error;
       }
     }
@@ -387,8 +387,18 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
       return prepared;
   }
   async function run() {
+    const latest=(await offlineStore.list(tenantId,actorId)).find(draft=>draft.requestId===requestId);
+    // A resumed snapshot cannot recreate a request already removed by another tab.
+    // Absence proves only that it is no longer pending, never a remote ACK.
+    if(options.durableDraft&&!latest)throw new DeliveryReplaySuperseded('O envio não está mais pendente neste aparelho. Atualize a fila.');
+    if(latest){durableDraft=latest;durableSaved=true;uploads=structuredClone(latest.synchronization?.uploads??[]);
+      prepared=latest.synchronization?.preparedDetails??null;retry=structuredClone(latest.synchronization?.retry??newDeliveryRetry(latest.uploadFailures??0));uploadFailures=latest.uploadFailures??0;}
+    if(durableDraft&&(durableDraft.tripId!==tripId||durableDraft.stopId!==stopId||durableDraft.eventKey!==eventKey))throw new Error('A chave do envio pertence a outro evento.');
+    if(durableDraft?.state==='needs_attention'&&durableDraft.attention?.kind!=='authorization')return queuedResult();
+    if(!deliveryRetryReady(retry)||isKnownOffline()&&durableSaved)return queuedResult();
     await ensureDurableDraft();
     if (isKnownOffline()) return queuedResult();
+    if(deliveryRetryExhausted(retry)){await markAttention('upload_failure',Object.assign(new Error('Limite de tentativas atingido; revise o envio salvo.'),{code:'delivery_retry_exhausted'}));return queuedResult();}
     let payload: Record<string, Json>;
     try {
       payload = await prepare();
@@ -403,10 +413,11 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
         ? await supabase.rpc('driver_record_delivery_outcome',{_stop_id:stopId,_outcome:outcome,_details:payload,
           _client_event_id:requestId,_expected_status:expectedStatus})
         : await supabase.rpc('driver_record_delivery_note',{_stop_id:stopId,_event_type:eventKey,_details:payload,_client_event_id:requestId});
-      const response = await retryAfterSessionRefresh(invoke,value=>value.error);
+      const response = await retryAfterSessionRefresh(()=>transport('dispatch_pending',invoke),value=>value.error,()=>transport('dispatch_pending',refreshSessionCoordinated));
       if (response.error) {
         if(isAuthorizationFailure(response.error))await markAttention('authorization',response.error);
         else if(isRemoteConflict(response.error))await markAttention('remote_conflict',response.error);
+        else await retainFailure(response.error);
         return queuedResult();
       }
       const fiscalConflict=fiscalConflictSchema.safeParse(response.data);
@@ -425,6 +436,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
     } catch (error) {
       if(durableSaved&&isAuthorizationFailure(error))await markAttention('authorization',error);
       else if(durableSaved&&isRemoteConflict(error))await markAttention('remote_conflict',error);
+      else if(durableSaved)await retainFailure(error);
       if (durableSaved) return queuedResult();
       throw error;
     }
@@ -433,7 +445,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
     get dispatched() { return dispatched; },
     get canRevise() { return canRevise; },
     submit() {
-      if (!inFlight) inFlight = run().finally(() => { inFlight=null; });
+      if (!inFlight) inFlight = submitOnce(tenantId,actorId,requestId,run).finally(() => { inFlight=null; });
       return inFlight;
     },
   };

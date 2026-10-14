@@ -23,6 +23,10 @@ import { suggestGroupDrivers, suggestGroupVehicles } from '@/lib/loads/groupAssi
 import { combinePendingGroups, type CombinedRouteGroup, type GroupCombination, type PendingRouteDoc, type PendingRouteGroup } from '@/lib/loads/pendingGroupCombinations';
 import { PendingGroupPicker } from './PendingGroupPicker';
 import { canSelectDocumentForNewLoad } from '@/lib/loads/newLoadDocumentSelection';
+import { APP_TIME_ZONE } from '@/lib/utils/formatDate';
+import { useCivilDay } from '@/hooks/useCivilDay';
+import { matchesNewLoadImportDate, newLoadImportDateRange } from '@/lib/loads/newLoadImportDateFilters';
+import { PendingGroupImportDates } from './PendingGroupImportDates';
 
 interface Props {
   open: boolean;
@@ -33,6 +37,11 @@ interface Props {
 export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: Props) {
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
+  const timeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const today = useCivilDay(timeZone);
+  const [importFrom, setImportFrom] = useState('');
+  const [importTo, setImportTo] = useState('');
+  const importDateRange = useMemo(() => newLoadImportDateRange(importFrom, importTo, timeZone), [importFrom, importTo, timeZone]);
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const queryClient = useQueryClient();
@@ -54,7 +63,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     queryFn: async () => {
       if (!currentTenant) return [];
       return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
-        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, clients!fiscal_documents_client_id_fkey(company_name)')
+        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, imported_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')
@@ -66,7 +75,8 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     enabled: !!currentTenant && open,
   });
 
-  const eligibleDocs = useMemo(() => pendingDocs.filter(canSelectDocumentForNewLoad), [pendingDocs]);
+  const eligibleDocs = useMemo(() => pendingDocs.filter(doc => canSelectDocumentForNewLoad(doc)
+    && matchesNewLoadImportDate(doc, importDateRange)), [pendingDocs, importDateRange]);
 
   // Group docs by operational route
   const baseGroups = useMemo(() => {
@@ -117,12 +127,21 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const groups = useMemo(() => combinePendingGroups(baseGroups, combinations), [baseGroups, combinations]);
   const selectedCount = groups.filter(group => selectedGroups.has(group.routeName)).length;
   const availabilityBlocked = isPending || isFetching || isError;
-  const planLocked = executing || creation.isPending || !!creation.error || creation.pending.length > 0 || availabilityBlocked;
+  const filterLocked = executing || creation.isPending || !!creation.error || creation.pending.length > 0 || availabilityBlocked;
+  const planLocked = filterLocked || !!importDateRange.error;
+  const changeImportDates = (from: string, to: string) => {
+    if (filterLocked || (from === importFrom && to === importTo)) return;
+    setImportFrom(from); setImportTo(to);
+    setSelectedGroups(new Set()); initialSelectionApplied.current = false;
+    setCombinations([]); setCombiningTarget(null);
+    setVehicleAssignments(new Map()); setDriverAssignments(new Map()); manualDrivers.current.clear();
+  };
 
   useEffect(() => {
     setVehicleAssignments(new Map()); setDriverAssignments(new Map()); manualDrivers.current.clear();
     initialSelectionApplied.current = false; setSelectedGroups(new Set());
     setCombinations([]); setCombiningTarget(null);
+    setImportFrom(''); setImportTo('');
   }, [currentTenant?.id]);
 
   // Auto-select only once per dialog opening; an explicit empty selection is preserved.
@@ -290,6 +309,8 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           <DialogDescription>Use o (+) para juntar destinos na mesma carga antes de criar. Confira as notas, os totais e o veículo.</DialogDescription>
         </DialogHeader>
 
+        <PendingGroupImportDates from={importFrom} to={importTo} today={today} timeZone={timeZone}
+          error={importDateRange.error} disabled={filterLocked} onChange={changeImportDates} />
         {isError && <div role="alert" className="space-y-2 rounded border border-destructive/30 p-3 text-sm text-destructive">
           <p>Não foi possível atualizar a disponibilidade das notas. O plano foi mantido. Atualize antes de alterar ou criar cargas.</p>
           <Button variant="outline" disabled={isFetching || executing || creation.isPending} onClick={() => void refetch()}>Atualizar notas</Button>
@@ -299,7 +320,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           <div className="text-center py-8 text-muted-foreground">Carregando NF-es pendentes...</div>
         ) : eligibleDocs.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            Nenhuma NF-e pendente (sem carga vinculada).
+            {importFrom || importTo ? 'Nenhuma NF-e pendente no período de importação selecionado.' : 'Nenhuma NF-e pendente (sem carga vinculada).'}
             <br />
             <span className="text-xs">Importe XMLs pela página de Importação usando "Salvar NF-es apenas".</span>
           </div>

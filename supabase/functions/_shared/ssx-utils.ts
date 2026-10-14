@@ -1,3 +1,4 @@
+import { requestSsxLogin } from "./ssx-login-request.ts";
 import { isCronRequest } from "./cron-auth.ts";
 import { corsHeaders } from "./cors.ts";
 import { activeTenantFromVerifiedRequest } from "./active-tenant.ts";
@@ -231,11 +232,7 @@ export async function getAdminToken(
   const startTime = Date.now();
 
   try {
-    const resp = await fetch(loginUrlWithParams, {
-      method: "POST",
-      headers: { Accept: "application/json" },
-    });
-    const text = await resp.text();
+    const { response: resp, text } = await requestSsxLogin(loginUrlWithParams, config.requestTimeoutMs);
     const duration = Date.now() - startTime;
     console.log(`[SSX:admin-token] POST ${loginUrl} (no HashAuth) | status=${resp.status} | ${duration}ms`);
 

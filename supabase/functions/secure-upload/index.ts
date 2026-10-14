@@ -1,3 +1,4 @@
+import {UNSCANNED_UPLOAD_PROVENANCE} from './scan-policy.ts';
 import {previewExpenseArtifact} from './artifact-preview.ts';
 import {readBoundedBody} from './bounded-request.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
@@ -84,27 +85,6 @@ async function consumeQuota(
     p_window_seconds: 60,
   });
   return !error && data === true;
-}
-
-async function scannerAccepts(file: File, correlationId: string) {
-  const scannerUrl = Deno.env.get("MALWARE_SCANNER_URL")?.trim();
-  const scannerToken = Deno.env.get("MALWARE_SCANNER_TOKEN")?.trim();
-  if (!scannerUrl || !scannerToken) return { available: false, clean: false };
-  const url = new URL(scannerUrl);
-  if (url.protocol !== "https:") return { available: false, clean: false };
-
-  const data = new FormData();
-  data.set("file", file, file.name);
-  const scan = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${scannerToken}`, "x-correlation-id": correlationId },
-    body: data,
-    redirect: "error",
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!scan.ok) return { available: false, clean: false };
-  const result = await scan.json() as { clean?: boolean };
-  return { available: true, clean: result.clean === true };
 }
 
 async function authorizeUpload(
@@ -291,14 +271,10 @@ Deno.serve(withFiscalCors(async (request) => {
         // A service-role request cannot prove the actor's MFA assurance level.
         inspect: args => callerClient.rpc("inspect_expense_receipt_upload", args),
         upload: (path, content, options) => adminClient.storage.from("receipts").upload(path, content, options),
-        scan: () => scannerAccepts(file, correlationId),
-      });
+              });
       return response(result.status, result.body);
     }
 
-    const scan = await scannerAccepts(file, correlationId);
-    if (!scan.available) return response(503, { error: "malware_scanner_unavailable" });
-    if (!scan.clean) return response(422, { error: "malware_detected" });
 
     if (financialScope || statementOriginal) {
       const access = await callerClient.rpc("get_finance_access", { _tenant_id: tenantId });
@@ -308,7 +284,7 @@ Deno.serve(withFiscalCors(async (request) => {
     if(statementOriginal){
       try{
         const original=await preserveStatementOriginal(tenantId,file.name,bytes,{
-          upload:(path,content,contentType)=>adminClient.storage.from("finance-statements").upload(path,content,{contentType,upsert:false,cacheControl:"0"}),
+          upload:(path,content,contentType)=>adminClient.storage.from("finance-statements").upload(path,content,{contentType,upsert:false,cacheControl:"0",metadata:UNSCANNED_UPLOAD_PROVENANCE}),
           download:async path=>{const stored=await adminClient.storage.from("finance-statements").download(path);return stored.error||!stored.data?null:new Uint8Array(await stored.data.arrayBuffer());},
         });
         return response(201,{...original,correlation_id:correlationId});
@@ -328,6 +304,7 @@ Deno.serve(withFiscalCors(async (request) => {
       contentType: mime,
       upsert: false,
       cacheControl: "3600",
+      metadata: UNSCANNED_UPLOAD_PROVENANCE,
     });
     if (uploadError) {
       if (hasEvidenceIdentity) {

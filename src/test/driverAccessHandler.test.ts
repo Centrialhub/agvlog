@@ -86,9 +86,9 @@ describe('managed driver access endpoint', () => {
   it('cleans the authorization after a username collision and asks for a different name', async () => {
     authError = 'User already registered'; const response = await request({ action: 'create', username: 'joao', password }); expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'Este usuário já está em uso. Escolha outro usuário.' }); expect(calls.at(-1)?.path).toContain('cancel_auth_invite');
   });
-  it('changes only the password of a managed account', async () => {
-    linked = true; expect((await request({ action: 'password', password, email: 'attack@empresa.com' })).status).toBe(200);
-    expect(calls.find(call => call.path.startsWith('/auth/'))).toMatchObject({ method: 'PUT', body: { password } });
+  it('requires an identified credential command instead of the former unguarded password call', async () => {
+    linked = true; expect((await request({ action: 'password', password, email: 'attack@empresa.com' })).status).toBe(409);
+    expect(calls.some(call => call.path.startsWith('/auth/'))).toBe(false);
   });
   it('blocks shared and privileged accounts before any Auth mutation', async () => {
     linked = true; scopeError = 'driver_account_shared_or_other_role'; expect((await request({ action: 'password', password })).status).toBe(409); expect((await request({ action: 'retire_legacy' })).status).toBe(409); expect(calls.some(call => call.path.startsWith('/auth/'))).toBe(false);
@@ -139,7 +139,7 @@ describe('verified active-tenant boundary before privileged driver access', () =
     expect(calls).toEqual([]); // fetch records every admin DB/RPC/Auth request
   });
 
-  it.each(['inspect', 'create', 'password', 'legacy_list', 'retire_legacy'])('checks context before action %s reaches any privileged client', async action => {
+  it.each(['inspect', 'create', 'password', 'convert', 'credential_status', 'legacy_list', 'retire_legacy'])('checks context before action %s reaches any privileged client', async action => {
     const response = await request({ action, username: 'joao', password }, { headerTenant: otherTenant });
     expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'tenant_context_mismatch' });
     expect(caller.auth.getUser).toHaveBeenCalledOnce(); expect(calls).toEqual([]);

@@ -22,20 +22,30 @@ logs=$(mktemp -d "${RUNNER_TEMP:-/tmp}/agvlog-baseline-logs.XXXXXXXX")
 chmod 700 "$logs"
 node scripts/restore-local-staging-baseline.mjs --approved-sha256 "$AGVLOG_REVIEWED_BASELINE_SHA256" \
   --expected-source-sha "$(git rev-parse HEAD)" --expected-public-tables 327 --expected-buckets 8 --log-directory "$logs"
-# Exact reviewed bytes only. The original manifest and supplemental manifest
-# retain their identities; historical migrations are never replayed or repaired.
-node --input-type=module - "$logs/forwards.sql" <<'NODE'
-import fs from 'node:fs';
-import { inspectBaselineCandidate } from './scripts/check-baseline-candidate.mjs';
-const { candidate, followups, supplements } = await inspectBaselineCandidate(process.cwd());
-const files = [...candidate.forwards, ...(followups?.forwards ?? []), ...(supplements?.forwards ?? [])];
-const sql = files.map(({filename}) => fs.readFileSync(`supabase/migrations/${filename}`, 'utf8')).join('\n');
-if (/^\s*(?:begin|commit|rollback)\s*;/im.test(sql)) throw new Error('Unexpected transaction boundary in reviewed forward');
-const contract = fs.readFileSync('supabase/verify/baseline_contract.sql', 'utf8');
-fs.writeFileSync(process.argv[2], `BEGIN;\n${sql}\n${contract}\nCOMMIT;\n`, {mode:0o600,flag:'wx'});
-NODE
-docker exec -i supabase_db_agvlog-local-staging psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$logs/forwards.sql" > "$logs/forwards.private.log" 2>&1
-docker exec -i supabase_db_agvlog-local-staging psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seed.sql > "$logs/seed.private.log" 2>&1
+# Restore the historical synthetic data before upgrading the captured schema.
+# The fixture owns BEGIN/COMMIT. Do not widen its Auth-only replication scope
+# or weaken any driver guard to create legacy accounts after this upgrade.
+docker exec -i supabase_db_agvlog-local-staging psql -X --no-password -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 --file - < supabase/seed.sql > "$logs/seed.private.log" 2>&1
+# Exact reviewed bytes only. Each forward owns one transaction; the two pinned
+# address forwards keep their original BEGIN/COMMIT. A failure preserves the
+# committed prefix and stops before catalog verification or app activation.
+node scripts/prepare-reviewed-forward-execution.mjs --output-directory "$logs/forwards"
+while IFS=$'\t' read -r mode file; do
+  transaction=()
+  case "$mode" in
+    single) transaction=(--single-transaction) ;;
+    self) ;;
+    *) echo 'Unknown approved forward transaction mode' >&2; exit 1 ;;
+  esac
+  docker exec -i supabase_db_agvlog-local-staging psql -X --no-password -U postgres -d postgres \
+    -v ON_ERROR_STOP=1 "${transaction[@]}" --file - < "$logs/forwards/$file" \
+    > "$logs/forwards/$file.private.log" 2>&1
+done < "$logs/forwards/plan.tsv"
+docker exec -i supabase_db_agvlog-local-staging psql -X --no-password -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 --single-transaction --file - < "$logs/forwards/baseline-contract.sql" \
+  > "$logs/catalog-contract.private.log" 2>&1
+
 node scripts/verify-local-staging-runtime.mjs --application-prerequisites --baseline-approval-sha256 "$AGVLOG_REVIEWED_BASELINE_SHA256"
 node scripts/prepare-local-staging.mjs --application --approved-sha256 "$AGVLOG_REVIEWED_BASELINE_SHA256"
 node_modules/.bin/supabase stop --project-id agvlog-local-staging --workdir .local-staging

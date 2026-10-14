@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import type {PGlite} from '@electric-sql/pglite';
@@ -129,7 +130,9 @@ describe('expense creation frontend with actual SQL',{timeout:15000},()=>{
  it('reaches older expenses beyond fifty records',async()=>{
   for(let n=0;n<51;n++)await creationCommand(db,await creationPayload(db,trip));render(<Story page/>);await screen.findByText('51 despesas · página 1');fireEvent.click(screen.getByRole('button',{name:'Próxima página'}));await screen.findByText('51 despesas · página 2');expect(screen.getAllByText('Alimentação')).toHaveLength(1);
  });
- it('sends real browser file bytes through the gateway contract and binds the SQL expense to the scanned object',async()=>{
+ it('sends real browser file bytes through the gateway contract and binds the SQL expense to its explicitly unscanned object',async()=>{
+  // This older graph preserves its original release rehearsals; this case alone upgrades the receipt helper.
+  await db.exec(readFileSync('supabase/migrations/20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql','utf8'));
   const scans=vi.fn(async()=>({available:true,clean:true}));
   mock.invoke.mockImplementation(async(name:string,{body}:{body:FormData})=>{
    expect(name).toBe('secure-upload');const file=body.get('file') as File,bytes=await readBlobBytes(file);
@@ -142,7 +145,7 @@ describe('expense creation frontend with actual SQL',{timeout:15000},()=>{
   fireEvent.change(screen.getByLabelText('Valor (R$)'),{target:{value:'12,34'}});
   fireEvent.change(screen.getByLabelText('Comprovante (imagem ou PDF)'),{target:{files:[new File([new Uint8Array([137,80,78,71,13,10,26,10])],'qa.png',{type:'image/png'})]}});
   fireEvent.click(screen.getByRole('button',{name:'Registrar despesa'}));await screen.findByText('Despesa registrada e aguardando aprovação.');
-  expect(scans).toHaveBeenCalledTimes(1);expect((await db.query('select receipt_url,no_receipt,amount::float amount from driver_expenses')).rows[0]).toMatchObject({no_receipt:false,amount:12.34,receipt_url:expect.stringContaining('/expense-receipts/'+i.user+'/')});
+  expect(scans).not.toHaveBeenCalled();expect((await db.query('select receipt_url,no_receipt,amount::float amount from driver_expenses')).rows[0]).toMatchObject({no_receipt:false,amount:12.34,receipt_url:expect.stringContaining('/expense-receipts/'+i.user+'/')});
   await db.exec('set constraints all immediate');
  });
 });

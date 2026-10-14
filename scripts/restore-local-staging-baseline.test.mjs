@@ -174,7 +174,10 @@ test('restores only approved artifacts in manifest order with one protected psql
     'psql', '-X', '--no-password', '-U', 'supabase_admin', '-d', 'postgres', '-q', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '--file', '-']);
   assert.equal(call.config.timeout, 300_000);
   assert.equal(call.config.env.DOCKER_HOST, 'unix:///var/run/docker.sock');
-  assert.deepEqual(Object.keys(call.config.env).sort(), ['DOCKER_HOST', 'HOME', 'LANG', 'PATH']);
+  assert.deepEqual(Object.keys(call.config.env).sort(), ['DOCKER_HOST', 'HOME', 'LANG', 'PATH',
+    'SUPABASE_NO_UPDATE_NOTIFIER', 'SUPABASE_TELEMETRY_DISABLED']);
+  assert.equal(call.config.env.SUPABASE_NO_UPDATE_NOTIFIER, '1');
+  assert.equal(call.config.env.SUPABASE_TELEMETRY_DISABLED, '1');
   const sql = call.config.input.toString('utf8');
   let previous = -1;
   for (const item of f.approval.artifacts) {
@@ -248,4 +251,46 @@ test('input builder rechecks artifact hashes and inventory validator rejects mis
     { ...counts, publicTablesWithoutRls: 1 }, { ...counts, extra: 1 }, { ...counts, publicTables: '3' }]) {
     assert.equal(validRestoreCounts(invalid, 3, 0), false);
   }
+});
+
+test('restore passes the closed notifier/telemetry environment to its verifier and every child process', (t) => {
+  const f = fixture(t);
+  const result = invoke(f, { check: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.sqlExecuted, false);
+  const verifierCalls = f.calls.filter((call) => call.command === process.execPath);
+  assert.equal(verifierCalls.length, 1);
+  assert.equal(verifierCalls[0].args[0], join(f.root, 'scripts/verify-local-staging-runtime.mjs'));
+  for (const { config } of f.calls) {
+    assert.deepEqual(Object.keys(config.env).sort(), ['DOCKER_HOST', 'HOME', 'LANG', 'PATH',
+      'SUPABASE_NO_UPDATE_NOTIFIER', 'SUPABASE_TELEMETRY_DISABLED']);
+    assert.equal(config.env.SUPABASE_NO_UPDATE_NOTIFIER, '1');
+    assert.equal(config.env.SUPABASE_TELEMETRY_DISABLED, '1');
+    assert.equal(config.env.DOCKER_HOST, 'unix:///var/run/docker.sock');
+  }
+  assert.equal(mutateCalls(f).length, 0);
+  assert.deepEqual(readdirSync(f.logDirectory), []);
+});
+
+test('empty CLI metadata appearing during runtime preflight blocks restore without rewriting evidence', (t) => {
+  const f = fixture(t);
+  const metadata = join(f.root, '.local-staging/supabase/.temp/cli-latest');
+  const manifest = join(f.root, '.local-staging/manifest.json');
+  const before = { bytes: readFileSync(manifest), mtime: lstatSync(manifest).mtimeMs };
+  const result = invoke(f, {}, (command, args, config) => {
+    if (command === process.execPath) {
+      mkdirSync(dirname(metadata), { recursive: true });
+      writeFileSync(metadata, '');
+    }
+    return f.run(command, args, config);
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.stage, 'prepared_files_after_preflight');
+  assert.equal(result.transactionCompleted, false);
+  assert.equal(result.applicationReady, false);
+  assert.equal(mutateCalls(f).length, 0);
+  assert.deepEqual(readdirSync(f.logDirectory), []);
+  assert.equal(readFileSync(metadata).length, 0);
+  assert.deepEqual(readFileSync(manifest), before.bytes);
+  assert.equal(lstatSync(manifest).mtimeMs, before.mtime);
 });

@@ -485,3 +485,17 @@ SELECT
   (SELECT count(*) FROM pg_policies WHERE schemaname IN ('public', 'storage')) AS rls_policies,
   (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') AS public_indexes,
   'baseline_contract_ok'::text AS status;
+
+-- Read-only contract for the exact 42nd reviewed forward, not a migration history repair.
+DO $verify_unscanned_receipt_policy$
+DECLARE p pg_catalog.pg_proc%ROWTYPE;
+BEGIN
+ SELECT * INTO p FROM pg_catalog.pg_proc WHERE oid=pg_catalog.to_regprocedure('public._expense_receipt_status(uuid,uuid,uuid,text,uuid,jsonb)');
+ IF p.oid IS NULL OR pg_catalog.md5(p.prosrc)<>'763e82a37b0b6cb4554ba2aa28c07e53' OR pg_catalog.pg_get_userbyid(p.proowner)<>'postgres'
+  OR p.prosecdef OR p.provolatile<>'s' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+  OR pg_catalog.has_function_privilege('anon',p.oid,'execute') OR pg_catalog.has_function_privilege('authenticated',p.oid,'execute')
+  OR pg_catalog.has_function_privilege('service_role',p.oid,'execute') THEN
+  RAISE EXCEPTION 'Baseline verification failed: reviewed receipt scan provenance contract differs';
+ END IF;
+END;
+$verify_unscanned_receipt_policy$;

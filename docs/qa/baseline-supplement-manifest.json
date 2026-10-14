@@ -18,6 +18,71 @@
       "version": "20261006155532",
       "filename": "20261006155532_align_ssx_cooldown_retry_after_contract.sql",
       "sha256": "3d900ef761181caf6d1ff49cd05dc518607550e3b9e8cf48d97f3e0cd3b93f57"
+    },
+    {
+      "version": "20261007122904",
+      "filename": "20261007122904_fence_ssx_rule_violation_finalization.sql",
+      "sha256": "94ce76768443e3014b96c43f2b009dc86906253ae272e51ca06643bf21807bb4"
+    },
+    {
+      "version": "20261007131504",
+      "filename": "20261007131504_add_bounded_ssx_violation_commit_v3.sql",
+      "sha256": "ba45766ae7b345315d3248a1157504bd84ea1cde83752b022a79c145f7657018"
+    },
+    {
+      "version": "20261009151836",
+      "filename": "20261009151836_address_queue_business_errors_no_serialization_retry.sql",
+      "sha256": "ff2183e2e26af28efae7f64d2d8ae184a274ad32ae0d6d05af9975726c51166b"
+    },
+    {
+      "version": "20261009161011",
+      "filename": "20261009161011_address_candidate_business_errors_no_serialization_retry.sql",
+      "sha256": "27defbe4db4f21d5b97115aa509745bad2f8c86a8ee9dc6fad9367d733b5c3bd"
+    },
+    {
+      "version": "20261012203921",
+      "filename": "20261012203921_driver_existing_workspace_projection.sql",
+      "sha256": "b2eee542a9da21375440c8755b1154c4a972e18252ec8db1abbc772c7262950c"
+    },
+    {
+      "version": "20261012211033",
+      "filename": "20261012211033_driver_operational_membership_guards.sql",
+      "sha256": "427a232a196d8cac072417be82e2f2bc2aec029462fe7bd0d63caf9b7795517b"
+    },
+    {
+      "version": "20261012214500",
+      "filename": "20261012214500_separate_driver_registry_and_suspend_existing_access.sql",
+      "sha256": "6be1f95e05e944392b3a24466724b96829d08b883bd692dc320b0e6864692ab0"
+    },
+    {
+      "version": "20261012215337",
+      "filename": "20261012215337_driver_workspace_credential_commands.sql",
+      "sha256": "9de0047dced92d23a31ac0e0764278a89fb4fb96d3d255607c7ae24f06ac5304"
+    },
+    {
+      "version": "20261012221129",
+      "filename": "20261012221129_revalidate_driver_membership_after_journey_lock.sql",
+      "sha256": "f3c0bc2fc565a978cd36288955aaafb89f08dcff1d7d8598db2704af7ddceb8a"
+    },
+    {
+      "version": "20261012224659",
+      "filename": "20261012224659_driver_credentials_review_boundaries.sql",
+      "sha256": "ffb06c52bc48f0ac94d06c7c0d87fefdd12c61956047c2e266dc83993c7e389b"
+    },
+    {
+      "version": "20261013025826",
+      "filename": "20261013025826_driver_native_link_registry_protection.sql",
+      "sha256": "95de856507b8cd7a30b0844707dba2707e20d624927e193452f535503053f074"
+    },
+    {
+      "version": "20261014062118",
+      "filename": "20261014062118_native_dispatch_stop_helper_execute.sql",
+      "sha256": "220233cb4d54a3685290bc6eb2a81c4ddaef34b75ebc52c5337b6727923dd902"
+    },
+    {
+      "version": "20261014141521",
+      "filename": "20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql",
+      "sha256": "b6d4967a133a249e67c46fd9e9e6f7c816c0867971cd072bcfbd99ee6dad8613"
     }
   ]
 }

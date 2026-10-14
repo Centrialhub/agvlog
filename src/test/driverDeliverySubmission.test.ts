@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DELIVERY_MAX_ATTEMPTS, DELIVERY_MAX_FAILURES } from '@/lib/driver/driverDeliveryRetryPolicy';
 import { QueryClient } from '@tanstack/react-query';
 import { createDeliverySubmission, deliveryOutcome, invalidateDeliveryQueries, replayPendingDeliverySubmissions, type DeliverySubmissionInput } from '@/lib/driver/driverDeliverySubmission';
 import { createMemoryDriverDeliveryOfflineStore, type DriverDeliveryOfflineDraft } from '@/lib/driver/driverDeliveryOfflineStore';
@@ -30,6 +31,11 @@ const input = (): DeliverySubmissionInput => ({tenantId:'tenant',actorId:'driver
   photos:[file()],receiptScan:receiptScan(),signatureDataUrl:'data:image/png;base64,AA==',details:{receiver_name:'Recebedor',notes:'Entregue',
     latitude:-23.55052,longitude:-46.633308,accuracy_m:8,fiscal_snapshot:{version:1,tenant_id:'tenant',actor_id:'driver-user',
       trip_id:'trip',stop_id:'stop',captured_at:'2026-09-10T09:58:00.000Z',revision:'a'.repeat(32),documents:[]}}});
+afterEach(()=>vi.restoreAllMocks());
+function advanceRetryClock(){
+  const at=Math.max(...[...mocks.offline.values()].map(draft=>draft.synchronization?.retry?.nextAttemptAt??Date.now()));
+  vi.spyOn(Date,'now').mockReturnValue(at);
+}
 beforeEach(() => {
   vi.clearAllMocks();
   for(const mock of [mocks.rpc,mocks.upload,mocks.remove,mocks.refreshSession,mocks.offlineSave,mocks.offlineList,mocks.offlineRemove])mock.mockReset();
@@ -80,7 +86,7 @@ describe('delivery frontend submission contract', () => {
     const draft=input(); const attempt=createDeliverySubmission(draft);
     await expect(attempt.submit()).resolves.toMatchObject({queued:true});
     draft.details.receiver_name='Changed'; draft.photos.push(file());
-    await attempt.submit();
+    advanceRetryClock(); await attempt.submit();
     expect(mocks.rpc.mock.calls[1]).toEqual(mocks.rpc.mock.calls[0]);
     expect(mocks.upload).toHaveBeenCalledTimes(4); expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -91,8 +97,9 @@ describe('delivery frontend submission contract', () => {
     const firstCall=mocks.rpc.mock.calls[0];
     expect([...mocks.offline.values()][0]).toMatchObject({synchronization:{stage:'dispatch_pending',
       uploads:expect.arrayContaining([expect.objectContaining({slot:'receipt:original',state:'uploaded',sha256:expect.stringMatching(/^[a-f0-9]{64}$/)})])}});
+    advanceRetryClock();
     mocks.rpc.mockResolvedValueOnce({data:{...result,replayed:true},error:null});
-    await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toEqual({confirmed:1,cleaned:0,rejected:0,pending:0,needsAttention:0,pendingStopIds:[]});
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toEqual({confirmed:1,cleaned:0,rejected:0,superseded:0,pending:0,needsAttention:0,pendingStopIds:[],nextRetryAt:null});
     expect(mocks.rpc.mock.calls[1]).toEqual(firstCall);
     expect(mocks.upload).toHaveBeenCalledTimes(4);
     expect(mocks.offline.size).toBe(0);
@@ -100,8 +107,8 @@ describe('delivery frontend submission contract', () => {
   it('does not replay another actor or tenant outbox', async () => {
     mocks.rpc.mockResolvedValueOnce({data:null,error:{message:'Network lost'}});
     await expect(createDeliverySubmission(input()).submit()).resolves.toMatchObject({queued:true});
-    await expect(replayPendingDeliverySubmissions('tenant','other-driver')).resolves.toEqual({confirmed:0,cleaned:0,rejected:0,pending:0,needsAttention:0,pendingStopIds:[]});
-    await expect(replayPendingDeliverySubmissions('other-tenant','driver-user')).resolves.toEqual({confirmed:0,cleaned:0,rejected:0,pending:0,needsAttention:0,pendingStopIds:[]});
+    await expect(replayPendingDeliverySubmissions('tenant','other-driver')).resolves.toEqual({confirmed:0,cleaned:0,rejected:0,superseded:0,pending:0,needsAttention:0,pendingStopIds:[],nextRetryAt:null});
+    await expect(replayPendingDeliverySubmissions('other-tenant','driver-user')).resolves.toEqual({confirmed:0,cleaned:0,rejected:0,superseded:0,pending:0,needsAttention:0,pendingStopIds:[],nextRetryAt:null});
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
     expect(mocks.offline.size).toBe(1);
     expect([...mocks.offline.values()][0]).toMatchObject({synchronization:{stage:'dispatch_pending'}});
@@ -112,8 +119,9 @@ describe('delivery frontend submission contract', () => {
     store.hasPendingPredecessor=hasPendingPredecessor;
     Object.defineProperty(navigator,'onLine',{configurable:true,value:false});
     await createDeliverySubmission(input(),{offlineStore:store}).submit();
+    const blocked=(await store.list('tenant','driver-user'))[0];blocked.synchronization!.retry!.nextAttemptAt=Date.now()-1;await store.save(blocked);
     Object.defineProperty(navigator,'onLine',{configurable:true,value:true});
-    await expect(replayPendingDeliverySubmissions('tenant','driver-user',store)).resolves.toMatchObject({confirmed:0,pending:1});
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user',store)).resolves.toMatchObject({confirmed:0,pending:1,nextRetryAt:null});
     expect(hasPendingPredecessor).toHaveBeenCalledTimes(1);
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
@@ -139,6 +147,7 @@ describe('delivery frontend submission contract', () => {
       .mockResolvedValueOnce({data:null,error:{code:'23514',message:'Parada já encerrada'}});
     const attempt=createDeliverySubmission(input());
     await expect(attempt.submit()).resolves.toMatchObject({queued:true});
+    advanceRetryClock();
     await expect(attempt.submit()).resolves.toMatchObject({queued:true});
     expect(attempt.canRevise).toBe(false); expect(mocks.remove).not.toHaveBeenCalled();
     expect(mocks.rpc.mock.calls[1]).toEqual(mocks.rpc.mock.calls[0]);
@@ -148,6 +157,7 @@ describe('delivery frontend submission contract', () => {
       .mockResolvedValueOnce({data:null,error:{code:'42501',message:'Sessão expirada'}});
     const attempt=createDeliverySubmission(input());
     await expect(attempt.submit()).resolves.toMatchObject({queued:true});
+    advanceRetryClock();
     await expect(attempt.submit()).resolves.toMatchObject({queued:true});
     expect(attempt.canRevise).toBe(false); expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -200,6 +210,7 @@ describe('delivery frontend submission contract', () => {
     expect(saved.uploadFailures).toBe(1);
     expect(saved.synchronization?.uploads?.filter(entry=>entry.state==='uploaded')).toHaveLength(completed);
     mocks.upload.mockImplementation(upload);
+    advanceRetryClock();
     await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toMatchObject({confirmed:1,pending:0});
     expect(mocks.upload).toHaveBeenCalledTimes(5);
     const slots=mocks.upload.mock.calls.map(([request])=>(request as {evidence:{slot:string}}).evidence.slot);
@@ -256,7 +267,7 @@ describe('delivery frontend submission contract', () => {
       code:'delivery_evidence_existing_object_mismatch',slot:'receipt:original'}});
     expect(mocks.remove).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
   });
-  it('cleans photos when signature upload fails and reports cleanup failures', async () => {
+  it('preserves evidence when an upload path is incompatible and never runs cleanup', async () => {
     mocks.upload.mockResolvedValueOnce('original.png').mockResolvedValueOnce('processed.png')
       .mockResolvedValueOnce('photo.png').mockRejectedValueOnce(new Error('signature failed'));
     mocks.remove.mockRejectedValue(new Error('cleanup failed'));
@@ -308,5 +319,124 @@ describe('delivery frontend submission contract', () => {
     expect(spy).toHaveBeenCalledWith({queryKey:['portal_shipment_detail_v2']});
     expect(spy).toHaveBeenCalledWith({queryKey:['driver_events']});
     client.clear();
+  });
+});
+
+describe('durable delivery retry bounds',()=>{
+  it.each([400,403,404,413,415,422])('retains permanent HTTP %s without any automatic replay',async status=>{
+    const upload=mocks.upload.getMockImplementation()!;let count=0;
+    mocks.upload.mockImplementation(async request=>{if(++count===4)throw Object.assign(new Error('controlled upload rejection'),{status,code:'invalid_upload'});return upload(request);});
+    const attempt=createDeliverySubmission(input());
+    await expect(attempt.submit()).resolves.toMatchObject({queued:true,needs_attention:true,attention_code:'invalid_upload'});
+    const saved=[...mocks.offline.values()][0];
+    expect(saved).toMatchObject({state:'needs_attention',attention:{kind:'upload_failure',slot:'signature',code:'invalid_upload'},synchronization:{retry:{attempts:4,failures:1,nextAttemptAt:null,lastStatus:status}}});
+    const hashes=saved.synchronization!.uploads!.map(entry=>entry.sha256);
+    for(let i=0;i<100;i++)await replayPendingDeliverySubmissions('tenant','driver-user');
+    await attempt.submit();
+    expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.rpc).not.toHaveBeenCalled();expect(mocks.remove).not.toHaveBeenCalled();
+    const retained=[...mocks.offline.values()][0];
+    expect(retained.requestId).toBe(saved.requestId);expect(retained.synchronization!.uploads!.map(entry=>entry.sha256)).toEqual(hashes);
+    expect(retained.synchronization!.uploads!.filter(entry=>entry.state==='uploaded')).toHaveLength(3);
+    expect(retained.signature!.blob.size).toBe(saved.signature!.blob.size);expect(retained.photos).toHaveLength(1);
+  });
+  it('honors a durable 429 Retry-After across new replay instances and then resumes the same slot',async()=>{
+    const initial=Date.now();vi.spyOn(Date,'now').mockReturnValue(initial);
+    mocks.upload.mockRejectedValueOnce(Object.assign(new Error('quota'),{status:429,code:'upload_rate_limited',retryAfterMs:90_000}));
+    await createDeliverySubmission(input()).submit();
+    const saved=[...mocks.offline.values()][0],at=saved.synchronization!.retry!.nextAttemptAt!;
+    expect(at).toBe(initial+90_000);
+    for(let i=0;i<100;i++)await replayPendingDeliverySubmissions('tenant','driver-user');
+    vi.spyOn(Date,'now').mockReturnValue(at-1);await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.upload).toHaveBeenCalledTimes(1);expect(mocks.rpc).not.toHaveBeenCalled();
+    vi.spyOn(Date,'now').mockReturnValue(at);
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toMatchObject({confirmed:1,pending:0,nextRetryAt:null});
+    expect(mocks.upload).toHaveBeenCalledTimes(5);
+    expect(mocks.upload.mock.calls[1][0].evidence).toEqual(mocks.upload.mock.calls[0][0].evidence);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+  it('limits repeated 503 failures across reloads and keeps the final draft and blobs',async()=>{
+    mocks.upload.mockRejectedValue(Object.assign(new Error('scanner unavailable'),{status:503,code:'av_scanner_unavailable'}));
+    await createDeliverySubmission(input()).submit();
+    for(let i=1;i<DELIVERY_MAX_FAILURES;i++){
+      const before=mocks.upload.mock.calls.length;await replayPendingDeliverySubmissions('tenant','driver-user');expect(mocks.upload).toHaveBeenCalledTimes(before);
+      advanceRetryClock();await replayPendingDeliverySubmissions('tenant','driver-user');
+    }
+    const saved=[...mocks.offline.values()][0];
+    expect(saved).toMatchObject({state:'needs_attention',attention:{kind:'upload_failure',code:'av_scanner_unavailable'},synchronization:{retry:{failures:5,attempts:5,nextAttemptAt:null}}});
+    for(let i=0;i<100;i++)await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.upload).toHaveBeenCalledTimes(5);expect(mocks.rpc).not.toHaveBeenCalled();expect(mocks.offline.size).toBe(1);
+    expect(saved.signature?.blob).toBeInstanceOf(Blob);expect(saved.receiptScan?.processed.blob).toBeInstanceOf(Blob);
+  });
+  it('bounds uncertain outcome RPCs while preserving their exact payload and uploaded evidence',async()=>{
+    mocks.rpc.mockRejectedValue(new Error('response lost'));
+    await createDeliverySubmission(input()).submit();
+    for(let i=1;i<DELIVERY_MAX_FAILURES;i++){advanceRetryClock();await replayPendingDeliverySubmissions('tenant','driver-user');}
+    for(let i=0;i<30;i++)await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.rpc).toHaveBeenCalledTimes(5);expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.remove).not.toHaveBeenCalled();
+    for(const call of mocks.rpc.mock.calls)expect(call).toEqual(mocks.rpc.mock.calls[0]);
+    expect([...mocks.offline.values()][0]).toMatchObject({state:'needs_attention',synchronization:{retry:{failures:5,attempts:9}}});
+  });
+  it('applies the total transport budget before another operation after reload',async()=>{
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:false});await createDeliverySubmission(input()).submit();
+    const saved=[...mocks.offline.values()][0];saved.synchronization!.retry!.attempts=DELIVERY_MAX_ATTEMPTS;
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:true});
+    await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.upload).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+    expect([...mocks.offline.values()][0]).toMatchObject({state:'needs_attention',attention:{code:'delivery_retry_exhausted'}});
+  });
+  it('shares an actual in-flight upload between a button instance and a separate replay instance',async()=>{
+    const upload=mocks.upload.getMockImplementation()!;let release!:()=>void;
+    mocks.upload.mockImplementationOnce(async request=>{await new Promise<void>(resolve=>{release=resolve;});return upload(request);});
+    const requestId=crypto.randomUUID(),first=createDeliverySubmission(input(),{requestId}).submit();
+    await vi.waitFor(()=>expect(mocks.upload).toHaveBeenCalledTimes(1));
+    const second=replayPendingDeliverySubmissions('tenant','driver-user');
+    await Promise.resolve();await Promise.resolve();expect(mocks.upload).toHaveBeenCalledTimes(1);
+    release();await first;await expect(second).resolves.toMatchObject({confirmed:1,pending:0});
+    expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+  it('does not join the same request id in a different actor or tenant',async()=>{
+    const requestId=crypto.randomUUID();
+    await Promise.all([createDeliverySubmission(input(),{requestId}).submit(),
+      createDeliverySubmission({...input(),tenantId:'foreign',actorId:'foreign-actor'},{requestId}).submit()]);
+    expect(mocks.upload).toHaveBeenCalledTimes(8);expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    const scopes=mocks.upload.mock.calls.map(([request])=>request.tenantId);
+    expect(scopes.filter(tenant=>tenant==='tenant')).toHaveLength(4);expect(scopes.filter(tenant=>tenant==='foreign')).toHaveLength(4);
+  });
+});
+
+it('never resets an older draft failure history when the optional retry metadata is absent',async()=>{
+  Object.defineProperty(navigator,'onLine',{configurable:true,value:false});await createDeliverySubmission(input()).submit();
+  const saved=[...mocks.offline.values()][0];delete saved.synchronization!.retry;saved.uploadFailures=DELIVERY_MAX_FAILURES;
+  Object.defineProperty(navigator,'onLine',{configurable:true,value:true});await replayPendingDeliverySubmissions('tenant','driver-user');
+  expect(mocks.upload).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+  expect([...mocks.offline.values()][0]).toMatchObject({requestId:saved.requestId,state:'needs_attention',uploadFailures:5,synchronization:{retry:{failures:5}}});
+});
+
+describe('post-lock absence of a captured delivery draft',()=>{
+  it('suppresses a captured replay after another operation already ACKed and removed the draft',async()=>{
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:false});await createDeliverySubmission(input()).submit();
+    const captured=structuredClone([...mocks.offline.values()][0]);
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:true});await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.rpc).toHaveBeenCalledTimes(1);expect(mocks.offline.size).toBe(0);
+    mocks.offlineList.mockResolvedValueOnce([captured]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toMatchObject({confirmed:0,rejected:0,superseded:1,pending:0,needsAttention:0,nextRetryAt:null});
+    expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.rpc).toHaveBeenCalledTimes(1);expect(mocks.offline.size).toBe(0);
+  });
+  it('does not return a made-up queued result or ACK for a directly resumed draft absent from storage',async()=>{
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:false});await createDeliverySubmission(input()).submit();
+    const captured=[...mocks.offline.values()][0];mocks.offline.clear();mocks.offlineSave.mockClear();
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:true});
+    for(let i=0;i<100;i++)await expect(createDeliverySubmission(input(),{requestId:captured.requestId,durableDraft:captured}).submit()).rejects.toThrow('não está mais pendente');
+    expect(mocks.offlineSave).not.toHaveBeenCalled();expect(mocks.upload).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.offline.size).toBe(0);
+  });
+  it('uses the latest durable deadline rather than a stale snapshot when the request is still pending',async()=>{
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:false});await createDeliverySubmission(input()).submit();
+    const captured=structuredClone([...mocks.offline.values()][0]),latest=[...mocks.offline.values()][0];
+    latest.synchronization!.retry!.attempts=7;latest.synchronization!.retry!.failures=2;latest.synchronization!.retry!.nextAttemptAt=Date.now()+60_000;
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:true});
+    await expect(createDeliverySubmission(input(),{requestId:captured.requestId,durableDraft:captured}).submit()).resolves.toMatchObject({queued:true,needs_attention:false});
+    expect(mocks.upload).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+    expect([...mocks.offline.values()][0].synchronization?.retry).toMatchObject({attempts:7,failures:2,nextAttemptAt:latest.synchronization!.retry!.nextAttemptAt});
   });
 });

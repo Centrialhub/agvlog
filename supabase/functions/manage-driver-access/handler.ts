@@ -1,13 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { driverLoginEmail, driverUsernameFromEmail, validateDriverPassword } from '../_shared/driverCredentials.ts';
+import { handleWorkspaceCredentialCommand } from './workspace-credentials.ts';
 
 type Scope = { managed: boolean; retired: boolean; deleted: boolean; active: boolean; email: string; tenant_id: string | null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 class AccessError extends Error {
-  constructor(message: string, readonly status = 400) { super(message); }
+  constructor(message: string, readonly status = 400, readonly code?: string) { super(message); }
 }
-const scopeMessage = 'Conta compartilhada com outra empresa ou outro perfil. Revise os vínculos antes de excluir o acesso.';
+const scopeMessage = 'Conta compartilhada com outra empresa ou outro perfil. A gestão desta conta de acesso está bloqueada para proteger os demais vínculos. O cadastro do motorista é separado; não exclua nem desvincule registros para contornar este bloqueio.';
 
 export async function handleDriverAccess(
   req: Request, callerClient: SupabaseClient, admin: SupabaseClient, headers: Record<string, string>,
@@ -20,7 +21,7 @@ export async function handleDriverAccess(
     const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser();
     if (callerError || !caller) return json({ error: 'Sessão inválida.' }, 401);
     const body = await req.json().catch(() => null);
-    if (!body || !uuid.test(body.tenant_id ?? '') || !['inspect', 'create', 'password', 'legacy_list', 'retire_legacy'].includes(body.action)) {
+    if (!body || !uuid.test(body.tenant_id ?? '') || !['inspect', 'create', 'password', 'convert', 'credential_status', 'legacy_list', 'retire_legacy'].includes(body.action)) {
       return json({ error: 'Solicitação inválida.' }, 400);
     }
     const tenantId = body.tenant_id as string;
@@ -38,7 +39,7 @@ export async function handleDriverAccess(
         _tenant_id: tenantId, _actor_id: caller.id, _user_id: userId, _retire: retire,
       });
       if (error) {
-        if (error.message.includes('shared_or_other_role')) throw new AccessError(scopeMessage, 409);
+        if (error.message.includes('shared_or_other_role')) throw new AccessError(scopeMessage, 409, 'account_scope_restricted');
         if (error.message.includes('cannot_be_retired')) throw new AccessError('Esta conta já usa o novo modelo e não será excluída como conta antiga.', 409);
         throw new AccessError('Não foi possível validar o acesso deste motorista.', 409);
       }
@@ -89,9 +90,64 @@ export async function handleDriverAccess(
       if (result.error) throw new AccessError('Não foi possível consultar o motorista.', 503);
       driver = result.data;
       if (!driver) throw new AccessError('Motorista não encontrado nesta empresa.', 404);
+      if (['convert', 'password', 'credential_status'].includes(body.action) && body.user_id !== undefined
+        && body.user_id !== driver.user_id) throw new AccessError('O vínculo de acesso mudou. Atualize o cadastro.', 409);
       userId = driver.user_id;
     }
     if (body.action === 'inspect') {
+      if (body.version === 2 || body.version === 3) {
+        // Local visibility and global identity administration are different capabilities.
+        // Establish a LOCAL link before classifying any scope refusal; never use a global
+        // account error as an existence oracle for an arbitrary user_id.
+        let localMembership: { role: string; active: boolean } | null = null;
+        if (userId) {
+          const member = await admin.from('tenant_memberships').select('role,active')
+            .eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle();
+          if (member.error) throw new AccessError('Não foi possível consultar o vínculo desta empresa.', 503);
+          localMembership = member.data;
+          if (!driver) {
+            const registry = await admin.from('drivers').select('id,name,user_id,active')
+              .eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle();
+            if (registry.error) throw new AccessError('Não foi possível consultar o cadastro desta empresa.', 503);
+            driver = registry.data;
+          }
+        }
+        if (!driver && localMembership?.role !== 'driver') throw new AccessError('Vínculo de motorista não encontrado nesta empresa.', 404);
+        const capabilities = { create_access: false, change_password: false, change_identity: false, delete_identity: false, unlink: false };
+        if (!userId) return json({ version: body.version, kind: 'none', driver_id: driver!.id, username: null,
+          active: false, capabilities: { ...capabilities, create_access: driver!.active } });
+        if (body.version === 3) {
+          const result = await admin.rpc('inspect_driver_workspace_credentials_v1', {
+            _tenant_id: tenantId, _actor_id: caller.id, _user_id: userId,
+          });
+          if (result.error) {
+            if (!/driver_credential_(scope_restricted|forbidden)/.test(result.error.message))
+              throw new AccessError('Não foi possível confirmar as permissões de credenciais.', 503);
+            return json({ version: 3, kind: 'linked', driver_id: driver?.id ?? null, username: null,
+              active: localMembership?.active === true, capabilities, credential_management: 'unavailable' });
+          }
+          if (!result.data || typeof result.data.managed !== 'boolean') throw new AccessError('O serviço não confirmou o acesso.', 503);
+          const username = result.data.managed ? driverUsernameFromEmail(result.data.email) : null;
+          const pending = result.data.command_pending === true;
+          return json({ version: 3, kind: result.data.managed ? 'managed' : 'legacy', driver_id: driver?.id ?? null,
+            username, active: true, command_pending: pending, pending_request_id: result.data.pending_request_id ?? null,
+            capabilities: { ...capabilities, change_password: !pending && !!username,
+              change_identity: !pending && !result.data.managed } });
+        }
+        let scope: Scope;
+        try { scope = await getScope(userId); }
+        catch (error) {
+          if (!(error instanceof AccessError) || error.code !== 'account_scope_restricted') throw error;
+          return json({ version: 2, kind: 'linked', driver_id: driver?.id ?? null, username: null,
+            active: localMembership?.active === true, capabilities,
+            credential_management: 'unavailable' });
+        }
+        const managed = scope.managed && scope.tenant_id === tenantId && !scope.retired && !scope.deleted;
+        const username = managed ? driverUsernameFromEmail(scope.email) : null;
+        return json({ version: 2, kind: managed ? 'managed' : 'legacy', driver_id: driver?.id ?? null,
+          username, active: scope.active,
+          capabilities: { ...capabilities, change_password: !!(managed && scope.active && username) } });
+      }
       if (!userId) {
         if (!driver) throw new AccessError('Motorista ou conta inválida.');
         return json({ kind: 'none', username: null });
@@ -130,6 +186,13 @@ export async function handleDriverAccess(
       }
     }
     if (!userId) throw new AccessError('Conta de motorista não encontrada.', 404);
+    if (['convert', 'password', 'credential_status'].includes(body.action)) {
+      if (!uuid.test(body.request_id ?? '')) throw new AccessError('Atualize a tela para iniciar uma solicitação de credenciais identificada.', 409);
+      const result = await handleWorkspaceCredentialCommand(admin, { tenantId, actorId: caller.id, userId,
+        requestId: body.request_id.toLowerCase(), action: body.action, driverId: driver?.id,
+        username: body.username, password: body.password });
+      return json(result.body, result.status);
+    }
     if (body.action === 'retire_legacy') {
       // Revoke relational access before deleting Auth: existing JWTs can otherwise outlive deletion.
       await getScope(userId, true);
@@ -137,15 +200,7 @@ export async function handleDriverAccess(
       if (error) throw new AccessError('O acesso foi desativado, mas a exclusão da conta precisa ser tentada novamente.', 503);
       return json({ success: true });
     }
-    const scope = await getScope(userId);
-    if (!scope.managed || scope.tenant_id !== tenantId || scope.retired || scope.deleted || !scope.active || !driverUsernameFromEmail(scope.email)) {
-      throw new AccessError('Exclua a conta antiga e crie uma nova conta por usuário antes de trocar a senha.', 409);
-    }
-    if (typeof body.password !== 'string') throw new AccessError('Informe a nova senha.');
-    validateDriverPassword(body.password);
-    const { error } = await admin.auth.admin.updateUserById(userId, { password: body.password });
-    if (error) throw new AccessError('Não foi possível trocar a senha.', 503);
-    return json({ success: true });
+    throw new AccessError('Solicitação inválida.');
   } catch (error) {
     if (error instanceof AccessError) return json({ error: error.message }, error.status);
     // Never echo request bodies, passwords, nonces, or upstream Auth diagnostics.
