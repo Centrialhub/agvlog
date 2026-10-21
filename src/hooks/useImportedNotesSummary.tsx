@@ -95,6 +95,9 @@ type NfseSummary = Pick<
   'id' | 'nfse_number' | 'rps_number' | 'status' | 'fiscal_document_ids' | 'created_at'
 >;
 
+// Keep UUID filters below gateway URL limits, including percent encoding.
+const LINK_QUERY_BATCH_SIZE = 50;
+
 const NOTE_OPERATIONAL_STATUSES = new Set<NoteOperationalStatus>([
   'not_processed', 'not_processed_redispatch', 'processed', 'in_transit',
   'delivered', 'not_delivered', 'transferred', 'not_transferred',
@@ -186,19 +189,24 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       const ids = rows.map(r => r.id);
       const cteMap = new Map<string, CteSummary>();
       if (ids.length > 0) {
-        const { data: allCtes, error: ctesError } = await supabase
-          .from('cte_documents')
-          .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
-          .eq('tenant_id', currentTenant.id)
-          .overlaps('fiscal_document_ids', ids)
-          .order('issued_at', { ascending: false })
-          .limit(2000);
-        if (ctesError) throw ctesError;
-        for (const c of allCtes || []) {
-          if (c.cancelled_at || String(c.status || '').toLowerCase() === 'cancelled') continue;
-          const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
-          for (const fid of fids) {
-            if (!cteMap.has(fid)) cteMap.set(fid, c); // primeiro é o mais recente
+        for (let start = 0; start < ids.length; start += LINK_QUERY_BATCH_SIZE) {
+          const batchIds = ids.slice(start, start + LINK_QUERY_BATCH_SIZE);
+          const { data: allCtes, error: ctesError } = await supabase
+            .from('cte_documents')
+            .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
+            .eq('tenant_id', currentTenant.id)
+            .overlaps('fiscal_document_ids', batchIds)
+            .order('issued_at', { ascending: false })
+            .limit(2000);
+          if (ctesError) throw ctesError;
+          for (const c of allCtes || []) {
+            if (c.cancelled_at || String(c.status || '').toLowerCase() === 'cancelled') continue;
+            const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
+            for (const fid of fids) {
+              // A document may overlap another batch. Only that batch can choose
+              // its latest CT-e after considering all candidates for its notes.
+              if (batchIds.includes(fid) && !cteMap.has(fid)) cteMap.set(fid, c);
+            }
           }
         }
       }
@@ -210,17 +218,19 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       ) as string[];
       const outboundMap = new Map<string, OutboundCteSummary>();
       if (outboundIds.length > 0) {
-        const { data: outbound, error: outboundError } = await supabase
-          .from('fiscal_documents')
-          .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
-          .eq('tenant_id', currentTenant.id)
-          .in('id', outboundIds);
-        if (outboundError) throw outboundError;
-        for (const o of outbound || []) {
-          const status = String(o.status || '').toLowerCase();
-          const sefazStatus = String(o.sefaz_status || '').toLowerCase();
-          if (status === 'cancelled' || sefazStatus === 'cancelled' || sefazStatus === 'cancelado') continue;
-          outboundMap.set(o.id, o);
+        for (let start = 0; start < outboundIds.length; start += LINK_QUERY_BATCH_SIZE) {
+          const { data: outbound, error: outboundError } = await supabase
+            .from('fiscal_documents')
+            .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
+            .eq('tenant_id', currentTenant.id)
+            .in('id', outboundIds.slice(start, start + LINK_QUERY_BATCH_SIZE));
+          if (outboundError) throw outboundError;
+          for (const o of outbound || []) {
+            const status = String(o.status || '').toLowerCase();
+            const sefazStatus = String(o.sefaz_status || '').toLowerCase();
+            if (status === 'cancelled' || sefazStatus === 'cancelled' || sefazStatus === 'cancelado') continue;
+            outboundMap.set(o.id, o);
+          }
         }
       }
 
@@ -228,19 +238,22 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       const nfseMap = new Map<string, NfseSummary>();
       const nfseById = new Map<string, NfseSummary>();
       if (ids.length > 0) {
-        const { data: nfses, error: nfsesError } = await supabase
-          .from('nfse_documents')
-          .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
-          .eq('tenant_id', currentTenant.id)
-          .overlaps('fiscal_document_ids', ids)
-          .order('created_at', { ascending: false })
-          .limit(2000);
-        if (nfsesError) throw nfsesError;
-        for (const n of nfses || []) {
-          if (n.status === 'cancelled') continue;
-          nfseById.set(n.id, n);
-          const fids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
-          for (const fid of fids) if (!nfseMap.has(fid)) nfseMap.set(fid, n);
+        for (let start = 0; start < ids.length; start += LINK_QUERY_BATCH_SIZE) {
+          const batchIds = ids.slice(start, start + LINK_QUERY_BATCH_SIZE);
+          const { data: nfses, error: nfsesError } = await supabase
+            .from('nfse_documents')
+            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+            .eq('tenant_id', currentTenant.id)
+            .overlaps('fiscal_document_ids', batchIds)
+            .order('created_at', { ascending: false })
+            .limit(2000);
+          if (nfsesError) throw nfsesError;
+          for (const n of nfses || []) {
+            if (n.status === 'cancelled') continue;
+            nfseById.set(n.id, n);
+            const fids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
+            for (const fid of fids) if (batchIds.includes(fid) && !nfseMap.has(fid)) nfseMap.set(fid, n);
+          }
         }
       }
 
@@ -251,15 +264,17 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       ) as string[];
       const missingNfseIds = nfseDirectIds.filter(id => !nfseById.has(id));
       if (missingNfseIds.length > 0) {
-        const { data: extra, error: extraNfseError } = await supabase
-          .from('nfse_documents')
-          .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
-          .eq('tenant_id', currentTenant.id)
-          .in('id', missingNfseIds);
-        if (extraNfseError) throw extraNfseError;
-        for (const n of extra || []) {
-          if (n.status === 'cancelled') continue;
-          nfseById.set(n.id, n);
+        for (let start = 0; start < missingNfseIds.length; start += LINK_QUERY_BATCH_SIZE) {
+          const { data: extra, error: extraNfseError } = await supabase
+            .from('nfse_documents')
+            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+            .eq('tenant_id', currentTenant.id)
+            .in('id', missingNfseIds.slice(start, start + LINK_QUERY_BATCH_SIZE));
+          if (extraNfseError) throw extraNfseError;
+          for (const n of extra || []) {
+            if (n.status === 'cancelled') continue;
+            nfseById.set(n.id, n);
+          }
         }
       }
 
