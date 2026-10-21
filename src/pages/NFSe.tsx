@@ -1,3 +1,4 @@
+import { nfseDownloadErrorMessage } from '@/lib/fiscal/nfseDownload';
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import {useSearchParams} from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -164,7 +165,7 @@ export default function NFSePage() {
       saveBlob(blob, `nfse-${doc.nfse_number || doc.rps_number || doc.id}.${format}`);
       toast.success(`NFS-e ${label} baixada`, { id: toastId });
     } catch (error: unknown) {
-      const description = error instanceof Error ? error.message : 'Não foi possível baixar o arquivo.';
+      const description = nfseDownloadErrorMessage(error);
       toast.error('Falha ao baixar NFS-e', { id: toastId, description, duration: 12_000 });
     } finally {
       setDownloadBusy(null);
@@ -197,7 +198,7 @@ export default function NFSePage() {
       const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
       fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
     } catch (error: unknown) {
-      const description = error instanceof Error ? error.message : 'Não foi possível baixar os arquivos.';
+      const description = nfseDownloadErrorMessage(error);
       toast.error('Falha no download em massa', { id: toastId, description, duration: 12_000 });
     } finally {
       setBulkBusy(false);
