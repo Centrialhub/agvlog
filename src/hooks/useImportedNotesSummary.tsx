@@ -5,6 +5,7 @@ import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { buildImportedAtFilter, normalizeImportedNoteFilters, validateImportedNoteFilters } from '@/lib/importedNotesFilters';
 import { csvSafeCell } from '@/lib/csvSafety';
+import { hasAuthorizedImportedDocument, isAuthorizedImportedCte, isAuthorizedImportedNfse } from '@/lib/importedNoteFiscalStatus';
 
 export type NoteOperationalStatus =
   | 'not_processed' | 'not_processed_redispatch' | 'processed'
@@ -79,12 +80,13 @@ export interface ImportedNoteRow {
   cte_access_key?: string | null;
   nfse_number?: string | null;
   nfse_id?: string | null;
+  nfse_status?: string | null;
   operational_status: NoteOperationalStatus;
 }
 
 type CteSummary = Pick<
   Tables<'cte_documents'>,
-  'id' | 'cte_number' | 'access_key' | 'freight_value' | 'issued_at' | 'status' | 'fiscal_document_ids' | 'cancelled_at'
+  'id' | 'cte_number' | 'access_key' | 'freight_value' | 'issued_at' | 'status' | 'sefaz_status' | 'fiscal_document_ids' | 'cancelled_at'
 >;
 type OutboundCteSummary = Pick<
   Tables<'fiscal_documents'>,
@@ -131,9 +133,7 @@ export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationa
   if (loadStatus === 'in_transit') return 'in_transit';
   if (loadStatus === 'delivered') return 'delivered';
   if (loadStatus && ['partial_delivery', 'returned', 'refused', 'failed', 'cancelled', 'divergent'].includes(loadStatus)) return 'not_delivered';
-  if (loadStatus && ['planned', 'assembling', 'ready', 'loading', 'loaded'].includes(loadStatus)) return 'processed';
-  if (row.cte_id || row.load_id) return 'processed';
-  if (row.imported_note_status === 'processed') return 'processed';
+  if (hasAuthorizedImportedDocument(row)) return 'processed';
   return 'not_processed';
 }
 
@@ -193,14 +193,14 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           const batchIds = ids.slice(start, start + LINK_QUERY_BATCH_SIZE);
           const { data: allCtes, error: ctesError } = await supabase
             .from('cte_documents')
-            .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
+            .select('id, cte_number, access_key, freight_value, issued_at, status, sefaz_status, fiscal_document_ids, cancelled_at')
             .eq('tenant_id', currentTenant.id)
             .overlaps('fiscal_document_ids', batchIds)
             .order('issued_at', { ascending: false })
             .limit(2000);
           if (ctesError) throw ctesError;
           for (const c of allCtes || []) {
-            if (c.cancelled_at || String(c.status || '').toLowerCase() === 'cancelled') continue;
+            if (!isAuthorizedImportedCte(c)) continue;
             const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
             for (const fid of fids) {
               // A document may overlap another batch. Only that batch can choose
@@ -226,9 +226,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
             .in('id', outboundIds.slice(start, start + LINK_QUERY_BATCH_SIZE));
           if (outboundError) throw outboundError;
           for (const o of outbound || []) {
-            const status = String(o.status || '').toLowerCase();
-            const sefazStatus = String(o.sefaz_status || '').toLowerCase();
-            if (status === 'cancelled' || sefazStatus === 'cancelled' || sefazStatus === 'cancelado') continue;
+            if (!isAuthorizedImportedCte(o)) continue;
             outboundMap.set(o.id, o);
           }
         }
@@ -249,7 +247,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
             .limit(2000);
           if (nfsesError) throw nfsesError;
           for (const n of nfses || []) {
-            if (n.status === 'cancelled') continue;
+            if (!isAuthorizedImportedNfse(n)) continue;
             nfseById.set(n.id, n);
             const fids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
             for (const fid of fids) if (batchIds.includes(fid) && !nfseMap.has(fid)) nfseMap.set(fid, n);
@@ -272,7 +270,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
             .in('id', missingNfseIds.slice(start, start + LINK_QUERY_BATCH_SIZE));
           if (extraNfseError) throw extraNfseError;
           for (const n of extra || []) {
-            if (n.status === 'cancelled') continue;
+            if (!isAuthorizedImportedNfse(n)) continue;
             nfseById.set(n.id, n);
           }
         }
@@ -299,6 +297,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           cte_freight_value: cte?.freight_value ?? out?.freight_value ?? null,
           cte_status: cte?.status ?? out?.status ?? null,
           nfse_id: nfse?.id ?? null,
+          nfse_status: nfse?.status ?? null,
           nfse_number: nfse ? String(nfse.nfse_number ?? nfse.rps_number ?? '') || null : null,
         };
         return { ...base, operational_status: resolveNoteStatus(base) };

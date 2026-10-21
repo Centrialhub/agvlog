@@ -40,8 +40,8 @@ describe('resolveNoteStatus', () => {
   it('não processado quando sem load nem CT-e', () => {
     expect(resolveNoteStatus(mk())).toBe('not_processed');
   });
-  it('processado com CT-e vinculado', () => {
-    expect(resolveNoteStatus(mk({ cte_id: 'c1' }))).toBe('processed');
+  it('processado com CT-e autorizado vinculado', () => {
+    expect(resolveNoteStatus(mk({ cte_id: 'c1', cte_status: 'authorized' }))).toBe('processed');
   });
   it('em trânsito quando load.status = in_transit', () => {
     expect(resolveNoteStatus(mk({ load_id: 'l1', loads: load('in_transit') }))).toBe('in_transit');
