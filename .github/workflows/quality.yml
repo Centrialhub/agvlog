@@ -126,9 +126,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Provision encrypted reviewed baseline
+        id: private-baseline
+        env:
+          AGVLOG_CI_BASELINE_KEY: ${{ secrets.AGVLOG_CI_BASELINE_KEY }}
+          AGVLOG_CI_BASELINE_URL: ${{ vars.AGVLOG_CI_BASELINE_URL }}
+          AGVLOG_CI_BASELINE_CIPHERTEXT_SHA256: ${{ vars.AGVLOG_CI_BASELINE_CIPHERTEXT_SHA256 }}
+        run: node scripts/provision-ci-baseline.mjs
+
       - name: Restore externally reviewed private baseline
         env:
-          AGVLOG_REVIEWED_BASELINE_DIRECTORY: ${{ vars.AGVLOG_REVIEWED_BASELINE_DIRECTORY }}
+          AGVLOG_REVIEWED_BASELINE_DIRECTORY: ${{ steps.private-baseline.outputs.directory }}
           AGVLOG_REVIEWED_BASELINE_SHA256: ${{ vars.AGVLOG_REVIEWED_BASELINE_SHA256 }}
         run: bash scripts/ci-reviewed-baseline.sh
 
