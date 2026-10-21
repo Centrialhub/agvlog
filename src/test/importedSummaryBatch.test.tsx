@@ -57,8 +57,8 @@ describe('imported summary bounded fiscal lookups', () => {
   it('selects the newest CT-e and NFS-e for a note in a later batch', async () => {
     fixture.rows.fiscal_documents = Array.from({ length: 51 }, (_, n) => note(n));
     for (const table of ['cte_documents', 'nfse_documents']) fixture.rows[table] = [
-      { id: 'old', tenant_id: 'tenant-a', fiscal_document_ids: [id(0), id(50)], status: 'issued', issued_at: '2026-01-01', created_at: '2026-01-01' },
-      { id: 'new', tenant_id: 'tenant-a', fiscal_document_ids: [id(50)], status: 'issued', issued_at: '2026-02-01', created_at: '2026-02-01' },
+      { id: 'old', tenant_id: 'tenant-a', fiscal_document_ids: [id(0), id(50)], status: table === 'cte_documents' ? 'authorized' : 'issued', issued_at: '2026-01-01', created_at: '2026-01-01' },
+      { id: 'new', tenant_id: 'tenant-a', fiscal_document_ids: [id(50)], status: table === 'cte_documents' ? 'authorized' : 'issued', issued_at: '2026-02-01', created_at: '2026-02-01' },
       { id: 'cancelled', tenant_id: 'tenant-a', fiscal_document_ids: [id(50)], status: 'cancelled', issued_at: '2026-03-01', created_at: '2026-03-01' },
     ];
     const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
@@ -72,6 +72,41 @@ describe('imported summary bounded fiscal lookups', () => {
     const direct = fixture.requests.filter(url => url.searchParams.has('id'));
     expect(direct).toHaveLength(10);
     expect(direct.every(url => url.href.length < 3000)).toBe(true);
+  });
+  it('uses authorized links instead of newer drafts/errors and does not process a ready load', async () => {
+    fixture.rows.fiscal_documents = [note(0), note(1), { ...note(2), load_id: 'load', loads: { status: 'ready' } }];
+    fixture.rows.cte_documents = [
+      { id: 'authorized-cte', tenant_id: 'tenant-a', fiscal_document_ids: [id(0)], status: 'authorized', sefaz_status: 'authorized', issued_at: '2026-01-01', cte_number: '10' },
+      { id: 'draft-cte', tenant_id: 'tenant-a', fiscal_document_ids: [id(0)], status: 'draft', issued_at: '2026-02-01', cte_number: '11' },
+    ];
+    fixture.rows.nfse_documents = [
+      { id: 'issued-nfse', tenant_id: 'tenant-a', fiscal_document_ids: [id(1)], status: 'issued', created_at: '2026-01-01', nfse_number: '100' },
+      { id: 'failed-nfse', tenant_id: 'tenant-a', fiscal_document_ids: [id(1)], status: 'error', created_at: '2026-02-01', rps_number: '101' },
+    ];
+    const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.find(r => r.id === id(0))).toMatchObject({ cte_id: 'authorized-cte', cte_number: '10', operational_status: 'processed' });
+    expect(result.current.data?.find(r => r.id === id(1))).toMatchObject({ nfse_id: 'issued-nfse', nfse_number: '100', operational_status: 'processed' });
+    expect(result.current.data?.find(r => r.id === id(2))).toMatchObject({ cte_id: null, nfse_id: null, operational_status: 'not_processed' });
+  });
+  it('applies the same authorization requirement to direct links and the processed filter', async () => {
+    fixture.rows.fiscal_documents = [
+      { ...note(0), cte_emitted_outbound_id: id(100) },
+      { ...note(1), cte_emitted_outbound_id: id(101) },
+      { ...note(2), nfse_emitted_document_id: id(102) },
+      { ...note(3), nfse_emitted_document_id: id(103) },
+      { ...note(4), imported_note_status: 'processed' },
+      { id: id(100), tenant_id: 'tenant-a', document_type: 'outbound', status: 'authorized', sefaz_status: 'rejected' },
+      { id: id(101), tenant_id: 'tenant-a', document_type: 'outbound', status: 'authorized', sefaz_status: 'authorized', invoice_number: '20' },
+    ];
+    fixture.rows.nfse_documents = [
+      { id: id(102), tenant_id: 'tenant-a', fiscal_document_ids: [], status: 'issued', nfse_number: '30' },
+      { id: id(103), tenant_id: 'tenant-a', fiscal_document_ids: [], status: 'rejected', rps_number: '31' },
+    ];
+    const { result } = renderHook(() => useImportedNotes({ status: 'processed' }), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.map(r => r.id).sort()).toEqual([id(1), id(2)]);
+    expect(result.current.data?.find(r => r.id === id(2))).toMatchObject({ nfse_number: '30', nfse_status: 'issued' });
   });
   it('reports a failed batch instead of returning a partial financial report', async () => {
     fixture.rows.fiscal_documents = Array.from({ length: 51 }, (_, n) => note(n)); fixture.failSecond = true;
