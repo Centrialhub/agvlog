@@ -173,7 +173,8 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       if (importedAtFilter) q = q.or(importedAtFilter);
       if (filters.remitter) q = q.ilike('remitter', `%${filters.remitter}%`);
       if (filters.invoiceNumber) q = q.ilike('invoice_number', `%${filters.invoiceNumber}%`);
-      if (filters.clientId) q = q.eq('client_id', filters.clientId);
+      // The catalog includes both recipients and shippers (e.g. the freight customer).
+      if (filters.clientId) q = q.or(`client_id.eq.${filters.clientId},supplier_id.eq.${filters.clientId}`);
       if (filters.supplierId) q = q.eq('supplier_id', filters.supplierId);
       if (filters.originCity) q = q.ilike('origin_city', `%${filters.originCity}%`);
       if (filters.destinationCity) q = q.ilike('recipient_city', `%${filters.destinationCity}%`);

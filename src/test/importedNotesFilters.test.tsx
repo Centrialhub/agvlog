@@ -11,6 +11,8 @@ const state = vi.hoisted(() => ({ rows: {} as Record<string, Row[]>, requests: [
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant', timezone: 'America/Sao_Paulo' } }) }));
 vi.mock('@/hooks/useClients', () => ({ useClients: () => ({ data: [
   { id: 'client', company_name: 'Cliente A' }, { id: 'other-client', company_name: 'Cliente B' },
+  { id: 'shipper-a', company_name: 'Industria', tax_id: '12.345.678/0001-90', is_supplier: true },
+  { id: 'shipper-b', company_name: 'Industria', tax_id: '12.345.678/0002-71', is_supplier: true },
 ] }) }));
 vi.mock('@/hooks/useCompanyProfile', () => ({ useCompanyProfile: () => ({ data: null }) }));
 vi.mock('@/hooks/useAlertStore', () => ({ useScopedAlerts: () => ({ confirmAction: vi.fn() }) }));
@@ -85,6 +87,19 @@ async function findNotes(filters: ImportedNoteFilters) {
 }
 
 describe('imported notes filters', () => {
+  it('finds the selected customer as recipient or supplier while preserving date and tenant restrictions', async () => {
+    state.rows.fiscal_documents = [
+      note('recipient', { client_id: 'shipper-a' }),
+      note('shipper', { supplier_id: 'shipper-a' }),
+      note('both', { client_id: 'shipper-a', supplier_id: 'shipper-a' }),
+      note('other-branch', { supplier_id: 'shipper-b' }),
+      note('outside-date', { supplier_id: 'shipper-a', created_at: '2026-08-01T12:00:00Z' }),
+      note('foreign', { supplier_id: 'shipper-a', tenant_id: 'other' }),
+      note('deleted', { supplier_id: 'shipper-a', deleted_at: '2026-08-31T12:00:00Z' }),
+    ];
+    expect(await findNotes({ clientId: 'shipper-a', importFrom: '2026-08-31', importTo: '2026-08-31' }))
+      .toEqual(['recipient', 'shipper', 'both']);
+  });
   it.each<ImportedNoteFilters>([
     { importFrom: '2026-08-31' }, { importTo: '2026-08-31' },
     { importFrom: '2026-08-31', importTo: '2026-08-31' },
@@ -152,6 +167,24 @@ describe('imported notes filters', () => {
 
 describe('imported notes summary page', () => {
   function renderPage() { return render(<Wrapper><MemoryRouter><ImportedNotesSummary /></MemoryRouter></Wrapper>); }
+  it('finds supplier-linked invoices from Cliente and distinguishes identically named branches by CNPJ', async () => {
+    state.rows.fiscal_documents = [
+      note('a', { supplier_id: 'shipper-a', invoice_number: '11111' }),
+      note('b', { supplier_id: 'shipper-b', invoice_number: '22222' }),
+    ];
+    renderPage();
+    await screen.findByText('22222');
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Cliente' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Industria — 12.345.678/0001-90' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    await screen.findByText('11111');
+    await waitFor(() => expect(screen.queryByText('22222')).not.toBeInTheDocument());
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Cliente' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Industria — 12.345.678/0002-71' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    await screen.findByText('22222');
+    await waitFor(() => expect(screen.queryByText('11111')).not.toBeInTheDocument());
+  });
 
   it.each(['Buscar', 'Atualizar'])('applies the visible client and date with %s', async action => {
     state.rows.fiscal_documents = [note('match'),
@@ -169,7 +202,7 @@ describe('imported notes summary page', () => {
       expect(screen.queryByText('33333')).not.toBeInTheDocument();
     });
     expect(await screen.findByText('12345')).toBeInTheDocument();
-    expect(state.requests.some(url => url.searchParams.get('client_id') === 'eq.client'
+    expect(state.requests.some(url => url.searchParams.get('or') === '(client_id.eq.client,supplier_id.eq.client)'
       && url.searchParams.getAll('issue_date').includes('gte.2026-08-21')
       && url.searchParams.getAll('issue_date').includes('lte.2026-08-21'))).toBe(true);
   });

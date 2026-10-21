@@ -325,9 +325,10 @@ export default function ImportedNotesSummary() {
               <SelectTrigger id="summary-client"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}{c.tax_id ? ` — ${c.tax_id}` : ''}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">Vínculo como destinatário ou fornecedor da nota.</p>
           </div>
           <div>
             <Label>Fornecedor</Label>
@@ -335,7 +336,7 @@ export default function ImportedNotesSummary() {
               <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                {clients.filter(c => c.is_supplier).map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {clients.filter(c => c.is_supplier).map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}{c.tax_id ? ` — ${c.tax_id}` : ''}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
