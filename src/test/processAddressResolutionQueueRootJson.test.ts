@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { beforeAll, afterAll, it } from 'vitest';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
@@ -15,11 +15,15 @@ type WorkerResult = { success: boolean; results: Array<{error?: string}> };
 type WorkerHandler = (request: Request) => Promise<Response>;
 type MockFetch = (url: string, options?: RequestInit) => Promise<Response>;
 const root=process.cwd();
-const base='6f6361ce86dc1c8d4d8d7c6e4849bcb340aa5838';
 const workerPath='supabase/functions/process-address-resolution-queue/index.ts';
-const originalWorker=execFileSync('git',['-c',`safe.directory=${root}`,'--no-optional-locks','-C',root,'show',`0cfa82473a56df813d2e2c883e3035afa6d98585:${workerPath}`],{encoding:'utf8'});
+const historicalWorker=(file:string,expectedHash:string)=>{
+  const text=readFileSync(`${root}/src/test/fixtures/history/${file}`,'utf8').replace(/\r\n/g,'\n');
+  assert.equal(createHash('sha256').update(text).digest('hex'),expectedHash,'Historical address worker fixture changed');
+  return text;
+};
+const originalWorker=historicalWorker('address-worker-0cfa824.fixture.txt','04e5a1d743a8565322c00fa99a367e5333852dfee5bed0db778310907248e1b1');
 const worker=readFileSync(`${root}/${workerPath}`,'utf8');
-const beforeWorker=execFileSync('git',['-c',`safe.directory=${root}`,'--no-optional-locks','-C',root,'show',`${base}:${workerPath}`],{encoding:'utf8'});
+const beforeWorker=historicalWorker('address-worker-6f6361c.fixture.txt','b8ea226e542ba4fff626186a025b2063c4cbcb19d9126b2cb4baa612e0f786dc');
 const migration=readFileSync(`${root}/supabase/migrations/20260916152615_finalize_geofence_automation.sql`,'utf8').replace(/\r\n/g,'\n');
 const ackSql=migration.match(/create or replace function public\.ack_address_resolution_queue_item_v2\(_payload jsonb\)[\s\S]*?grant execute on function public\.ack_address_resolution_queue_item_v2\(jsonb\) to service_role;/)?.[0];
 const fixture=readFileSync(`${root}/src/test/processAddressResolutionQueueErrorAck.test.ts`,'utf8');

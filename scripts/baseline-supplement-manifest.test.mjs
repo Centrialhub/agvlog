@@ -124,11 +124,22 @@ test('a directory masquerading as a listed migration is rejected before reading 
 test('authorized no-AV supplement is explicitly hash-bound and preserves the preceding stop helper', async () => {
   const {candidate, followups, supplements}=await inspectBaselineCandidate(process.cwd());
   const all=[...candidate.forwards,...followups.forwards,...supplements.forwards];
-  assert.equal(all.length,42);
-  assert.equal(all.at(-1).filename,'20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql');
-  const bytes=await readFile(join('supabase/migrations',all.at(-1).filename));
-  assert.equal(digest(bytes),all.at(-1).sha256);
-  assert.equal(all.at(-2).sha256,'220233cb4d54a3685290bc6eb2a81c4ddaef34b75ebc52c5337b6727923dd902');
+  assert.equal(all.length,46);
+  const shared=all.filter(row=>row.version<='20261019171216');
+  assert.equal(shared.length,43);
+  assert.equal(shared.at(-1).sha256,'cea89c8dc330ebda889224e44936e8a09dcc41e0f9ea8f6ae85fcd01bf873aae');
+  assert.equal(all[43].filename,'20261019214029_restore_legacy_sql_contracts.sql');
+  assert.equal(all[43].sha256,'cdcb58655582e7be47d4ec97495868fb0136cb66f9037d214a51d70601d6394c');
+  assert.deepEqual(all.slice(44).map(row=>row.filename), [
+    '20261021122925_classify_confirmed_submission_failures.sql',
+    '20261021124814_align_fiscal_submission_outcome_channels.sql',
+  ]);
+  const historical=all.filter(row=>row.version<='20261014141521');
+  assert.equal(historical.length,42);
+  assert.equal(historical.at(-1).filename,'20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql');
+  const bytes=await readFile(join('supabase/migrations',historical.at(-1).filename));
+  assert.equal(digest(bytes),historical.at(-1).sha256);
+  assert.equal(historical.at(-2).sha256,'220233cb4d54a3685290bc6eb2a81c4ddaef34b75ebc52c5337b6727923dd902');
   assert.match(bytes.toString(),/receipt_scan_policy_predecessor_mismatch/);
   assert.match(bytes.toString(),/not_performed/);
 });

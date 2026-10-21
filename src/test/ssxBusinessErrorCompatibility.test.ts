@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PostgrestClient } from '@supabase/postgrest-js';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Row = Record<string, unknown>;
@@ -146,9 +146,13 @@ const forwardFiles = [
   '20261007122904_fence_ssx_rule_violation_finalization.sql',
   '20261007131504_add_bounded_ssx_violation_commit_v3.sql',
 ];
-const legacyDefinitions = forwardFiles.flatMap(file => {
-  const text = execFileSync('git', ['--no-optional-locks', 'show',
-    'e2b5dfb9935431cfc4dceea0025d8b5964331bbf:supabase/migrations/' + file], { encoding: 'utf8' });
+const historicalFiles = [
+  ['ssx-finalization-e2b5dfb.sql', 'e60ab41541ca35dfeb2247b26c2ccad0c0e797b4e8803fd01667ac5f6ff8c20d'],
+  ['ssx-bounded-commit-e2b5dfb.sql', '1be7865866a9e4d251b5805b6287fd7a510a582d05cf0675db4aac4fddd5d087'],
+];
+const legacyDefinitions = historicalFiles.flatMap(([file, expectedHash]) => {
+  const text = readFileSync('src/test/fixtures/history/' + file, 'utf8').replace(/\r\n/g, '\n');
+  if (createHash('sha256').update(text).digest('hex') !== expectedHash) throw new Error('Historical SSX fixture changed: ' + file);
   return [...text.matchAll(/create function public\.[\s\S]*?end \$function\$;/g)]
     .map(match => match[0].replace(/^create function/, 'create or replace function'));
 });

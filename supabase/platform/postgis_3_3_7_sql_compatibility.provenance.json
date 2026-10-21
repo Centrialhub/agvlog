@@ -1,0 +1,54 @@
+{
+  "formatVersion": 1,
+  "purpose": "PostGIS 3.3.7 SQL compatibility backport; not an upstream release",
+  "upstreamVersion": "3.3.7",
+  "license": "GPL-2.0-or-later",
+  "upstream": "https://github.com/postgis/postgis/tree/3.3.7",
+  "sqlSha256": "0a0c4c0131b19edbef5c0bf0b419876bd30c141cb874a1b92bb9dc5922f82895",
+  "sqlExecuted": false,
+  "productionOwnerRolloutRequired": true,
+  "changes": [
+    "Typed dynamic extent and geometry results",
+    "Runtime lookup for optional modules already handled as unavailable",
+    "Transaction-local authorization insert with quoted values",
+    "Resolved authorization relation and bound LockRow parameters"
+  ],
+  "functions": [
+    {
+      "signature": "extensions.st_findextent(text,text,text)",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "c0f74a0239e0b86c5f65164a71291d94",
+      "afterBodyMd5": "23a27d7956698e6c1d7aa51086ebf6d6"
+    },
+    {
+      "signature": "extensions.st_findextent(text,text)",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "f1de6770ce18eafb12bd2a4783cac9f7",
+      "afterBodyMd5": "4010854f1bcb5197b9b23d2ccd948131"
+    },
+    {
+      "signature": "extensions.populate_geometry_columns(oid,boolean)",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "2c339fb1e3287ec843258759b18be75b",
+      "afterBodyMd5": "ae0cc1d2496e7cc4fec1435e2e4d12bc"
+    },
+    {
+      "signature": "extensions.postgis_full_version()",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "5608ccd23d605d59d95546c6df2b92f2",
+      "afterBodyMd5": "71fa4302d0415af1a3b7ee20fcc2be01"
+    },
+    {
+      "signature": "extensions.addauth(text)",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "06714c876a40f42a81bff04f169f8a88",
+      "afterBodyMd5": "1abfa406990f7fdd336b1bf21bc890f9"
+    },
+    {
+      "signature": "extensions.lockrow(text,text,text,text,timestamp without time zone)",
+      "owner": "supabase_admin",
+      "beforeBodyMd5": "e5e3eed300f4517ccf744064d8c74200",
+      "afterBodyMd5": "04c71288f8ebe05a3e44dd3a84442938"
+    }
+  ]
+}

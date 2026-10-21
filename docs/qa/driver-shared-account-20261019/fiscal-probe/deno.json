@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "node-forge": "../../../../supabase/functions/_shared/vendor/forge/edge.mjs"
+  }
+}

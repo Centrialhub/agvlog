@@ -82,10 +82,10 @@ export async function handleDriverAccess(
     }
 
     let userId = typeof body.user_id === 'string' && uuid.test(body.user_id) ? body.user_id : null;
-    let driver: { id: string; name: string; user_id: string | null; active: boolean } | null = null;
+    let driver: { id: string; name: string; user_id: string | null; active: boolean; workspace_id: string | null } | null = null;
     if (body.driver_id !== undefined) {
       if (!uuid.test(body.driver_id)) throw new AccessError('Motorista inválido.');
-      const result = await admin.from('drivers').select('id,name,user_id,active')
+      const result = await admin.from('drivers').select('id,name,user_id,active,workspace_id')
         .eq('tenant_id', tenantId).eq('id', body.driver_id).maybeSingle();
       if (result.error) throw new AccessError('Não foi possível consultar o motorista.', 503);
       driver = result.data;
@@ -106,7 +106,7 @@ export async function handleDriverAccess(
           if (member.error) throw new AccessError('Não foi possível consultar o vínculo desta empresa.', 503);
           localMembership = member.data;
           if (!driver) {
-            const registry = await admin.from('drivers').select('id,name,user_id,active')
+            const registry = await admin.from('drivers').select('id,name,user_id,active,workspace_id')
               .eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle();
             if (registry.error) throw new AccessError('Não foi possível consultar o cadastro desta empresa.', 503);
             driver = registry.data;
@@ -158,6 +158,7 @@ export async function handleDriverAccess(
     }
     if (body.action === 'create') {
       if (!driver?.active || driver.user_id) throw new AccessError('O motorista deve estar ativo e sem uma conta vinculada.', 409);
+      if (!uuid.test(driver.workspace_id ?? '')) throw new AccessError('Não foi possível confirmar a operação deste motorista.', 409);
       if (typeof body.username !== 'string' || typeof body.password !== 'string') throw new AccessError('Informe usuário e senha.');
       const email = driverLoginEmail(body.username);
       validateDriverPassword(body.password);
@@ -170,7 +171,11 @@ export async function handleDriverAccess(
         const { data, error } = await admin.auth.admin.createUser({
           email, password: body.password, email_confirm: true,
           user_metadata: { full_name: name, agvlog_invite_nonce: nonce },
-          app_metadata: { driver_username_managed: true, driver_access_tenant_id: tenantId },
+          // GoTrue updates its original metadata after INSERT. Carry the same
+          // database-verified workspace markers through that update; the private
+          // reservation and Auth trigger still validate the complete scope.
+          app_metadata: { driver_username_managed: true, driver_access_tenant_id: tenantId,
+            driver_workspace_managed: true, driver_access_workspace_id: driver.workspace_id },
         });
         if (error) {
           if (error.code === 'email_exists' || /already.*registered|already exists/i.test(error.message)) {

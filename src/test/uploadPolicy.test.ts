@@ -7,6 +7,7 @@ import {
 } from '@/lib/uploadPolicy';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { UNSCANNED_UPLOAD_PROVENANCE } from '../../supabase/functions/secure-upload/scan-policy';
 
 function file(name: string, type: string, size = 1) {
   return new File([new Uint8Array(size)], name, { type });
@@ -46,7 +47,7 @@ describe('política de uploads privados', () => {
     await expect(validateUploadContent(xxe, 'financial')).rejects.toThrow('conteúdo');
   });
 
-  it('bloqueia escrita direta nos buckets e exige scanner no gateway', () => {
+  it('bloqueia escrita direta nos buckets e preserva a proveniência sem scanner aprovada no PATCH2', () => {
     const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20260829144103_enforce_secure_upload_gateway_policies.sql'), 'utf8');
     const rateLimitMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20260829144001_add_production_secure_upload_rate_limits.sql'), 'utf8');
     const gateway = readFileSync(join(process.cwd(), 'supabase/functions/secure-upload/index.ts'), 'utf8');
@@ -55,8 +56,8 @@ describe('política de uploads privados', () => {
     for (const policy of ['receipts_tenant_insert', 'receipts_tenant_update', 'pallet_proof_insert', 'pallet_proof_update', 'return_proof_insert', 'return_proof_update']) {
       expect(migration).toContain(`drop policy if exists ${policy}`);
     }
-    expect(gateway).toContain('MALWARE_SCANNER_URL');
-    expect(gateway).toContain('malware_scanner_unavailable');
+    expect(gateway).toContain('metadata: UNSCANNED_UPLOAD_PROVENANCE');
+    expect(UNSCANNED_UPLOAD_PROVENANCE).toEqual({ scanned: false, scan_status: 'not_performed', scan_policy: 'patch2-no-scanner-v1' });
     expect(gateway).toContain('file_signature_mismatch');
     expect(gateway).toContain('consume_secure_upload_quota_v1');
     expect(gateway).toContain('upload_rate_limited');

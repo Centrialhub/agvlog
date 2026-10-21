@@ -1,0 +1,63 @@
+{
+  "formatVersion": 1,
+  "upstreamReleaseClaim": false,
+  "sourceTarballSha256": "a030ce10115256d5f924866d9cb5aa4dbc8dc3fdf8d7e8574f8520b63d2c4a8a",
+  "esbuildVersion": "0.25.0",
+  "options": {
+    "format": "esm",
+    "platform": "browser",
+    "target": "es2022",
+    "external": [
+      "crypto"
+    ],
+    "define": {
+      "process": "undefined"
+    }
+  },
+  "artifact": "supabase/functions/_shared/vendor/forge/edge.mjs",
+  "sha256": "0d168cb2a9b03b7450b5234177247877e0e448baa6d51acb0c26c172abd303ac",
+  "inputs": [
+    "supabase/functions/_shared/vendor/forge/lib/aes.js",
+    "supabase/functions/_shared/vendor/forge/lib/aesCipherSuites.js",
+    "supabase/functions/_shared/vendor/forge/lib/asn1-validator.js",
+    "supabase/functions/_shared/vendor/forge/lib/asn1.js",
+    "supabase/functions/_shared/vendor/forge/lib/baseN.js",
+    "supabase/functions/_shared/vendor/forge/lib/cipher.js",
+    "supabase/functions/_shared/vendor/forge/lib/cipherModes.js",
+    "supabase/functions/_shared/vendor/forge/lib/des.js",
+    "supabase/functions/_shared/vendor/forge/lib/ed25519.js",
+    "supabase/functions/_shared/vendor/forge/lib/forge.js",
+    "supabase/functions/_shared/vendor/forge/lib/hmac.js",
+    "supabase/functions/_shared/vendor/forge/lib/index.js",
+    "supabase/functions/_shared/vendor/forge/lib/jsbn.js",
+    "supabase/functions/_shared/vendor/forge/lib/kem.js",
+    "supabase/functions/_shared/vendor/forge/lib/log.js",
+    "supabase/functions/_shared/vendor/forge/lib/md.all.js",
+    "supabase/functions/_shared/vendor/forge/lib/md.js",
+    "supabase/functions/_shared/vendor/forge/lib/md5.js",
+    "supabase/functions/_shared/vendor/forge/lib/mgf.js",
+    "supabase/functions/_shared/vendor/forge/lib/mgf1.js",
+    "supabase/functions/_shared/vendor/forge/lib/oids.js",
+    "supabase/functions/_shared/vendor/forge/lib/pbe.js",
+    "supabase/functions/_shared/vendor/forge/lib/pbkdf2.js",
+    "supabase/functions/_shared/vendor/forge/lib/pem.js",
+    "supabase/functions/_shared/vendor/forge/lib/pkcs1.js",
+    "supabase/functions/_shared/vendor/forge/lib/pkcs12.js",
+    "supabase/functions/_shared/vendor/forge/lib/pkcs7.js",
+    "supabase/functions/_shared/vendor/forge/lib/pkcs7asn1.js",
+    "supabase/functions/_shared/vendor/forge/lib/pki.js",
+    "supabase/functions/_shared/vendor/forge/lib/prime.js",
+    "supabase/functions/_shared/vendor/forge/lib/prng.js",
+    "supabase/functions/_shared/vendor/forge/lib/pss.js",
+    "supabase/functions/_shared/vendor/forge/lib/random.js",
+    "supabase/functions/_shared/vendor/forge/lib/rc2.js",
+    "supabase/functions/_shared/vendor/forge/lib/rsa.js",
+    "supabase/functions/_shared/vendor/forge/lib/sha1.js",
+    "supabase/functions/_shared/vendor/forge/lib/sha256.js",
+    "supabase/functions/_shared/vendor/forge/lib/sha512.js",
+    "supabase/functions/_shared/vendor/forge/lib/ssh.js",
+    "supabase/functions/_shared/vendor/forge/lib/tls.js",
+    "supabase/functions/_shared/vendor/forge/lib/util.js",
+    "supabase/functions/_shared/vendor/forge/lib/x509.js"
+  ]
+}

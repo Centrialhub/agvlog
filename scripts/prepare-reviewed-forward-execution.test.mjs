@@ -41,18 +41,42 @@ test('writes a byte-identical private execution package and refuses overwriting 
   } finally {rmSync(own,{recursive:true});}
 });
 
-test('qualifies all 42 exact forwards without SQL execution and preserves both reviewed self transactions', () => {
+test('qualifies the exact 44-forward extension and preserves both historical prefixes', () => {
   const inventory = ['baseline-candidate-manifest.json', 'baseline-followup-manifest.json', 'baseline-supplement-manifest.json']
-    .flatMap(name => JSON.parse(readFileSync(join('docs/qa', name), 'utf8')).forwards);
+    .flatMap(name => JSON.parse(readFileSync(join('docs/qa', name), 'utf8')).forwards).slice(0,44);
   validateClosedForwardInventory(inventory);
+  validateClosedForwardInventory(inventory.slice(0,42));
+  validateClosedForwardInventory(inventory.slice(0,43));
   const plan = planForwardTransactions(inventory, read);
-  assert.equal(plan.length, 42);
-  assert.equal(plan.filter(item => item.mode === 'self').length, 2);
-  assert.equal(plan.filter(item => item.mode === 'single').length, 40);
-  assert.deepEqual(plan.at(-1).bytes, read('20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql'));
+  assert.equal(plan.length, 44);
+  assert.equal(plan.filter(item => item.mode === 'self').length, 3);
+  assert.equal(plan.filter(item => item.mode === 'single').length, 41);
+  assert.deepEqual(plan.at(-3).bytes, read('20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql'));
+  assert.deepEqual(plan.at(-2).bytes, read('20261019171216_driver_shared_workspace_account_creation.sql'));
+  assert.deepEqual(plan.at(-1).bytes, read('20261019214029_restore_legacy_sql_contracts.sql'));
   assert.throws(() => validateClosedForwardInventory(inventory.slice(0, 41)), /closed 42-forward/);
   assert.throws(() => validateClosedForwardInventory([...inventory, inventory.at(-1)]), /closed 42-forward/);
-  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0, -1), {...inventory.at(-1), sha256:'0'.repeat(64)}]), /provenance forward changed/);
-  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0,-2), {...inventory.at(-2),sha256:'0'.repeat(64)}, inventory.at(-1)]), /helper forward changed/);
+  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0, -1), {...inventory.at(-1), sha256:'0'.repeat(64)}]), /SQL compatibility forward changed/);
+  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0,-2), {...inventory.at(-2),sha256:'0'.repeat(64)}, inventory.at(-1)]), /shared driver forward changed/);
+  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0,-3), {...inventory.at(-3),sha256:'0'.repeat(64)}, ...inventory.slice(-2)]), /provenance forward changed/);
+  assert.throws(() => validateClosedForwardInventory([...inventory.slice(0,-4), {...inventory.at(-4),sha256:'0'.repeat(64)}, ...inventory.slice(-3)]), /helper forward changed/);
   assert.throws(() => planForwardTransactions(inventory, name => {if (name === inventory.at(-1).filename) throw new Error('missing reviewed file');return read(name);}), /missing reviewed file/);
+});
+
+test('requires both fiscal forwards in order and preserves their exact transaction bytes', () => {
+  const inventory = ['baseline-candidate-manifest.json', 'baseline-followup-manifest.json', 'baseline-supplement-manifest.json']
+    .flatMap(name => JSON.parse(readFileSync(join('docs/qa', name), 'utf8')).forwards);
+  assert.equal(inventory.length,46);
+  validateClosedForwardInventory(inventory);
+  const plan = planForwardTransactions(inventory,read);
+  assert.equal(plan.filter(item=>item.mode==='single').length,43);
+  for (const item of plan.slice(44)) assert.deepEqual(item.bytes,read(item.filename));
+  assert.throws(()=>validateClosedForwardInventory(inventory.slice(0,45)),/closed 42-forward/);
+  assert.throws(()=>validateClosedForwardInventory([...inventory.slice(0,44),inventory[45],inventory[44]]),/fiscal submission forward changed/);
+  for (const index of [44,45]) {
+    const changed=inventory.map((item,i)=>i===index?{...item,sha256:'0'.repeat(64)}:item);
+    assert.throws(()=>validateClosedForwardInventory(changed),/fiscal submission forward changed/);
+  }
+  const changedPrefix=inventory.map((item,i)=>i===43?{...item,sha256:'0'.repeat(64)}:item);
+  assert.throws(()=>validateClosedForwardInventory(changedPrefix),/SQL compatibility forward changed/);
 });

@@ -178,7 +178,7 @@ jobs:
         run: psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/verify/baseline_contract.sql
 
       - name: pgTAP security and RLS contracts
-        run: ./node_modules/.bin/supabase test db --local --workdir .local-staging --network-id agvlog-local-staging-loopback
+        run: ./node_modules/.bin/supabase test db "$GITHUB_WORKSPACE/supabase/tests/database" --local --workdir .local-staging --network-id agvlog-local-staging-loopback
 
       - name: Install Playwright Chromium
         run: ./node_modules/.bin/playwright install --with-deps chromium
@@ -186,11 +186,13 @@ jobs:
       - name: Desktop, tablet and mobile E2E
         env:
           PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/full
+          AGVLOG_RETRY_QA_ARTIFACTS: ${{ runner.temp }}/agvlog-driver-delivery-retry
         run: npm run e2e -- --workers=1 --retries=0 --output=test-results/full
 
       - name: Critical journeys three consecutive times
         env:
           PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/critical-repeat
+          AGVLOG_RETRY_QA_ARTIFACTS: ${{ runner.temp }}/agvlog-driver-delivery-retry
         run: npm run e2e:critical:3 -- --workers=1 --retries=0 --output=test-results/critical-repeat
 
       - name: Upload E2E evidence

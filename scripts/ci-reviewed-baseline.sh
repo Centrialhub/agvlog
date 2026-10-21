@@ -42,6 +42,9 @@ while IFS=$'\t' read -r mode file; do
     -v ON_ERROR_STOP=1 "${transaction[@]}" --file - < "$logs/forwards/$file" \
     > "$logs/forwards/$file.private.log" 2>&1
 done < "$logs/forwards/plan.tsv"
+# Extension-owned SQL is repaired by its existing owner only in the verified
+# disposable fixture. This does not grant the role or authorize production use.
+node scripts/apply-reviewed-postgis-compatibility.mjs > "$logs/postgis-platform-contract.json"
 docker exec -i supabase_db_agvlog-local-staging psql -X --no-password -U postgres -d postgres \
   -v ON_ERROR_STOP=1 --single-transaction --file - < "$logs/forwards/baseline-contract.sql" \
   > "$logs/catalog-contract.private.log" 2>&1

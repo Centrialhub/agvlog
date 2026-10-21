@@ -9,6 +9,8 @@ const tenant = '11111111-1111-4111-8111-111111111111';
 const actor = '22222222-2222-4222-8222-222222222222';
 const driver = '33333333-3333-4333-8333-333333333333';
 const user = '44444444-4444-4444-8444-444444444444';
+const workspace = '55555555-5555-4555-8555-555555555555';
+let driverWorkspace: string | null;
 const password = 'SenhaNova12345';
 let authorized: boolean, linked: boolean, managed: boolean, scopeError: string | null, authError: string | null;
 let calls: Array<{ path: string; method: string; body: Record<string, unknown> }>;
@@ -17,6 +19,7 @@ let listSize: number;
 const caller = { auth: { getUser: vi.fn() } };
 beforeEach(() => {
   authorized = true; linked = false; managed = true; scopeError = null; authError = null; calls = []; listSize = 0;
+  driverWorkspace = workspace;
   caller.auth.getUser.mockReset();
   caller.auth.getUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
   admin = createClient('https://fixture.invalid', 'fixture-service-key', { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: async (input, init) => {
@@ -26,7 +29,7 @@ beforeEach(() => {
       payload = url.searchParams.get('role') === 'eq.driver'
         ? Array.from({ length: Math.max(0, Math.min(Number(url.searchParams.get('limit') ?? 500), listSize - Number(url.searchParams.get('offset') ?? 0))) }, (_, index) => ({ user_id: `${user.slice(0, -5)}${String(index + Number(url.searchParams.get('offset') ?? 0)).padStart(5, '0')}` }))
         : authorized ? { role: 'admin' } : null;
-    } else if (path === '/rest/v1/drivers') payload = url.searchParams.get('select') === 'user_id' ? [] : { id: driver, name: 'João', user_id: linked ? user : null, active: true };
+    } else if (path === '/rest/v1/drivers') payload = url.searchParams.get('select') === 'user_id' ? [] : { id: driver, name: 'João', user_id: linked ? user : null, active: true, workspace_id: driverWorkspace };
     else if (path.endsWith('/prepare_driver_access_v1')) payload = 'João';
     else if (path.endsWith('/driver_access_scope_v1')) {
       payload = scopeError ? { message: scopeError } : { managed, active: true, retired: false, deleted: false, email: managed ? 'joao@usuario.com' : 'joao@antigo.com', tenant_id: tenant };
@@ -64,14 +67,22 @@ describe('managed driver access endpoint', () => {
     authorized = false; expect((await request({ action: 'create', username: 'joao', password })).status).toBe(403); expect(calls.some(call => call.path.startsWith('/auth/'))).toBe(false);
   });
   it('creates a confirmed synthetic login with a one-use authorization and driver link', async () => {
-    const response = await request({ action: 'create', username: ' Joao ', password }); expect(response.status).toBe(200);
+    const response = await request({ action: 'create', username: ' Joao ', password, workspace_id: user }); expect(response.status).toBe(200);
     const prepare = calls.find(call => call.path.endsWith('/prepare_driver_access_v1'))!;
     expect(prepare.body).toMatchObject({ _tenant_id: tenant, _actor_id: actor, _driver_id: driver, _email: 'joao@usuario.com' });
     expect(prepare.body).not.toHaveProperty('password');
     const create = calls.find(call => call.path === '/auth/v1/admin/users')!;
-    expect(create.body).toMatchObject({ email: 'joao@usuario.com', password, email_confirm: true, app_metadata: { driver_username_managed: true, driver_access_tenant_id: tenant } });
+    expect(create.body).toMatchObject({ email: 'joao@usuario.com', password, email_confirm: true, app_metadata: {
+      driver_username_managed: true, driver_access_tenant_id: tenant,
+      driver_workspace_managed: true, driver_access_workspace_id: workspace,
+    } });
     expect(JSON.stringify(await response.json())).not.toContain(password); expect(calls.at(-1)?.path).toContain('cancel_auth_invite');
     expect(calls.some(call => call.path.includes('/invite'))).toBe(false);
+  });
+  it('refuses an unavailable persisted workspace before reserving or creating Auth access', async () => {
+    driverWorkspace = null;
+    expect((await request({ action: 'create', username: 'joao', password, workspace_id: workspace })).status).toBe(409);
+    expect(calls.some(call => call.path.includes('/rpc/') || call.path.startsWith('/auth/'))).toBe(false);
   });
   it('rejects invalid usernames without creating an authorization', async () => {
     expect((await request({ action: 'create', username: 'email@empresa.com', password })).status).toBe(400); expect(calls.some(call => call.path.includes('/rpc/'))).toBe(false);

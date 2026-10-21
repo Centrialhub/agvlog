@@ -83,6 +83,26 @@
       "version": "20261014141521",
       "filename": "20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql",
       "sha256": "b6d4967a133a249e67c46fd9e9e6f7c816c0867971cd072bcfbd99ee6dad8613"
+    },
+    {
+      "version": "20261019171216",
+      "filename": "20261019171216_driver_shared_workspace_account_creation.sql",
+      "sha256": "cea89c8dc330ebda889224e44936e8a09dcc41e0f9ea8f6ae85fcd01bf873aae"
+    },
+    {
+      "version": "20261019214029",
+      "filename": "20261019214029_restore_legacy_sql_contracts.sql",
+      "sha256": "cdcb58655582e7be47d4ec97495868fb0136cb66f9037d214a51d70601d6394c"
+    },
+    {
+      "version": "20261021122925",
+      "filename": "20261021122925_classify_confirmed_submission_failures.sql",
+      "sha256": "53cff12d125c76635d51796323f33d8db00eba320e58ebccd2339a572bbfbbda"
+    },
+    {
+      "version": "20261021124814",
+      "filename": "20261021124814_align_fiscal_submission_outcome_channels.sql",
+      "sha256": "bd2a1f9d807f034f1930d47cc3ba3a744176712fa72d364644e965926d02dd2e"
     }
   ]
 }
