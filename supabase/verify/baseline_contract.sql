@@ -499,3 +499,23 @@ BEGIN
  END IF;
 END;
 $verify_unscanned_receipt_policy$;
+-- The platform backport is a separately owner-operated prerequisite; a green
+-- local contract must never come from granting its role to application owners.
+do $postgis_sql_compatibility_contract$
+begin
+ if pg_catalog.pg_has_role('postgres','supabase_admin','MEMBER') then
+  raise exception 'postgis_platform_owner_role_must_not_be_granted';
+ end if;
+ if exists(select 1 from (values
+('extensions.st_findextent(text,text,text)','23a27d7956698e6c1d7aa51086ebf6d6'),
+('extensions.st_findextent(text,text)','4010854f1bcb5197b9b23d2ccd948131'),
+('extensions.populate_geometry_columns(oid,boolean)','ae0cc1d2496e7cc4fec1435e2e4d12bc'),
+('extensions.postgis_full_version()','71fa4302d0415af1a3b7ee20fcc2be01'),
+('extensions.addauth(text)','1abfa406990f7fdd336b1bf21bc890f9'),
+('extensions.lockrow(text,text,text,text,timestamp without time zone)','04c71288f8ebe05a3e44dd3a84442938')
+ ) expected(signature,body_md5) left join pg_catalog.pg_proc p on p.oid=pg_catalog.to_regprocedure(expected.signature)
+ where p.oid is null or pg_catalog.pg_get_userbyid(p.proowner)<>'supabase_admin' or p.prosecdef or pg_catalog.md5(p.prosrc)<>expected.body_md5) then
+  raise exception 'postgis_sql_compatibility_owner_or_source_changed';
+ end if;
+end;
+$postgis_sql_compatibility_contract$;

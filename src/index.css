@@ -112,9 +112,12 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-[hsl(var(--chart-4))];
   }
 
-  .leaflet-control-attribution a {
-    color: #004c6d;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
+}
+
+/* Leaflet creates these classes at runtime. Keep this override outside
+   Tailwind utilities so it survives pruning and overrides vendor styling. */
+.leaflet-container .leaflet-control-attribution a {
+  color: #004c6d;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

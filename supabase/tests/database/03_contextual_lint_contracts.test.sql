@@ -43,7 +43,7 @@ reset role;
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000006","role":"authenticated","aal":"aal1","active_tenant_id":"20000000-0000-4000-8000-000000000001"}',true);
 select lives_ok($$select finance_private.legacy_integrity_inventory_revision(
   '20000000-0000-4000-8000-000000000001')$$,
-  'legacy integrity FOREACH executes every table name separately');
+  'legacy integrity dependency loop executes every table name separately');
 select throws_ok($$select finance_private.unloading_projection_repair_context(
   '20000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000003')$$,
   '22023','finance_unloading_not_found','unloading repair still requires an existing audited charge');
@@ -55,7 +55,7 @@ declare source text; names text[]; query text; tab text; rows jsonb;
 begin
   select prosrc into source from pg_proc where oid=
     'finance_private.unloading_projection_repair_context(uuid,uuid)'::regprocedure;
-  names:=(regexp_match(source,'foreach tab in array array\[([^]]+)\] loop'));
+  names:=(regexp_match(source,'(?:foreach tab in array array|for tab in select unnest\(array)\[([^]]+)\](?:\))? loop'));
   if names is null then raise exception 'unloading_loop_source_changed'; end if;
   execute 'select array['||names[1]||']::text[]' into names;
   if cardinality(names)<>14 then raise exception 'unloading_dependency_inventory_changed'; end if;
@@ -72,6 +72,6 @@ begin
 end;
 $probe$;
 select lives_ok($$select pg_temp.probe_unloading_dependency_loop()$$,
-  'the exact unloading FOREACH and SELECT execute across all fourteen dependencies');
+  'the exact unloading dependency loop and SELECT execute across all fourteen dependencies');
 select * from finish();
 rollback;

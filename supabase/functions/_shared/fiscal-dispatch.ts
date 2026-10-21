@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fiscalOperationResponse, isConfirmedSubmissionFailure } from './fiscal-submission-outcome.ts';
 type RecordData = Record<string, unknown>;
 interface Intent extends RecordData {
  id: string; request_payload: RecordData; hub_document_id?: string; status?: string;
@@ -50,8 +51,11 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
  if(emission.hub_document_id && record(receipt).id && record(receipt).id!==emission.hub_document_id)return uncertain(emission.id);
  // An error response can still contain a durable Hub document. Bind it to the
  // persisted request before retaining the receipt; this only enables later GETs.
+ const scopedFailure = isConfirmedSubmissionFailure(result.data);
  const receiptMatches = record(receipt).idIntegracao===emission.request_payload.idIntegracao
-  && record(receipt).environment===environment && record(receipt).emitterCnpj===emission.request_payload.emitterCnpj;
+  && (record(receipt).environment===environment || (scopedFailure && record(receipt).environment===undefined))
+  && (record(receipt).emitterCnpj===emission.request_payload.emitterCnpj
+    || (scopedFailure && record(receipt).emitterCnpj===undefined));
  if((result.status<400 || receiptMatches) && typeof record(receipt).id==='string' && record(receipt).id) {
   const received=await admin.from('hub_fiscal_emissions').update({hub_document_id:record(receipt).id})
    .eq('id',emission.id).eq('tenant_id',tenant).select('id').single();
@@ -64,10 +68,5 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
  // Read committed state: a callback may have won the race with the HTTP response.
  const current=await admin.from('hub_fiscal_emissions').select('*').eq('id',emission.id).eq('tenant_id',tenant).single();
  if(current.error||!current.data)return uncertain(emission.id);
- const committed=current.data;
- const provider=record(record(result.data).document);
- const document={...provider,id:committed.hub_document_id,status:committed.status,accessKey:committed.access_key,
-  authorizationProtocol:committed.authorization_protocol,number:committed.number,series:committed.series,
-  pdfUrl:committed.pdf_url,xmlUrl:committed.xml_url,message:committed.message};
- return {status:200,data:{success:true,hub:{document},emission:{id:committed.id},recovered:claim.dispatch!==true}};
+ return fiscalOperationResponse(current.data, result.data, claim.dispatch!==true);
 }

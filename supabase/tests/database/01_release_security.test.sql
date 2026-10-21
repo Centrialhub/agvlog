@@ -571,7 +571,7 @@ select throws_ok(
   $$select public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000002',
     '80000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
     'accept', '{"vehicle_id":"50000000-0000-4000-8000-000000000002"}')$$,
-  '42501', 'trip_cargo_not_authorized', 'driver cannot accept cargo in another tenant');
+  '42501', 'driver_operation_not_authorized', 'driver cannot accept cargo in another tenant');
 
 select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
   '80000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
@@ -639,7 +639,7 @@ select is(
 select throws_ok(
   $$select public.driver_start_trip('80000000-0000-4000-8000-000000000002')$$,
   '42501',
-  'Viagem não atribuída ao motorista autenticado',
+  'driver_operation_not_authorized',
   'driver cannot start a known tenant B trip'
 );
 

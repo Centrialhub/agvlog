@@ -156,7 +156,7 @@ export function useSyncCTe() {
     if(res.success!==true)throw new Error(res.error?.message||'Não foi possível confirmar o estado fiscal.');
     // The server commits the status. A delayed browser response must not overwrite a newer callback.
     return {success:true,hub:res};
-  },onSuccess:()=>{for(const key of ['finance-unbilled-freight-summary','finance-unbilled-freight-origins','fiscal_documents','cte_search','cte_monitor','cte_documents','eligible_ctes','billing_documents'])qc.invalidateQueries({queryKey:[key]});}});
+  },onSettled:()=>{for(const key of ['finance-unbilled-freight-summary','finance-unbilled-freight-origins','fiscal_documents','cte_search','cte_monitor','cte_documents','eligible_ctes','billing_documents'])qc.invalidateQueries({queryKey:[key]});}});
 }
 
 export function useCancelCTe() {
@@ -249,5 +249,5 @@ export function useResendCte() {
   const result=await hubFiscal.emit({type:'cte',emitterId:emission.emitter_id,fiscalDocumentId:emission.fiscal_document_id||undefined,cteDocumentId:emission.cte_document_id||undefined,body});
   if(['rejected','cancelled'].includes(String(result.hub?.document?.status)))throw new Error(result.hub?.document?.message||'Documento recusado ou cancelado. Corrija pela prévia de faturamento.');
   return result;
- },onSuccess:()=>{for(const key of ['cte_monitor','cte_search','fiscal_documents','cte_documents','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','eligible_ctes'])qc.invalidateQueries({queryKey:[key]});}});
+ },onSettled:()=>{for(const key of ['cte_monitor','cte_search','fiscal_documents','cte_documents','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','eligible_ctes'])qc.invalidateQueries({queryKey:[key]});}});
 }

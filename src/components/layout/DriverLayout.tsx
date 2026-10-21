@@ -21,6 +21,7 @@ import { DriverExpenseSyncAgent } from '@/components/driver/DriverExpenseSyncAge
 import { DriverDeliverySyncBanner } from '@/components/driver/DriverDeliverySyncBanner';
 import { DriverOperationalSyncAgent } from '@/components/driver/DriverOperationalSyncAgent';
 import { DriverAppObservabilityAgent } from '@/components/driver/DriverAppObservabilityAgent';
+import { DriverTenantSwitcher } from '@/components/driver/DriverTenantSwitcher';
 
 const driverNav: { label: string; href: string; icon: typeof Home; match?: string[] }[] = [
   { label: 'Início', href: '/driver', icon: Home },
@@ -75,6 +76,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
         </button>
       </header>
 
+      <DriverTenantSwitcher />
       <DriverPwaInstall />
       <DriverExpenseSyncAgent />
       <DriverDeliverySyncBanner />

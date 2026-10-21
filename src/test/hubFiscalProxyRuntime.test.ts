@@ -116,7 +116,7 @@ describe('fiscal Edge handler environment isolation (no external requests)', () 
   });
   it('uses and persists homologation exactly when that credential exists', async () => {
     state.tables.hub_fiscal_credentials.push(credential('homologation', 'nfcom'));
-    expect((await emit()).status).toBe(200);
+    expect((await emit()).status).toBe(202);
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0][1]?.headers).toMatchObject({ Authorization: 'Bearer homologation-scoped' });
     expect(state.inserts[0]).toMatchObject({ environment: 'homologation', emitter_id: 'emitter', doc_type: 'nfcom' });
@@ -137,7 +137,7 @@ describe('fiscal Edge handler environment isolation (no external requests)', () 
       payload:{CFOP:'5352',inicio:{uf:'MG',municipio:'Montes Claros',codigoMunicipio:'3143302'},
         fim:{uf:'MG',municipio:'Coracao de Jesus',codigoMunicipio:'3118802'}},
     }});
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(fetcher).toHaveBeenCalledOnce();
     const sent = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(sent.environment).toBe('production');

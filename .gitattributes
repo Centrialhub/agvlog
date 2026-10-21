@@ -1,4 +1,11 @@
 *.sql text eol=lf
+# Preserve the reviewed security artifact bytes across Windows/Linux checkouts.
+/vendor/node-forge-*.provenance.json text eol=lf
+/vendor/braces-*.provenance.json text eol=lf
+/supabase/platform/*.provenance.json text eol=lf
+/vendor/node-forge-*.tgz -text
+/vendor/braces-*.tgz -text
+/supabase/functions/_shared/vendor/forge/** -text
 /scripts/provision-local-staging-linux.sh text eol=lf
 # Historical source hashes include original trailing whitespace.
 /docs/qa/edge-source-snapshots-2026-09-26/*.txt text eol=lf whitespace=-blank-at-eol

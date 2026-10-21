@@ -2,6 +2,7 @@ import { fiscalHubBaseUrl, requireFiscalTransport } from '../_shared/fiscal-tran
 import { decryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
+import { fiscalOperationResponse } from '../_shared/fiscal-submission-outcome.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { createClient } from '@supabase/supabase-js';
@@ -458,9 +459,8 @@ Deno.serve(withFiscalCors(async (req) => {
       const current=await admin.from('hub_fiscal_emissions').select('*').eq('tenant_id',tenantId).eq('id',found.data.id).single();
       if(current.error||!current.data)throw new Error('Falha ao ler o resultado fiscal confirmado.');
       const e=current.data;
-      return json(200,{success:true,hub:{document:{...doc,id:e.hub_document_id,status:e.status,
-        accessKey:e.access_key,authorizationProtocol:e.authorization_protocol,number:e.number,series:e.series,
-        message:e.message,pdfUrl:e.pdf_url,xmlUrl:e.xml_url}}});
+      const outcome = fiscalOperationResponse(e, response, true);
+      return json(outcome.status, outcome.data);
     }
 
     switch (action) {

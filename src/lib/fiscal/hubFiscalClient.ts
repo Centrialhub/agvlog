@@ -27,6 +27,10 @@ export interface HubDocument {
 
 export interface HubResponse<T = unknown> {
   success: boolean;
+  processing?: boolean;
+  terminal?: boolean;
+  requiresReconciliation?: boolean;
+  submissionOutcome?: string;
   source?: string;
   scope_matched?: string | null;
   hub?: {
@@ -38,7 +42,26 @@ export interface HubResponse<T = unknown> {
     error?: { code: string; message?: string; retryable?: boolean };
   };
   emission?: { id: string } & Record<string, unknown>;
-  error?: { code: string; message?: string };
+  error?: { code: string; message?: string; submissionOutcome?: string; automaticRetry?: boolean };
+}
+
+export class HubFiscalOperationError extends Error {
+  readonly definitive: boolean;
+  readonly terminal: boolean;
+  readonly requiresReconciliation: boolean;
+  readonly submissionOutcome?: string;
+  readonly automaticRetry: boolean;
+
+  constructor(message: string, response: Partial<HubResponse>) {
+    super(message);
+    this.name = 'HubFiscalOperationError';
+    this.terminal = response.terminal === true;
+    this.requiresReconciliation = response.requiresReconciliation !== false;
+    this.submissionOutcome = response.submissionOutcome ?? response.error?.submissionOutcome;
+    this.automaticRetry = false;
+    this.definitive = this.terminal && !this.requiresReconciliation && response.processing === false
+      && (this.submissionOutcome === 'not_submitted' || response.error?.code === 'FISCAL_DOCUMENT_REJECTED');
+  }
 }
 
 let fileAccessTokenPromise: Promise<string> | null = null;
@@ -160,17 +183,19 @@ async function invoke(payload: Record<string, unknown>, acceptPartial = false) {
   const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', { body: payload });
   if (error) {
     let detail = error.message || 'Hub Fiscal proxy error';
+    let outcome: Partial<HubResponse> = {};
     const context = (error as { context?: Response }).context;
     if (context) {
       try {
         const response = await context.clone().json();
+        outcome = response;
         detail = readHubFiscalError(response) || detail;
       } catch { /* mantém a mensagem padrão */ }
     }
-    throw new Error(detail);
+    throw new HubFiscalOperationError(detail, outcome);
   }
   if ((data as HubResponse | null)?.success === false && !(acceptPartial && Array.isArray((data as NFSeBatchResponse | null)?.results))) {
-    throw new Error(readHubFiscalError(data) || 'Operação recusada pelo Hub Fiscal');
+    throw new HubFiscalOperationError(readHubFiscalError(data) || 'Operação recusada pelo Hub Fiscal', data);
   }
   return data as HubResponse;
 }

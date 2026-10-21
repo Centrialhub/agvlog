@@ -228,7 +228,24 @@ test("driver records canonical expense and delivery outcome with recoverable eve
   ]);
 
   const deliveryEventId = crypto.randomUUID();
+  const fiscalSnapshotResponse = await rpc(request, session, "get_driver_delivery_fiscal_snapshot_v1", {
+    _tenant_id: fixtureIds.tenantA,
+    _trip_id: fixtureIds.tripA,
+    _stop_id: deliveryStopId,
+  });
+  expect(fiscalSnapshotResponse.ok(), await fiscalSnapshotResponse.text()).toBeTruthy();
+  const fiscalSnapshot = await fiscalSnapshotResponse.json();
+  expect(fiscalSnapshot).toMatchObject({
+    version: 1,
+    tenant_id: fixtureIds.tenantA,
+    actor_id: expenseContext.actor_id,
+    trip_id: fixtureIds.tripA,
+    stop_id: deliveryStopId,
+    documents: [],
+    revision: expect.stringMatching(/^[0-9a-f]{32}$/),
+  });
   const deliveryDetails = {
+    fiscal_snapshot: fiscalSnapshot,
     notes: "Cliente indisponível no cenário E2E",
     event_label: "Cliente ausente E2E",
     photo_paths: [],

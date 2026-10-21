@@ -9,6 +9,7 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const selfTransactions = new Map([
   ['20261009151836_address_queue_business_errors_no_serialization_retry.sql', 'ff2183e2e26af28efae7f64d2d8ae184a274ad32ae0d6d05af9975726c51166b'],
   ['20261009161011_address_candidate_business_errors_no_serialization_retry.sql', '27defbe4db4f21d5b97115aa509745bad2f8c86a8ee9dc6fad9367d733b5c3bd'],
+  ['20261019171216_driver_shared_workspace_account_creation.sql', 'cea89c8dc330ebda889224e44936e8a09dcc41e0f9ea8f6ae85fcd01bf873aae'],
 ]);
 
 export function planForwardTransactions(files, read) {
@@ -66,13 +67,37 @@ export function writeForwardExecution({repositoryRoot, outputDirectory, plan, co
 }
 
 export function validateClosedForwardInventory(files) {
-  if (files.length !== 42) throw new Error('Expected the closed 42-forward release inventory');
-  const last = files.at(-2);
+  if (![42,43,44,46].includes(files.length)) throw new Error('Expected the closed 42-forward, 43-forward, 44-forward or 46-forward release inventory');
+  // Preserve the exact historical PATCH2 inventory as an independently valid
+  // prefix. A new candidate may append only this explicitly bound forward.
+  if (files.length >= 43) {
+    const shared = files[42];
+    if (shared.version !== '20261019171216' || shared.filename !== '20261019171216_driver_shared_workspace_account_creation.sql'
+      || shared.sha256 !== selfTransactions.get(shared.filename)) throw new Error('Reviewed shared driver forward changed');
+  }
+  if(files.length>=44){
+    const compatibility=files[43];
+    if(compatibility.version!=='20261019214029'||compatibility.filename!=='20261019214029_restore_legacy_sql_contracts.sql'||compatibility.sha256!=='cdcb58655582e7be47d4ec97495868fb0136cb66f9037d214a51d70601d6394c')throw new Error('Reviewed SQL compatibility forward changed');
+  }
+  if (files.length === 46) {
+    const fiscal = [
+      ['20261021122925_classify_confirmed_submission_failures.sql', '53cff12d125c76635d51796323f33d8db00eba320e58ebccd2339a572bbfbbda'],
+      ['20261021124814_align_fiscal_submission_outcome_channels.sql', 'bd2a1f9d807f034f1930d47cc3ba3a744176712fa72d364644e965926d02dd2e'],
+    ];
+    for (const [index, [filename, sha256]] of fiscal.entries()) {
+      const file = files[44 + index];
+      if (file.version !== filename.slice(0, 14) || file.filename !== filename || file.sha256 !== sha256) {
+        throw new Error('Reviewed fiscal submission forward changed');
+      }
+    }
+  }
+  const prefix = files.slice(0,42);
+  const last = prefix.at(-2);
   if (last.version !== '20261014062118' || last.filename !== '20261014062118_native_dispatch_stop_helper_execute.sql' ||
       last.sha256 !== '220233cb4d54a3685290bc6eb2a81c4ddaef34b75ebc52c5337b6727923dd902') {
     throw new Error('Final reviewed stop helper forward changed');
   }
-  const policy = files.at(-1);
+  const policy = prefix.at(-1);
   if (policy.version !== '20261014141521' || policy.filename !== '20261014141521_remove_required_malware_scan_preserve_receipt_provenance.sql' || policy.sha256 !== 'b6d4967a133a249e67c46fd9e9e6f7c816c0867971cd072bcfbd99ee6dad8613') {
     throw new Error('Reviewed unscanned receipt provenance forward changed');
   }

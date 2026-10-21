@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "upstream": {
+    "name": "braces",
+    "version": "3.0.3",
+    "url": "https://registry.npmjs.org/braces/-/braces-3.0.3.tgz",
+    "integrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
+    "tarballSha256": "1cd18e862c8640b4568b1425a7df4ee030ff201d45b2da8f9f222d2987494ffc"
+  },
+  "localVersion": "3.0.4-agvlog.1",
+  "officialUpstreamRelease": false,
+  "tarball": "vendor/braces-3.0.4-agvlog.1.tgz",
+  "sha256": "8bc64fccfbfc53afd515628e63ed56a663033fc73765aa27eb371098b63ae094",
+  "integrity": "sha512-ioP0942fyWoTEDzqHRqcuEgjlYr0pm+zxL6Yr0coA5kSdOd4E9ul2MqK/1YsdQlYqQViCMcLIq1WOCIliLGgbQ==",
+  "securityChanges": [
+    {
+      "path": "lib/parse.js",
+      "beforeSha256": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+      "afterSha256": "ca63d6362ab308857c449f75d71d31b9d587abcda543ee3f5ebbe7af59a1eafe"
+    }
+  ],
+  "references": [
+    "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "https://github.com/micromatch/braces/issues/70"
+  ],
+  "fileHashes": {
+    "LICENSE": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2",
+    "README.md": "947b0fc3cc12eaaa070207126213fbdf9ab2bf8cd13dcc6e4007b36b79309866",
+    "index.js": "332ea07c7b006361aad12aa994ca75dc1db8e8382b884909e2f38f10b85c88a4",
+    "lib/compile.js": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+    "lib/constants.js": "c18ac5adb57308f1ce42a28552da3a31f5d83709743ebd9a636336813a744d4b",
+    "lib/expand.js": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+    "lib/parse.js": "ca63d6362ab308857c449f75d71d31b9d587abcda543ee3f5ebbe7af59a1eafe",
+    "lib/stringify.js": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+    "lib/utils.js": "b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7",
+    "package.json": "f15e21959cff0f379550438403d18a627835169273fd3dfea0b3e8a2dc4df31f"
+  }
+}
