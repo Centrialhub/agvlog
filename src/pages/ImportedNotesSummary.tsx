@@ -26,7 +26,8 @@ import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useSortableData } from '@/hooks/useSortableData';
-import { validateImportedNoteFilters } from '@/lib/importedNotesFilters';
+import { normalizeImportedNoteFilters, validateImportedNoteFilters } from '@/lib/importedNotesFilters';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,6 +67,7 @@ export default function ImportedNotesSummary() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { currentTenant } = useTenant();
   const tenantTimezone = currentTenant?.timezone || APP_TIME_ZONE;
   const { data: companyProfile } = useCompanyProfile();
@@ -101,11 +103,18 @@ export default function ImportedNotesSummary() {
   }, [rowsData]);
   const set = <K extends keyof ImportedNoteFilters>(key: K, value: ImportedNoteFilters[K]) =>
     setFilters((previous) => ({ ...previous, [key]: value === '' ? null : value }));
+  const hasPendingFilters = JSON.stringify(normalizeImportedNoteFilters(filters)) !== JSON.stringify(normalizeImportedNoteFilters(applied));
 
   const doSearch = () => {
     try {
       validateImportedNoteFilters(filters);
-      setApplied(filters);
+      if (hasPendingFilters) {
+        // Revisiting a cached filter must still fetch current data after an explicit search.
+        void queryClient.invalidateQueries({ queryKey: ['imported_notes_summary', currentTenant?.id], refetchType: 'none' });
+        setApplied(normalizeImportedNoteFilters(filters));
+      } else {
+        void refetch();
+      }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Período informado inválido.');
     }
@@ -311,9 +320,9 @@ export default function ImportedNotesSummary() {
             </div>
           )}
           <div>
-            <Label>Cliente</Label>
+            <Label htmlFor="summary-client">Cliente</Label>
             <Select disabled={clientsLoading || clientsIsError} value={filters.clientId || '__all__'} onValueChange={(v) => set('clientId', v === '__all__' ? null : v)}>
-              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectTrigger id="summary-client"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
                 {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -347,7 +356,7 @@ export default function ImportedNotesSummary() {
           <div className="md:col-span-4 flex flex-wrap gap-2 pt-2">
             <Button onClick={doSearch}><Search className="h-4 w-4 mr-2" />Buscar</Button>
             <Button variant="outline" onClick={doClear}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
-            <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Atualizar</Button>
+            <Button variant="outline" onClick={doSearch}><RefreshCw className="h-4 w-4 mr-2" />Atualizar</Button>
             <div className="flex-1" />
             {selectedIds.size > 0 && (
               <div className="flex gap-2 mr-4 bg-muted/50 p-1 px-2 rounded-md border animate-in fade-in zoom-in duration-200">
@@ -374,6 +383,7 @@ export default function ImportedNotesSummary() {
             <Button variant="outline" onClick={handleXlsx} disabled={isError || rows.length === 0}><FileSpreadsheet className="h-4 w-4 mr-2" />Exportar Excel (Cliente)</Button>
             <Button onClick={() => setPrintDlgOpen(true)} disabled={isError || rows.length === 0}><Printer className="h-4 w-4 mr-2" />Imprimir</Button>
           </div>
+          {hasPendingFilters && <p role="status" className="md:col-span-4 text-sm text-muted-foreground">Filtros alterados. Clique em Buscar ou Atualizar para aplicar.</p>}
         </CardContent>
       </Card>
 
