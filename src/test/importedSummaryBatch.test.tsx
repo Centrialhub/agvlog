@@ -2,7 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getImportedNoteSummaryTotals, useImportedNotes } from '@/hooks/useImportedNotesSummary';
+import { exportImportedNotesCsv, getImportedNoteSummaryTotals, useImportedNotes } from '@/hooks/useImportedNotesSummary';
+import { buildImportedNotesWorkbook } from '@/lib/importedNotesXlsx';
+import * as XLSX from 'xlsx';
 
 type Row = Record<string, unknown>;
 const fixture = vi.hoisted(() => ({ rows: {} as Record<string, Row[]>, requests: [] as URL[], failSecond: false, overlaps: 0 }));
@@ -45,6 +47,53 @@ beforeEach(() => {
 afterEach(() => { cleanup(); client.clear(); });
 
 describe('imported summary bounded fiscal lookups', () => {
+  it('exports the authorized freight of CT-es 422 and 423 when imported freight is missing', async () => {
+    fixture.rows.fiscal_documents = [0, 1].map(n => ({ ...note(n), freight_cif_value: null, freight_value: null }));
+    fixture.rows.cte_documents = [1800.44, 1656.26].map((freight, n) => ({
+      id: 'cte-' + n, tenant_id: 'tenant-a', fiscal_document_ids: [id(n)], status: 'authorized',
+      sefaz_status: 'authorized', cte_number: String(422 + n), freight_value: freight,
+    }));
+    const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const rows = result.current.data!;
+    expect(rows.map(r => r.freight_value)).toEqual([1800.44, 1656.26]);
+    expect(getImportedNoteSummaryTotals(rows).totalCif).toBe(3456.7);
+    const csv = exportImportedNotesCsv(rows);
+    expect(csv).toContain('1800,44'); expect(csv).toContain('1656,26');
+    const workbook = XLSX.read(XLSX.write(buildImportedNotesWorkbook(rows), { type: 'array', bookType: 'xlsx' }), { type: 'array' });
+    for (const sheet of ['Notas x Documentos', 'Emitidas']) {
+      expect(workbook.Sheets[sheet].M2.v).toBe(1800.44);
+      expect(workbook.Sheets[sheet].M3.v).toBe(1656.26);
+    }
+    expect(workbook.Sheets.Resumo.B8.v).toBe(3456.7);
+  });
+  it('preserves recorded amounts and explicit zero, and never duplicates a shared document total', async () => {
+    fixture.rows.fiscal_documents = [
+      { ...note(0), freight_value: 12, freight_cif_value: null },
+      { ...note(1), freight_value: 0, freight_cif_value: null },
+      { ...note(2), freight_value: null, freight_cif_value: 0 },
+      { ...note(3), freight_value: null, freight_cif_value: null },
+      { ...note(4), freight_value: null, freight_cif_value: null },
+    ];
+    fixture.rows.cte_documents = [0, 1, 2].map(n => ({ id: 'cte-' + n, tenant_id: 'tenant-a', fiscal_document_ids: [id(n)], status: 'authorized', freight_value: 100 }));
+    fixture.rows.cte_documents.push({ id: 'shared', tenant_id: 'tenant-a', fiscal_document_ids: [id(3), id(4)], status: 'authorized', freight_value: 500 });
+    const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getImportedNoteSummaryTotals(result.current.data!).totalCif).toBe(12);
+    expect(result.current.data?.slice(3).map(r => r.freight_value)).toEqual([null, null]);
+  });
+  it('uses the authorized NFS-e service amount, but not rejected or multi-note totals', async () => {
+    fixture.rows.fiscal_documents = [0, 1, 2].map(n => ({ ...note(n), freight_cif_value: null, freight_value: null }));
+    fixture.rows.nfse_documents = [
+      { id: 'issued', tenant_id: 'tenant-a', fiscal_document_ids: [id(0)], status: 'issued', valor_servicos: 123.45 },
+      { id: 'rejected', tenant_id: 'tenant-a', fiscal_document_ids: [id(1)], status: 'rejected', valor_servicos: 999 },
+      { id: 'shared', tenant_id: 'tenant-a', fiscal_document_ids: [id(2), id(99)], status: 'issued', valor_servicos: 1000 },
+    ];
+    const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.map(r => r.freight_value)).toEqual([123.45, null, null]);
+    expect(getImportedNoteSummaryTotals(result.current.data!).totalCif).toBe(123.45);
+  });
   it.each([0, 50, 51, 911, 2000])('loads %i notes without oversized URLs or losing totals', async count => {
     fixture.rows.fiscal_documents = Array.from({ length: count }, (_, n) => note(n));
     const { result } = renderHook(() => useImportedNotes({}), { wrapper: Wrapper });
