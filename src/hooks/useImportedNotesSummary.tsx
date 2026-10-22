@@ -94,7 +94,7 @@ type OutboundCteSummary = Pick<
 >;
 type NfseSummary = Pick<
   Tables<'nfse_documents'>,
-  'id' | 'nfse_number' | 'rps_number' | 'status' | 'fiscal_document_ids' | 'created_at'
+  'id' | 'nfse_number' | 'rps_number' | 'status' | 'fiscal_document_ids' | 'created_at' | 'valor_servicos'
 >;
 
 // Keep UUID filters below gateway URL limits, including percent encoding.
@@ -241,7 +241,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           const batchIds = ids.slice(start, start + LINK_QUERY_BATCH_SIZE);
           const { data: nfses, error: nfsesError } = await supabase
             .from('nfse_documents')
-            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at, valor_servicos')
             .eq('tenant_id', currentTenant.id)
             .overlaps('fiscal_document_ids', batchIds)
             .order('created_at', { ascending: false })
@@ -266,7 +266,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
         for (let start = 0; start < missingNfseIds.length; start += LINK_QUERY_BATCH_SIZE) {
           const { data: extra, error: extraNfseError } = await supabase
             .from('nfse_documents')
-            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+            .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at, valor_servicos')
             .eq('tenant_id', currentTenant.id)
             .in('id', missingNfseIds.slice(start, start + LINK_QUERY_BATCH_SIZE));
           if (extraNfseError) throw extraNfseError;
@@ -286,6 +286,12 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           null;
         const base: Omit<ImportedNoteRow, 'operational_status'> = {
           ...r,
+          // Read-model fallback only: never overwrite a recorded amount (including zero).
+          // A document covering multiple notes needs a persisted allocation; copying
+          // its entire total to each note would inflate every export and summary.
+          freight_value: r.freight_value ?? (nfse
+            ? (nfse.fiscal_document_ids?.length === 1 && nfse.fiscal_document_ids[0] === r.id ? nfse.valor_servicos : null)
+            : (cte?.fiscal_document_ids?.length === 1 ? cte.freight_value : null)),
           imported_note_status: isNoteOperationalStatus(r.imported_note_status) ? r.imported_note_status : null,
           cte_id: cte?.id ?? out?.id ?? null,
           cte_number:
