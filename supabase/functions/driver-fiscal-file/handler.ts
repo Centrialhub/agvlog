@@ -98,7 +98,7 @@ export async function handleDriverFiscalFile(req: Request, caller: SupabaseClien
       if (capability) return json(capability.status, 'FISCAL_INTEGRATION_UNAVAILABLE');
     }
     await recheckCredential?.();
-    return new Response(bytes, { status: 200, headers: {
+    return new Response(bytes as Uint8Array<ArrayBuffer>, { status: 200, headers: {
       ...responseHeaders, 'Content-Type': request.format === 'pdf' ? 'application/pdf' : 'application/xml;charset=utf-8',
       'Content-Disposition': 'attachment; filename="' + file.filename + '"',
     } });
