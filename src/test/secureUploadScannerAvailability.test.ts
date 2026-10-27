@@ -29,7 +29,7 @@ afterAll(()=>vi.unstubAllGlobals());
 beforeEach(()=>{role='driver';quota=true;finance=false;storageCalls=0;metadata={};settings={};envReads=[];transport.mockClear();});
 async function submit(bytes:Uint8Array=new Uint8Array([137,80,78,71,13,10,26,10,0]),changes:Record<string,string>={},headerTenant=tenant){
  const form=new FormData();for(const [k,v] of Object.entries({tenant_id:tenant,bucket:'receipts',folder:'deliveries/trip/stop/signatures',kind:'image',...changes}))form.set(k,v);
- form.set('file',new File([bytes],'fixture.bin',{type:'application/octet-stream'}));
+ form.set('file',new File([bytes as Uint8Array<ArrayBuffer>],'fixture.bin',{type:'application/octet-stream'}));
  const token='fixture.'+Buffer.from(JSON.stringify({active_tenant_id:tenant})).toString('base64url')+'.fixture';
  return handler(new Request('https://fixture.invalid/secure-upload',{method:'POST',headers:{Authorization:'Bearer '+token,'x-agvlog-tenant-id':headerTenant},body:form}));
 }
