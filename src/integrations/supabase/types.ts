@@ -14,227 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      address_geocoding_cache: {
-        Row: {
-          address_hash: string
-          candidates: Json
-          created_at: string
-          expires_at: string
-          hit_count: number
-          id: string
-          last_used_at: string
-          normalized_address: string
-          provider: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          address_hash: string
-          candidates: Json
-          created_at?: string
-          expires_at: string
-          hit_count?: number
-          id?: string
-          last_used_at?: string
-          normalized_address: string
-          provider: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          address_hash?: string
-          candidates?: Json
-          created_at?: string
-          expires_at?: string
-          hit_count?: number
-          id?: string
-          last_used_at?: string
-          normalized_address?: string
-          provider?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "address_geocoding_cache_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      address_resolution_audit_events: {
-        Row: {
-          actor_id: string | null
-          address_hash: string | null
-          created_at: string
-          details: Json
-          entity_id: string
-          entity_type: string
-          event_kind: string
-          id: string
-          latitude: number | null
-          longitude: number | null
-          provider: string | null
-          queue_id: string | null
-          tenant_id: string
-        }
-        Insert: {
-          actor_id?: string | null
-          address_hash?: string | null
-          created_at?: string
-          details?: Json
-          entity_id: string
-          entity_type: string
-          event_kind: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          provider?: string | null
-          queue_id?: string | null
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string | null
-          address_hash?: string | null
-          created_at?: string
-          details?: Json
-          entity_id?: string
-          entity_type?: string
-          event_kind?: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          provider?: string | null
-          queue_id?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "address_resolution_audit_events_queue_id_fkey"
-            columns: ["queue_id"]
-            isOneToOne: false
-            referencedRelation: "address_resolution_queue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "address_resolution_audit_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      address_resolution_queue: {
-        Row: {
-          address_hash: string
-          address_snapshot: string
-          attempts: number
-          candidates: Json
-          canonical_address_id: string | null
-          created_at: string
-          entity_id: string
-          entity_type: string
-          id: string
-          invalidated_at: string | null
-          last_error: string | null
-          last_worker_request_key: string | null
-          lease_expires_at: string | null
-          lease_token: string | null
-          next_attempt_at: string
-          processed_at: string | null
-          resolution_details: Json
-          resolution_kind: string | null
-          resolved_accuracy_m: number | null
-          resolved_at: string | null
-          resolved_by: string | null
-          resolved_confidence: number | null
-          resolved_lat: number | null
-          resolved_lng: number | null
-          resolved_provider: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          address_hash: string
-          address_snapshot: string
-          attempts?: number
-          candidates?: Json
-          canonical_address_id?: string | null
-          created_at?: string
-          entity_id: string
-          entity_type: string
-          id?: string
-          invalidated_at?: string | null
-          last_error?: string | null
-          last_worker_request_key?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          next_attempt_at?: string
-          processed_at?: string | null
-          resolution_details?: Json
-          resolution_kind?: string | null
-          resolved_accuracy_m?: number | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolved_confidence?: number | null
-          resolved_lat?: number | null
-          resolved_lng?: number | null
-          resolved_provider?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          address_hash?: string
-          address_snapshot?: string
-          attempts?: number
-          candidates?: Json
-          canonical_address_id?: string | null
-          created_at?: string
-          entity_id?: string
-          entity_type?: string
-          id?: string
-          invalidated_at?: string | null
-          last_error?: string | null
-          last_worker_request_key?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          next_attempt_at?: string
-          processed_at?: string | null
-          resolution_details?: Json
-          resolution_kind?: string | null
-          resolved_accuracy_m?: number | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolved_confidence?: number | null
-          resolved_lat?: number | null
-          resolved_lng?: number | null
-          resolved_provider?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "address_resolution_queue_canonical_tenant_fk"
-            columns: ["tenant_id", "canonical_address_id"]
-            isOneToOne: false
-            referencedRelation: "canonical_addresses"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "address_resolution_queue_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       alert_instances: {
         Row: {
           closed_at: string | null
@@ -344,96 +123,6 @@ export type Database = {
           },
         ]
       }
-      application_error_events: {
-        Row: {
-          actor_fingerprint: string
-          client_family: string | null
-          component_stack: string | null
-          correlation_id: string
-          error_name: string
-          id: string
-          occurred_at: string
-          phase: string | null
-          received_at: string
-          release: string
-          route: string
-          safe_message: string
-          tenant_fingerprint: string | null
-        }
-        Insert: {
-          actor_fingerprint: string
-          client_family?: string | null
-          component_stack?: string | null
-          correlation_id: string
-          error_name: string
-          id?: string
-          occurred_at: string
-          phase?: string | null
-          received_at?: string
-          release: string
-          route: string
-          safe_message: string
-          tenant_fingerprint?: string | null
-        }
-        Update: {
-          actor_fingerprint?: string
-          client_family?: string | null
-          component_stack?: string | null
-          correlation_id?: string
-          error_name?: string
-          id?: string
-          occurred_at?: string
-          phase?: string | null
-          received_at?: string
-          release?: string
-          route?: string
-          safe_message?: string
-          tenant_fingerprint?: string | null
-        }
-        Relationships: []
-      }
-      application_web_vitals: {
-        Row: {
-          actor_fingerprint: string
-          correlation_id: string
-          id: string
-          metric_name: string
-          metric_value: number
-          occurred_at: string
-          rating: string
-          received_at: string
-          release: string
-          route: string
-          tenant_fingerprint: string | null
-        }
-        Insert: {
-          actor_fingerprint: string
-          correlation_id: string
-          id?: string
-          metric_name: string
-          metric_value: number
-          occurred_at: string
-          rating: string
-          received_at?: string
-          release: string
-          route: string
-          tenant_fingerprint?: string | null
-        }
-        Update: {
-          actor_fingerprint?: string
-          correlation_id?: string
-          id?: string
-          metric_name?: string
-          metric_value?: number
-          occurred_at?: string
-          rating?: string
-          received_at?: string
-          release?: string
-          route?: string
-          tenant_fingerprint?: string | null
-        }
-        Relationships: []
-      }
       asset_movements: {
         Row: {
           asset_id: string
@@ -494,27 +183,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "asset_movements_tenant_asset_fkey"
-            columns: ["tenant_id", "asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "asset_movements_tenant_from_employee_fkey"
-            columns: ["tenant_id", "from_employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "asset_movements_tenant_to_employee_fkey"
-            columns: ["tenant_id", "to_employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "asset_movements_to_employee_id_fkey"
@@ -629,13 +297,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assets_tenant_responsible_employee_fkey"
-            columns: ["tenant_id", "responsible_employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1039,24 +700,24 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_export_items_client_invoice_id_fkey"
-            columns: ["tenant_id", "client_invoice_id"]
+            columns: ["client_invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "billing_edi_export_items_export_id_fkey"
-            columns: ["tenant_id", "export_id"]
+            columns: ["export_id"]
             isOneToOne: false
             referencedRelation: "billing_edi_exports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "billing_edi_export_items_receivable_id_fkey"
-            columns: ["tenant_id", "receivable_id"]
+            columns: ["receivable_id"]
             isOneToOne: false
             referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1154,17 +815,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_exports_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "billing_edi_exports_profile_id_fkey"
-            columns: ["tenant_id", "profile_id"]
+            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "billing_edi_profiles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1244,68 +905,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_profiles_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      canonical_addresses: {
-        Row: {
-          accuracy_m: number | null
-          address_hash: string
-          confidence: number | null
-          created_at: string
-          id: string
-          latitude: number | null
-          longitude: number | null
-          normalized_address: string
-          provider: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          accuracy_m?: number | null
-          address_hash: string
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          normalized_address: string
-          provider?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          accuracy_m?: number | null
-          address_hash?: string
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          normalized_address?: string
-          provider?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canonical_addresses_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -1410,55 +1012,6 @@ export type Database = {
             referencedRelation: "maintenance_orders"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "checklist_executions_tenant_checklist_fkey"
-            columns: ["tenant_id", "checklist_id"]
-            isOneToOne: false
-            referencedRelation: "operational_checklists"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_employee_fkey"
-            columns: ["tenant_id", "employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_incident_fkey"
-            columns: ["tenant_id", "generated_incident_id"]
-            isOneToOne: false
-            referencedRelation: "incidents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_maintenance_fkey"
-            columns: ["tenant_id", "generated_maintenance_id"]
-            isOneToOne: false
-            referencedRelation: "maintenance_orders"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_trip_fkey"
-            columns: ["tenant_id", "dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_trip_fkey"
-            columns: ["tenant_id", "dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["tenant_id", "trip_id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_tenant_vehicle_fkey"
-            columns: ["tenant_id", "vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
-          },
         ]
       }
       client_invoice_charges: {
@@ -1527,74 +1080,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoice_charges_tenant_invoice_fkey"
-            columns: ["tenant_id", "invoice_id"]
+            foreignKeyName: "client_invoice_charges_invoice_id_fkey"
+            columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      client_invoice_commands: {
-        Row: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at: string
-          id: string
-          invoice_id: string
-          payload_hash: string
-          reason: string
-          report_id: string | null
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at?: string
-          id: string
-          invoice_id: string
-          payload_hash: string
-          reason: string
-          report_id?: string | null
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          after_snapshot?: Json
-          before_snapshot?: Json
-          created_at?: string
-          id?: string
-          invoice_id?: string
-          payload_hash?: string
-          reason?: string
-          report_id?: string | null
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_invoice_commands_tenant_id_invoice_id_fkey"
-            columns: ["tenant_id", "invoice_id"]
-            isOneToOne: false
-            referencedRelation: "client_invoices"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "client_invoice_commands_tenant_id_report_id_fkey"
-            columns: ["tenant_id", "report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1667,18 +1157,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoice_details_tenant_charge_invoice_fkey"
-            columns: ["tenant_id", "charge_id", "invoice_id"]
+            foreignKeyName: "client_invoice_details_charge_id_fkey"
+            columns: ["charge_id"]
             isOneToOne: false
             referencedRelation: "client_invoice_charges"
-            referencedColumns: ["tenant_id", "id", "invoice_id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "client_invoice_details_tenant_invoice_fkey"
-            columns: ["tenant_id", "invoice_id"]
+            foreignKeyName: "client_invoice_details_invoice_id_fkey"
+            columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1723,8 +1213,6 @@ export type Database = {
           invoice_number: string
           issue_date: string
           last_edi_export_id: string | null
-          lifecycle_command_id: string | null
-          lifecycle_revision: number
           notes: string | null
           payer_snapshot: Json
           pdf_url: string | null
@@ -1758,8 +1246,6 @@ export type Database = {
           invoice_number: string
           issue_date?: string
           last_edi_export_id?: string | null
-          lifecycle_command_id?: string | null
-          lifecycle_revision?: number
           notes?: string | null
           payer_snapshot?: Json
           pdf_url?: string | null
@@ -1793,8 +1279,6 @@ export type Database = {
           invoice_number?: string
           issue_date?: string
           last_edi_export_id?: string | null
-          lifecycle_command_id?: string | null
-          lifecycle_revision?: number
           notes?: string | null
           payer_snapshot?: Json
           pdf_url?: string | null
@@ -1811,18 +1295,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoices_tenant_client_fkey"
-            columns: ["tenant_id", "client_id"]
+            foreignKeyName: "client_invoices_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "invoice_lifecycle_command_fkey"
-            columns: ["tenant_id", "lifecycle_command_id"]
-            isOneToOne: false
-            referencedRelation: "client_invoice_commands"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1834,7 +1311,6 @@ export type Database = {
           id: string
           message: string
           occurrence_id: string
-          request_id: string | null
           tenant_id: string
         }
         Insert: {
@@ -1844,7 +1320,6 @@ export type Database = {
           id?: string
           message: string
           occurrence_id: string
-          request_id?: string | null
           tenant_id: string
         }
         Update: {
@@ -1854,7 +1329,6 @@ export type Database = {
           id?: string
           message?: string
           occurrence_id?: string
-          request_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -1935,11 +1409,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_portal_access_tenant_client_fkey"
-            columns: ["tenant_id", "client_id"]
+            foreignKeyName: "client_portal_access_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_portal_access_tenant_id_fkey"
@@ -1987,10 +1461,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_regions_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_regions_tenant_id_fkey"
@@ -2170,17 +1644,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_rural_delivery_profiles_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_rural_delivery_profiles_related_remitter_id_fkey"
-            columns: ["tenant_id", "related_remitter_id"]
+            columns: ["related_remitter_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2194,16 +1668,6 @@ export type Database = {
           address_complement: string | null
           address_country_code: string | null
           address_country_name: string | null
-          address_geocode_accuracy_m: number | null
-          address_geocode_audit: Json
-          address_geocode_confidence: number | null
-          address_geocode_hash: string | null
-          address_geocode_provider: string | null
-          address_geocode_status: string
-          address_geocoded_at: string | null
-          address_geocoded_by: string | null
-          address_lat: number | null
-          address_lng: number | null
           address_neighborhood: string | null
           address_number: string | null
           address_state: string | null
@@ -2214,7 +1678,6 @@ export type Database = {
           blocked: boolean
           budget_group_client: string | null
           budget_group_supplier: string | null
-          canonical_address_id: string | null
           category: string | null
           cfop_client_type: string | null
           client_type: string | null
@@ -2248,10 +1711,6 @@ export type Database = {
           provider_person_integration_account_id: string | null
           provider_person_sync_status: string | null
           provider_person_synced_at: string | null
-          registry_profile_id: string | null
-          registry_source: string | null
-          registry_status: string | null
-          registry_verified_at: string | null
           rural_access_type: string | null
           rural_contact_name: string | null
           rural_contact_phone: string | null
@@ -2272,7 +1731,6 @@ export type Database = {
           trade_name: string | null
           updated_at: string
           updated_by: string | null
-          workspace_id: string
         }
         Insert: {
           accounting_code_client?: string | null
@@ -2283,16 +1741,6 @@ export type Database = {
           address_complement?: string | null
           address_country_code?: string | null
           address_country_name?: string | null
-          address_geocode_accuracy_m?: number | null
-          address_geocode_audit?: Json
-          address_geocode_confidence?: number | null
-          address_geocode_hash?: string | null
-          address_geocode_provider?: string | null
-          address_geocode_status?: string
-          address_geocoded_at?: string | null
-          address_geocoded_by?: string | null
-          address_lat?: number | null
-          address_lng?: number | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2303,7 +1751,6 @@ export type Database = {
           blocked?: boolean
           budget_group_client?: string | null
           budget_group_supplier?: string | null
-          canonical_address_id?: string | null
           category?: string | null
           cfop_client_type?: string | null
           client_type?: string | null
@@ -2337,10 +1784,6 @@ export type Database = {
           provider_person_integration_account_id?: string | null
           provider_person_sync_status?: string | null
           provider_person_synced_at?: string | null
-          registry_profile_id?: string | null
-          registry_source?: string | null
-          registry_status?: string | null
-          registry_verified_at?: string | null
           rural_access_type?: string | null
           rural_contact_name?: string | null
           rural_contact_phone?: string | null
@@ -2361,7 +1804,6 @@ export type Database = {
           trade_name?: string | null
           updated_at?: string
           updated_by?: string | null
-          workspace_id: string
         }
         Update: {
           accounting_code_client?: string | null
@@ -2372,16 +1814,6 @@ export type Database = {
           address_complement?: string | null
           address_country_code?: string | null
           address_country_name?: string | null
-          address_geocode_accuracy_m?: number | null
-          address_geocode_audit?: Json
-          address_geocode_confidence?: number | null
-          address_geocode_hash?: string | null
-          address_geocode_provider?: string | null
-          address_geocode_status?: string
-          address_geocoded_at?: string | null
-          address_geocoded_by?: string | null
-          address_lat?: number | null
-          address_lng?: number | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2392,7 +1824,6 @@ export type Database = {
           blocked?: boolean
           budget_group_client?: string | null
           budget_group_supplier?: string | null
-          canonical_address_id?: string | null
           category?: string | null
           cfop_client_type?: string | null
           client_type?: string | null
@@ -2426,10 +1857,6 @@ export type Database = {
           provider_person_integration_account_id?: string | null
           provider_person_sync_status?: string | null
           provider_person_synced_at?: string | null
-          registry_profile_id?: string | null
-          registry_source?: string | null
-          registry_status?: string | null
-          registry_verified_at?: string | null
           rural_access_type?: string | null
           rural_contact_name?: string | null
           rural_contact_phone?: string | null
@@ -2450,16 +1877,8 @@ export type Database = {
           trade_name?: string | null
           updated_at?: string
           updated_by?: string | null
-          workspace_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "clients_canonical_address_tenant_fk"
-            columns: ["tenant_id", "canonical_address_id"]
-            isOneToOne: false
-            referencedRelation: "canonical_addresses"
-            referencedColumns: ["tenant_id", "id"]
-          },
           {
             foreignKeyName: "clients_provider_person_integration_account_id_fkey"
             columns: ["provider_person_integration_account_id"]
@@ -2468,177 +1887,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "clients_registry_profile_id_fkey"
-            columns: ["registry_profile_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_party_registry"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "clients_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clients_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      closing_report_action_requests: {
-        Row: {
-          action: string
-          actor_id: string
-          created_at: string
-          payload_hash: string
-          report_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          created_at?: string
-          payload_hash: string
-          report_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          created_at?: string
-          payload_hash?: string
-          report_id?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "closing_report_action_requests_tenant_id_report_id_fkey"
-            columns: ["tenant_id", "report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      closing_report_charge_claims: {
-        Row: {
-          amount: number
-          attempt_id: string | null
-          claimed_at: string
-          claimed_by: string
-          fiscal_document_id: string
-          id: string
-          item_id: string
-          release_reason: string | null
-          released_at: string | null
-          released_by: string | null
-          report_id: string
-          source_key: string | null
-          tenant_id: string
-        }
-        Insert: {
-          amount: number
-          attempt_id?: string | null
-          claimed_at?: string
-          claimed_by: string
-          fiscal_document_id: string
-          id?: string
-          item_id: string
-          release_reason?: string | null
-          released_at?: string | null
-          released_by?: string | null
-          report_id: string
-          source_key?: string | null
-          tenant_id: string
-        }
-        Update: {
-          amount?: number
-          attempt_id?: string | null
-          claimed_at?: string
-          claimed_by?: string
-          fiscal_document_id?: string
-          id?: string
-          item_id?: string
-          release_reason?: string | null
-          released_at?: string | null
-          released_by?: string | null
-          report_id?: string
-          source_key?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "closing_report_charge_claims_tenant_id_fiscal_document_id_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_report_charge_claims_tenant_id_item_id_report_id_fkey"
-            columns: ["tenant_id", "item_id", "report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_report_items"
-            referencedColumns: ["tenant_id", "id", "closing_report_id"]
-          },
-          {
-            foreignKeyName: "closing_report_charge_claims_tenant_id_report_id_fkey"
-            columns: ["tenant_id", "report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      closing_report_creation_requests: {
-        Row: {
-          actor_id: string
-          closing_report_id: string
-          created_at: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          closing_report_id: string
-          created_at?: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          closing_report_id?: string
-          created_at?: string
-          payload_hash?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "closing_report_creation_reques_tenant_id_closing_report_id_fkey"
-            columns: ["tenant_id", "closing_report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_report_creation_requests_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2689,10 +1938,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_history_closing_report_id_fkey"
-            columns: ["tenant_id", "closing_report_id"]
+            columns: ["closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2865,52 +2114,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_items_closing_report_id_fkey"
-            columns: ["tenant_id", "closing_report_id"]
+            columns: ["closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_report_items_cte_document_id_fkey"
-            columns: ["tenant_id", "cte_document_id"]
+            columns: ["cte_document_id"]
             isOneToOne: false
             referencedRelation: "cte_documents"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_report_items_fiscal_document_id_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
+            columns: ["fiscal_document_id"]
             isOneToOne: false
             referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_report_items_load_id_fkey"
-            columns: ["tenant_id", "load_id"]
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_report_items_load_id_fkey"
-            columns: ["tenant_id", "load_id"]
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_report_items_tenant_driver_fkey"
-            columns: ["tenant_id", "driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_report_items_tenant_vehicle_fkey"
-            columns: ["tenant_id", "vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2918,7 +2153,6 @@ export type Database = {
         Row: {
           amount: number
           bank_account_id: string | null
-          canonical_receivable_payment_id: string | null
           closing_report_id: string
           created_at: string
           created_by: string | null
@@ -2932,7 +2166,6 @@ export type Database = {
         Insert: {
           amount: number
           bank_account_id?: string | null
-          canonical_receivable_payment_id?: string | null
           closing_report_id: string
           created_at?: string
           created_by?: string | null
@@ -2946,7 +2179,6 @@ export type Database = {
         Update: {
           amount?: number
           bank_account_id?: string | null
-          canonical_receivable_payment_id?: string | null
           closing_report_id?: string
           created_at?: string
           created_by?: string | null
@@ -2959,25 +2191,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "closing_payment_canonical_receipt_fkey"
-            columns: ["tenant_id", "canonical_receivable_payment_id"]
-            isOneToOne: false
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "closing_report_payments_closing_report_id_fkey"
-            columns: ["tenant_id", "closing_report_id"]
+            columns: ["closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_report_payments_receivable_id_fkey"
-            columns: ["tenant_id", "receivable_id"]
+            columns: ["receivable_id"]
             isOneToOne: false
             referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3063,10 +2288,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_summary_lines_closing_report_id_fkey"
-            columns: ["tenant_id", "closing_report_id"]
+            columns: ["closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3103,7 +2328,6 @@ export type Database = {
           invoice_status: string
           issue_date_end: string | null
           issue_date_start: string | null
-          lifecycle_revision: number
           load_count: number
           notes: string | null
           open_amount: number
@@ -3168,7 +2392,6 @@ export type Database = {
           invoice_status?: string
           issue_date_end?: string | null
           issue_date_start?: string | null
-          lifecycle_revision?: number
           load_count?: number
           notes?: string | null
           open_amount?: number
@@ -3233,7 +2456,6 @@ export type Database = {
           invoice_status?: string
           issue_date_end?: string | null
           issue_date_start?: string | null
-          lifecycle_revision?: number
           load_count?: number
           notes?: string | null
           open_amount?: number
@@ -3269,31 +2491,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_reports_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "closing_reports_payer_client_id_fkey"
-            columns: ["tenant_id", "payer_client_id"]
+            columns: ["payer_client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_reports_tenant_client_invoice_fkey"
-            columns: ["tenant_id", "client_invoice_id"]
-            isOneToOne: false
-            referencedRelation: "client_invoices"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "closing_reports_tenant_receivable_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3720,50 +2928,6 @@ export type Database = {
           },
         ]
       }
-      cte_failed_draft_archives: {
-        Row: {
-          archived_at: string
-          archived_by: string
-          cte_document_id: string
-          draft: Json
-          hub_emissions: Json
-          id: string
-          sefaz_events: Json
-          source_document_ids: string[]
-          tenant_id: string
-        }
-        Insert: {
-          archived_at?: string
-          archived_by: string
-          cte_document_id: string
-          draft: Json
-          hub_emissions?: Json
-          id?: string
-          sefaz_events?: Json
-          source_document_ids?: string[]
-          tenant_id: string
-        }
-        Update: {
-          archived_at?: string
-          archived_by?: string
-          cte_document_id?: string
-          draft?: Json
-          hub_emissions?: Json
-          id?: string
-          sefaz_events?: Json
-          source_document_ids?: string[]
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cte_failed_draft_archives_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cte_sefaz_events: {
         Row: {
           created_at: string
@@ -3809,17 +2973,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "cte_sefaz_events_cte_document_tenant_fk"
-            columns: ["tenant_id", "cte_document_id"]
+            foreignKeyName: "cte_sefaz_events_cte_document_id_fkey"
+            columns: ["cte_document_id"]
             isOneToOne: false
             referencedRelation: "cte_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "cte_sefaz_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -4084,566 +3241,6 @@ export type Database = {
         }
         Relationships: []
       }
-      delivery_attempts: {
-        Row: {
-          actor_id: string
-          event_id: string
-          financial_snapshot: Json
-          fiscal_document_id: string
-          id: string
-          items: Json
-          previous_attempt_id: string | null
-          previous_outcome_id: string
-          reason: string
-          recorded_at: string
-          source_allocation_id: string
-          source_document_snapshot: Json
-          source_items_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          event_id: string
-          financial_snapshot: Json
-          fiscal_document_id: string
-          id?: string
-          items: Json
-          previous_attempt_id?: string | null
-          previous_outcome_id: string
-          reason: string
-          recorded_at?: string
-          source_allocation_id: string
-          source_document_snapshot: Json
-          source_items_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          event_id?: string
-          financial_snapshot?: Json
-          fiscal_document_id?: string
-          id?: string
-          items?: Json
-          previous_attempt_id?: string | null
-          previous_outcome_id?: string
-          reason?: string
-          recorded_at?: string
-          source_allocation_id?: string
-          source_document_snapshot?: Json
-          source_items_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_attempts_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: true
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_previous_attempt_id_fkey"
-            columns: ["previous_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "active_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "current_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_source_allocation_id_fkey"
-            columns: ["source_allocation_id"]
-            isOneToOne: true
-            referencedRelation: "current_dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_source_allocation_id_fkey"
-            columns: ["source_allocation_id"]
-            isOneToOne: true
-            referencedRelation: "delivery_allocation_documents"
-            referencedColumns: ["allocation_id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_source_allocation_id_fkey"
-            columns: ["source_allocation_id"]
-            isOneToOne: true
-            referencedRelation: "dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_attempts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_document_corrections: {
-        Row: {
-          corrected_outcome_id: string
-          financial_snapshot: Json
-          id: string
-          previous_outcome_id: string
-          recorded_at: string
-          tenant_id: string
-        }
-        Insert: {
-          corrected_outcome_id: string
-          financial_snapshot: Json
-          id?: string
-          previous_outcome_id: string
-          recorded_at?: string
-          tenant_id: string
-        }
-        Update: {
-          corrected_outcome_id?: string
-          financial_snapshot?: Json
-          id?: string
-          previous_outcome_id?: string
-          recorded_at?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_corrections_corrected_outcome_id_fkey"
-            columns: ["corrected_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "active_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_corrected_outcome_id_fkey"
-            columns: ["corrected_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "current_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_corrected_outcome_id_fkey"
-            columns: ["corrected_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "active_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "current_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_previous_outcome_id_fkey"
-            columns: ["previous_outcome_id"]
-            isOneToOne: true
-            referencedRelation: "delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_corrections_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_document_metadata_audits: {
-        Row: {
-          actor_id: string
-          after_fields: Json
-          before_fields: Json
-          changes: Json
-          delivery_attempt_id: string | null
-          fiscal_document_id: string
-          id: string
-          load_id: string
-          outcome_id: string | null
-          reason: string
-          recorded_at: string
-          request_id: string
-          source: string
-          source_event_id: string | null
-          tenant_id: string
-          transaction_id: string
-        }
-        Insert: {
-          actor_id: string
-          after_fields: Json
-          before_fields: Json
-          changes: Json
-          delivery_attempt_id?: string | null
-          fiscal_document_id: string
-          id?: string
-          load_id: string
-          outcome_id?: string | null
-          reason: string
-          recorded_at?: string
-          request_id: string
-          source: string
-          source_event_id?: string | null
-          tenant_id: string
-          transaction_id?: string
-        }
-        Update: {
-          actor_id?: string
-          after_fields?: Json
-          before_fields?: Json
-          changes?: Json
-          delivery_attempt_id?: string | null
-          fiscal_document_id?: string
-          id?: string
-          load_id?: string
-          outcome_id?: string | null
-          reason?: string
-          recorded_at?: string
-          request_id?: string
-          source?: string
-          source_event_id?: string | null
-          tenant_id?: string
-          transaction_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_metadata_audits_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_outcome_id_fkey"
-            columns: ["outcome_id"]
-            isOneToOne: false
-            referencedRelation: "active_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_outcome_id_fkey"
-            columns: ["outcome_id"]
-            isOneToOne: false
-            referencedRelation: "current_delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_outcome_id_fkey"
-            columns: ["outcome_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_document_outcomes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_source_event_id_fkey"
-            columns: ["source_event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_metadata_audits_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_document_outcomes: {
-        Row: {
-          actor_id: string
-          delivery_attempt_id: string | null
-          dispatch_stop_document_id: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          document_snapshot: Json
-          event_id: string
-          fiscal_document_id: string
-          id: string
-          items_snapshot: Json
-          load_id: string
-          occurred_at: string
-          outcome: string
-          proof_snapshot: Json
-          reason: string | null
-          recorded_at: string
-          source: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          delivery_attempt_id?: string | null
-          dispatch_stop_document_id: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          document_snapshot: Json
-          event_id: string
-          fiscal_document_id: string
-          id?: string
-          items_snapshot: Json
-          load_id: string
-          occurred_at: string
-          outcome: string
-          proof_snapshot: Json
-          reason?: string | null
-          recorded_at?: string
-          source: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          delivery_attempt_id?: string | null
-          dispatch_stop_document_id?: string
-          dispatch_stop_id?: string
-          dispatch_trip_id?: string
-          document_snapshot?: Json
-          event_id?: string
-          fiscal_document_id?: string
-          id?: string
-          items_snapshot?: Json
-          load_id?: string
-          occurred_at?: string
-          outcome?: string
-          proof_snapshot?: Json
-          reason?: string | null
-          recorded_at?: string
-          source?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_outcomes_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "current_dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_allocation_documents"
-            referencedColumns: ["allocation_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_document_references: {
-        Row: {
-          access_key: string | null
-          created_at: string
-          cte_document_id: string | null
-          document_kind: string
-          document_number: string | null
-          document_series: string | null
-          fiscal_document_id: string | null
-          id: string
-          issue_date: string | null
-          issuer_name: string | null
-          issuer_tax_id: string | null
-          nfse_document_id: string | null
-          operational_reference: string | null
-          recipient_name: string | null
-          source_snapshot: Json
-          supplier_id: string | null
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          access_key?: string | null
-          created_at?: string
-          cte_document_id?: string | null
-          document_kind: string
-          document_number?: string | null
-          document_series?: string | null
-          fiscal_document_id?: string | null
-          id?: string
-          issue_date?: string | null
-          issuer_name?: string | null
-          issuer_tax_id?: string | null
-          nfse_document_id?: string | null
-          operational_reference?: string | null
-          recipient_name?: string | null
-          source_snapshot?: Json
-          supplier_id?: string | null
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          access_key?: string | null
-          created_at?: string
-          cte_document_id?: string | null
-          document_kind?: string
-          document_number?: string | null
-          document_series?: string | null
-          fiscal_document_id?: string | null
-          id?: string
-          issue_date?: string | null
-          issuer_name?: string | null
-          issuer_tax_id?: string | null
-          nfse_document_id?: string | null
-          operational_reference?: string | null
-          recipient_name?: string | null
-          source_snapshot?: Json
-          supplier_id?: string | null
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_references_cte_document_id_fkey"
-            columns: ["cte_document_id"]
-            isOneToOne: false
-            referencedRelation: "cte_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_references_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_references_nfse_document_id_fkey"
-            columns: ["nfse_document_id"]
-            isOneToOne: false
-            referencedRelation: "nfse_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_references_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_references_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       delivery_occurrence_items: {
         Row: {
           created_at: string
@@ -4874,1164 +3471,6 @@ export type Database = {
           },
         ]
       }
-      delivery_receipt_channel_adapters: {
-        Row: {
-          adapter_key: string
-          channel_kind: string
-          created_at: string
-          display_name: string
-          is_enabled: boolean
-          is_implemented: boolean
-          supported_capabilities: Json
-          updated_at: string
-        }
-        Insert: {
-          adapter_key: string
-          channel_kind: string
-          created_at?: string
-          display_name: string
-          is_enabled?: boolean
-          is_implemented?: boolean
-          supported_capabilities?: Json
-          updated_at?: string
-        }
-        Update: {
-          adapter_key?: string
-          channel_kind?: string
-          created_at?: string
-          display_name?: string
-          is_enabled?: boolean
-          is_implemented?: boolean
-          supported_capabilities?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      delivery_receipt_channel_job_events: {
-        Row: {
-          created_at: string
-          detail: Json
-          event_type: string
-          id: number
-          job_id: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          detail?: Json
-          event_type: string
-          id?: never
-          job_id: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          detail?: Json
-          event_type?: string
-          id?: never
-          job_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_channel_job_event_job_fkey"
-            columns: ["tenant_id", "job_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_channel_jobs"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_channel_job_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_channel_jobs: {
-        Row: {
-          adapter_key: string
-          attempt_count: number
-          channel_id: string
-          channel_kind: string
-          completed_at: string | null
-          created_at: string
-          evidence_fingerprint: string
-          external_reference: string | null
-          id: string
-          idempotency_key: string
-          last_error_code: string | null
-          lease_expires_at: string | null
-          lease_token: string | null
-          payload_snapshot: Json
-          receipt_id: string
-          response_metadata: Json | null
-          retry_after_at: string | null
-          status: string
-          supplier_key: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          adapter_key: string
-          attempt_count?: number
-          channel_id: string
-          channel_kind?: string
-          completed_at?: string | null
-          created_at?: string
-          evidence_fingerprint: string
-          external_reference?: string | null
-          id?: string
-          idempotency_key: string
-          last_error_code?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          payload_snapshot: Json
-          receipt_id: string
-          response_metadata?: Json | null
-          retry_after_at?: string | null
-          status?: string
-          supplier_key: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          adapter_key?: string
-          attempt_count?: number
-          channel_id?: string
-          channel_kind?: string
-          completed_at?: string | null
-          created_at?: string
-          evidence_fingerprint?: string
-          external_reference?: string | null
-          id?: string
-          idempotency_key?: string
-          last_error_code?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          payload_snapshot?: Json
-          receipt_id?: string
-          response_metadata?: Json | null
-          retry_after_at?: string | null
-          status?: string
-          supplier_key?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_channel_job_adapter_fkey"
-            columns: ["adapter_key"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_channel_adapters"
-            referencedColumns: ["adapter_key"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_channel_job_channel_fkey"
-            columns: ["tenant_id", "channel_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_supplier_channels"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_channel_job_receipt_fkey"
-            columns: ["tenant_id", "receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_channel_jobs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_documents: {
-        Row: {
-          created_at: string
-          document_reference_id: string
-          document_snapshot: Json
-          receipt_id: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          document_reference_id: string
-          document_snapshot?: Json
-          receipt_id: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          document_reference_id?: string
-          document_snapshot?: Json
-          receipt_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_documents_document_reference_id_fkey"
-            columns: ["document_reference_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_document_references"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_documents_receipt_id_fkey"
-            columns: ["receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_documents_receipt_tenant_fkey"
-            columns: ["tenant_id", "receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_documents_reference_tenant_fkey"
-            columns: ["tenant_id", "document_reference_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_document_references"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_documents_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_email_batches: {
-        Row: {
-          attempt_count: number
-          body_text: string
-          bounced_at: string | null
-          cover_config: Json
-          created_at: string
-          created_by: string
-          delivered_at: string | null
-          id: string
-          last_error: string | null
-          lease_expires_at: string | null
-          lease_token: string | null
-          planned_attachment_bytes: number | null
-          planned_source_bytes: number | null
-          provider_event_at: string | null
-          provider_message_id: string | null
-          receipt_ids: string[]
-          recipients: string[]
-          retry_after_at: string | null
-          sent_at: string | null
-          size_plan_snapshot: Json | null
-          status: string
-          subject: string
-          supplier_key: string | null
-          supplier_name: string
-          template_customized: boolean
-          template_id: string | null
-          template_snapshot: Json | null
-          template_version: number | null
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attempt_count?: number
-          body_text: string
-          bounced_at?: string | null
-          cover_config?: Json
-          created_at?: string
-          created_by: string
-          delivered_at?: string | null
-          id: string
-          last_error?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          planned_attachment_bytes?: number | null
-          planned_source_bytes?: number | null
-          provider_event_at?: string | null
-          provider_message_id?: string | null
-          receipt_ids: string[]
-          recipients: string[]
-          retry_after_at?: string | null
-          sent_at?: string | null
-          size_plan_snapshot?: Json | null
-          status?: string
-          subject: string
-          supplier_key?: string | null
-          supplier_name: string
-          template_customized?: boolean
-          template_id?: string | null
-          template_snapshot?: Json | null
-          template_version?: number | null
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attempt_count?: number
-          body_text?: string
-          bounced_at?: string | null
-          cover_config?: Json
-          created_at?: string
-          created_by?: string
-          delivered_at?: string | null
-          id?: string
-          last_error?: string | null
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          planned_attachment_bytes?: number | null
-          planned_source_bytes?: number | null
-          provider_event_at?: string | null
-          provider_message_id?: string | null
-          receipt_ids?: string[]
-          recipients?: string[]
-          retry_after_at?: string | null
-          sent_at?: string | null
-          size_plan_snapshot?: Json | null
-          status?: string
-          subject?: string
-          supplier_key?: string | null
-          supplier_name?: string
-          template_customized?: boolean
-          template_id?: string | null
-          template_snapshot?: Json | null
-          template_version?: number | null
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_email_batches_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_email_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_email_batches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_email_items: {
-        Row: {
-          batch_id: string
-          cover_snapshot: Json
-          created_at: string
-          document_snapshot: Json
-          file_name: string
-          pdf_path: string
-          receipt_id: string
-          tenant_id: string
-        }
-        Insert: {
-          batch_id: string
-          cover_snapshot?: Json
-          created_at?: string
-          document_snapshot?: Json
-          file_name: string
-          pdf_path: string
-          receipt_id: string
-          tenant_id: string
-        }
-        Update: {
-          batch_id?: string
-          cover_snapshot?: Json
-          created_at?: string
-          document_snapshot?: Json
-          file_name?: string
-          pdf_path?: string
-          receipt_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_email_items_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_email_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_email_items_receipt_id_fkey"
-            columns: ["receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_email_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_email_templates: {
-        Row: {
-          body_template: string
-          cover_config: Json
-          created_at: string
-          created_by: string
-          id: string
-          is_active: boolean
-          recipients: string[]
-          subject_template: string
-          supplier_key: string | null
-          supplier_name: string
-          template_version: number
-          tenant_id: string
-          updated_at: string
-          updated_by: string
-        }
-        Insert: {
-          body_template: string
-          cover_config?: Json
-          created_at?: string
-          created_by: string
-          id: string
-          is_active?: boolean
-          recipients: string[]
-          subject_template: string
-          supplier_key?: string | null
-          supplier_name: string
-          template_version?: number
-          tenant_id: string
-          updated_at?: string
-          updated_by: string
-        }
-        Update: {
-          body_template?: string
-          cover_config?: Json
-          created_at?: string
-          created_by?: string
-          id?: string
-          is_active?: boolean
-          recipients?: string[]
-          subject_template?: string
-          supplier_key?: string | null
-          supplier_name?: string
-          template_version?: number
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_email_templates_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_email_webhook_events: {
-        Row: {
-          batch_id: string
-          event_status: string
-          occurred_at: string
-          provider_message_id: string
-          received_at: string
-          svix_id: string
-        }
-        Insert: {
-          batch_id: string
-          event_status: string
-          occurred_at: string
-          provider_message_id: string
-          received_at?: string
-          svix_id: string
-        }
-        Update: {
-          batch_id?: string
-          event_status?: string
-          occurred_at?: string
-          provider_message_id?: string
-          received_at?: string
-          svix_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_email_webhook_events_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_email_batches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_exports: {
-        Row: {
-          completed_at: string | null
-          error_code: string | null
-          export_kind: string
-          file_name: string
-          receipt_id: string
-          request_id: string
-          requested_at: string
-          requested_by: string
-          status: string
-          storage_path: string | null
-          tenant_id: string
-        }
-        Insert: {
-          completed_at?: string | null
-          error_code?: string | null
-          export_kind: string
-          file_name: string
-          receipt_id: string
-          request_id: string
-          requested_at?: string
-          requested_by: string
-          status?: string
-          storage_path?: string | null
-          tenant_id: string
-        }
-        Update: {
-          completed_at?: string | null
-          error_code?: string | null
-          export_kind?: string
-          file_name?: string
-          receipt_id?: string
-          request_id?: string
-          requested_at?: string
-          requested_by?: string
-          status?: string
-          storage_path?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_exports_receipt_id_fkey"
-            columns: ["receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_exports_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_ocr_jobs: {
-        Row: {
-          attempt_count: number
-          available_at: string
-          completed_at: string | null
-          confidence: number | null
-          created_at: string
-          error_code: string | null
-          extracted_text: string | null
-          id: string
-          lease_expires_at: string | null
-          lease_token: string | null
-          processed_hash: string
-          receipt_id: string
-          result_fingerprint: string | null
-          source_path: string
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attempt_count?: number
-          available_at?: string
-          completed_at?: string | null
-          confidence?: number | null
-          created_at?: string
-          error_code?: string | null
-          extracted_text?: string | null
-          id?: string
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          processed_hash: string
-          receipt_id: string
-          result_fingerprint?: string | null
-          source_path: string
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attempt_count?: number
-          available_at?: string
-          completed_at?: string | null
-          confidence?: number | null
-          created_at?: string
-          error_code?: string | null
-          extracted_text?: string | null
-          id?: string
-          lease_expires_at?: string | null
-          lease_token?: string | null
-          processed_hash?: string
-          receipt_id?: string
-          result_fingerprint?: string | null
-          source_path?: string
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_ocr_jobs_tenant_id_receipt_id_fkey"
-            columns: ["tenant_id", "receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      delivery_receipt_physical_events: {
-        Row: {
-          actor_id: string
-          created_at: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          id: string
-          occurrence_event_id: string | null
-          previous_status: string
-          reason: string | null
-          receipt_id: string
-          request_id: string
-          response: Json
-          resulting_status: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          created_at?: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          id?: string
-          occurrence_event_id?: string | null
-          previous_status: string
-          reason?: string | null
-          receipt_id: string
-          request_id: string
-          response: Json
-          resulting_status: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          created_at?: string
-          dispatch_stop_id?: string
-          dispatch_trip_id?: string
-          id?: string
-          occurrence_event_id?: string | null
-          previous_status?: string
-          reason?: string | null
-          receipt_id?: string
-          request_id?: string
-          response?: Json
-          resulting_status?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_physical_events_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_occurrence_event_id_fkey"
-            columns: ["occurrence_event_id"]
-            isOneToOne: false
-            referencedRelation: "operational_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_occurrence_event_id_fkey"
-            columns: ["occurrence_event_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["event_id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_receipt_id_fkey"
-            columns: ["receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_physical_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_quality_policies: {
-        Row: {
-          client_id: string | null
-          created_at: string
-          created_by: string
-          id: string
-          is_active: boolean
-          retired_at: string | null
-          retired_by: string | null
-          tenant_id: string
-          thresholds: Json
-          version: number
-        }
-        Insert: {
-          client_id?: string | null
-          created_at?: string
-          created_by: string
-          id?: string
-          is_active?: boolean
-          retired_at?: string | null
-          retired_by?: string | null
-          tenant_id: string
-          thresholds: Json
-          version: number
-        }
-        Update: {
-          client_id?: string | null
-          created_at?: string
-          created_by?: string
-          id?: string
-          is_active?: boolean
-          retired_at?: string | null
-          retired_by?: string | null
-          tenant_id?: string
-          thresholds?: Json
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_quality_policies_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_quality_policies_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_replacements: {
-        Row: {
-          actor_id: string
-          created_at: string
-          payload_hash: string
-          previous_receipt_id: string
-          replacement_receipt_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          created_at?: string
-          payload_hash: string
-          previous_receipt_id: string
-          replacement_receipt_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          created_at?: string
-          payload_hash?: string
-          previous_receipt_id?: string
-          replacement_receipt_id?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_replacements_previous_receipt_id_fkey"
-            columns: ["previous_receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_replacements_replacement_receipt_id_fkey"
-            columns: ["replacement_receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_replacements_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipt_supplier_channels: {
-        Row: {
-          adapter_key: string
-          auto_enqueue: boolean
-          auto_enqueue_requested: boolean
-          channel_kind: string
-          created_at: string
-          created_by: string
-          id: string
-          lifecycle_status: string
-          requested_capabilities: Json
-          safe_configuration: Json
-          supplier_key: string
-          supplier_name: string
-          tenant_id: string
-          updated_at: string
-          updated_by: string
-          verification_reference: string | null
-          verified_at: string | null
-          verified_by: string | null
-          verified_capabilities: Json | null
-        }
-        Insert: {
-          adapter_key: string
-          auto_enqueue?: boolean
-          auto_enqueue_requested?: boolean
-          channel_kind?: string
-          created_at?: string
-          created_by: string
-          id: string
-          lifecycle_status?: string
-          requested_capabilities: Json
-          safe_configuration: Json
-          supplier_key: string
-          supplier_name: string
-          tenant_id: string
-          updated_at?: string
-          updated_by: string
-          verification_reference?: string | null
-          verified_at?: string | null
-          verified_by?: string | null
-          verified_capabilities?: Json | null
-        }
-        Update: {
-          adapter_key?: string
-          auto_enqueue?: boolean
-          auto_enqueue_requested?: boolean
-          channel_kind?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          lifecycle_status?: string
-          requested_capabilities?: Json
-          safe_configuration?: Json
-          supplier_key?: string
-          supplier_name?: string
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string
-          verification_reference?: string | null
-          verified_at?: string | null
-          verified_by?: string | null
-          verified_capabilities?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipt_supplier_channels_adapter_key_fkey"
-            columns: ["adapter_key"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_channel_adapters"
-            referencedColumns: ["adapter_key"]
-          },
-          {
-            foreignKeyName: "delivery_receipt_supplier_channels_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_receipts: {
-        Row: {
-          accuracy_m: number | null
-          captured_at: string | null
-          created_at: string
-          created_by: string | null
-          delivered_at: string
-          delivery_event_id: string
-          digital_status: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          driver_id: string | null
-          email_status: string
-          id: string
-          is_active: boolean
-          latitude: number | null
-          longitude: number | null
-          ocr_confidence: number | null
-          ocr_error_code: string | null
-          ocr_processed_hash: string | null
-          ocr_status: string
-          ocr_text: string | null
-          ocr_updated_at: string | null
-          original_hash: string | null
-          original_path: string | null
-          pdf_path: string | null
-          physical_received_at: string | null
-          physical_received_by: string | null
-          physical_status: string
-          previous_receipt_id: string | null
-          processed_hash: string | null
-          processed_path: string | null
-          quality_confirmed: boolean
-          quality_policy_id: string | null
-          quality_policy_scope: string | null
-          quality_policy_snapshot: Json | null
-          quality_policy_version: number | null
-          receiver_document: string | null
-          receiver_name: string | null
-          receiver_role: string | null
-          rejection_reason: string | null
-          scan_corners: Json | null
-          scan_mode: string
-          scan_quality: Json
-          scan_rotation: number
-          signature_path: string | null
-          storage_bucket: string
-          tenant_id: string
-          thumbnail_hash: string | null
-          thumbnail_path: string | null
-          updated_at: string
-          validated_at: string | null
-          validated_by: string | null
-          vehicle_id: string | null
-          version: number
-        }
-        Insert: {
-          accuracy_m?: number | null
-          captured_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          delivered_at: string
-          delivery_event_id: string
-          digital_status?: string
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          driver_id?: string | null
-          email_status?: string
-          id?: string
-          is_active?: boolean
-          latitude?: number | null
-          longitude?: number | null
-          ocr_confidence?: number | null
-          ocr_error_code?: string | null
-          ocr_processed_hash?: string | null
-          ocr_status?: string
-          ocr_text?: string | null
-          ocr_updated_at?: string | null
-          original_hash?: string | null
-          original_path?: string | null
-          pdf_path?: string | null
-          physical_received_at?: string | null
-          physical_received_by?: string | null
-          physical_status?: string
-          previous_receipt_id?: string | null
-          processed_hash?: string | null
-          processed_path?: string | null
-          quality_confirmed?: boolean
-          quality_policy_id?: string | null
-          quality_policy_scope?: string | null
-          quality_policy_snapshot?: Json | null
-          quality_policy_version?: number | null
-          receiver_document?: string | null
-          receiver_name?: string | null
-          receiver_role?: string | null
-          rejection_reason?: string | null
-          scan_corners?: Json | null
-          scan_mode?: string
-          scan_quality?: Json
-          scan_rotation?: number
-          signature_path?: string | null
-          storage_bucket?: string
-          tenant_id: string
-          thumbnail_hash?: string | null
-          thumbnail_path?: string | null
-          updated_at?: string
-          validated_at?: string | null
-          validated_by?: string | null
-          vehicle_id?: string | null
-          version?: number
-        }
-        Update: {
-          accuracy_m?: number | null
-          captured_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          delivered_at?: string
-          delivery_event_id?: string
-          digital_status?: string
-          dispatch_stop_id?: string
-          dispatch_trip_id?: string
-          driver_id?: string | null
-          email_status?: string
-          id?: string
-          is_active?: boolean
-          latitude?: number | null
-          longitude?: number | null
-          ocr_confidence?: number | null
-          ocr_error_code?: string | null
-          ocr_processed_hash?: string | null
-          ocr_status?: string
-          ocr_text?: string | null
-          ocr_updated_at?: string | null
-          original_hash?: string | null
-          original_path?: string | null
-          pdf_path?: string | null
-          physical_received_at?: string | null
-          physical_received_by?: string | null
-          physical_status?: string
-          previous_receipt_id?: string | null
-          processed_hash?: string | null
-          processed_path?: string | null
-          quality_confirmed?: boolean
-          quality_policy_id?: string | null
-          quality_policy_scope?: string | null
-          quality_policy_snapshot?: Json | null
-          quality_policy_version?: number | null
-          receiver_document?: string | null
-          receiver_name?: string | null
-          receiver_role?: string | null
-          rejection_reason?: string | null
-          scan_corners?: Json | null
-          scan_mode?: string
-          scan_quality?: Json
-          scan_rotation?: number
-          signature_path?: string | null
-          storage_bucket?: string
-          tenant_id?: string
-          thumbnail_hash?: string | null
-          thumbnail_path?: string | null
-          updated_at?: string
-          validated_at?: string | null
-          validated_by?: string | null
-          vehicle_id?: string | null
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_receipts_delivery_event_id_fkey"
-            columns: ["delivery_event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_previous_receipt_id_fkey"
-            columns: ["previous_receipt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_quality_policy_id_fkey"
-            columns: ["quality_policy_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_receipt_quality_policies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_receipts_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       dispatch_events: {
         Row: {
           created_at: string
@@ -6110,7 +3549,6 @@ export type Database = {
       dispatch_stop_documents: {
         Row: {
           created_at: string
-          delivery_attempt_id: string | null
           dispatch_stop_id: string
           fiscal_document_id: string
           id: string
@@ -6119,7 +3557,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          delivery_attempt_id?: string | null
           dispatch_stop_id: string
           fiscal_document_id: string
           id?: string
@@ -6128,7 +3565,6 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          delivery_attempt_id?: string | null
           dispatch_stop_id?: string
           fiscal_document_id?: string
           id?: string
@@ -6136,13 +3572,6 @@ export type Database = {
           tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "dispatch_stop_documents_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "dispatch_stop_documents_dispatch_stop_id_fkey"
             columns: ["dispatch_stop_id"]
@@ -6187,81 +3616,10 @@ export type Database = {
           },
         ]
       }
-      dispatch_stop_nfse_documents: {
-        Row: {
-          dispatch_stop_id: string
-          linked_at: string
-          linked_by: string | null
-          load_id: string | null
-          nfse_document_id: string
-          tenant_id: string
-        }
-        Insert: {
-          dispatch_stop_id: string
-          linked_at?: string
-          linked_by?: string | null
-          load_id?: string | null
-          nfse_document_id: string
-          tenant_id: string
-        }
-        Update: {
-          dispatch_stop_id?: string
-          linked_at?: string
-          linked_by?: string | null
-          load_id?: string | null
-          nfse_document_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_nfse_document_id_fkey"
-            columns: ["nfse_document_id"]
-            isOneToOne: false
-            referencedRelation: "nfse_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_nfse_documents_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       dispatch_stops: {
         Row: {
           actual_arrival_at: string | null
           actual_departure_at: string | null
-          canonical_address_id: string | null
           client_id: string | null
           created_at: string
           delivery_window_end: string | null
@@ -6269,30 +3627,14 @@ export type Database = {
           destination: string | null
           dispatch_trip_id: string
           estimated_departure_at: string | null
-          geofence_radius_is_override: boolean
-          geofence_radius_m: number
           id: string
           latitude: number | null
-          location_accuracy_m: number | null
-          location_address: string | null
-          location_audit: Json
-          location_confidence: number | null
-          location_exception_at: string | null
-          location_exception_by: string | null
-          location_exception_reason: string | null
-          location_invalidated_at: string | null
-          location_provider: string | null
-          location_resolved_at: string | null
-          location_resolved_by: string | null
-          location_source: string
-          location_verification_status: string
           longitude: number | null
           notes: string | null
           planned_arrival_at: string | null
           risk_level: string | null
           risk_reason: string | null
           service_time_minutes: number | null
-          source_client_address_hash: string | null
           status: string
           stop_order: number
           tenant_id: string
@@ -6301,7 +3643,6 @@ export type Database = {
         Insert: {
           actual_arrival_at?: string | null
           actual_departure_at?: string | null
-          canonical_address_id?: string | null
           client_id?: string | null
           created_at?: string
           delivery_window_end?: string | null
@@ -6309,30 +3650,14 @@ export type Database = {
           destination?: string | null
           dispatch_trip_id: string
           estimated_departure_at?: string | null
-          geofence_radius_is_override?: boolean
-          geofence_radius_m?: number
           id?: string
           latitude?: number | null
-          location_accuracy_m?: number | null
-          location_address?: string | null
-          location_audit?: Json
-          location_confidence?: number | null
-          location_exception_at?: string | null
-          location_exception_by?: string | null
-          location_exception_reason?: string | null
-          location_invalidated_at?: string | null
-          location_provider?: string | null
-          location_resolved_at?: string | null
-          location_resolved_by?: string | null
-          location_source?: string
-          location_verification_status?: string
           longitude?: number | null
           notes?: string | null
           planned_arrival_at?: string | null
           risk_level?: string | null
           risk_reason?: string | null
           service_time_minutes?: number | null
-          source_client_address_hash?: string | null
           status?: string
           stop_order?: number
           tenant_id: string
@@ -6341,7 +3666,6 @@ export type Database = {
         Update: {
           actual_arrival_at?: string | null
           actual_departure_at?: string | null
-          canonical_address_id?: string | null
           client_id?: string | null
           created_at?: string
           delivery_window_end?: string | null
@@ -6349,43 +3673,20 @@ export type Database = {
           destination?: string | null
           dispatch_trip_id?: string
           estimated_departure_at?: string | null
-          geofence_radius_is_override?: boolean
-          geofence_radius_m?: number
           id?: string
           latitude?: number | null
-          location_accuracy_m?: number | null
-          location_address?: string | null
-          location_audit?: Json
-          location_confidence?: number | null
-          location_exception_at?: string | null
-          location_exception_by?: string | null
-          location_exception_reason?: string | null
-          location_invalidated_at?: string | null
-          location_provider?: string | null
-          location_resolved_at?: string | null
-          location_resolved_by?: string | null
-          location_source?: string
-          location_verification_status?: string
           longitude?: number | null
           notes?: string | null
           planned_arrival_at?: string | null
           risk_level?: string | null
           risk_reason?: string | null
           service_time_minutes?: number | null
-          source_client_address_hash?: string | null
           status?: string
           stop_order?: number
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "dispatch_stops_canonical_address_tenant_fk"
-            columns: ["tenant_id", "canonical_address_id"]
-            isOneToOne: false
-            referencedRelation: "canonical_addresses"
-            referencedColumns: ["tenant_id", "id"]
-          },
           {
             foreignKeyName: "dispatch_stops_client_id_fkey"
             columns: ["client_id"]
@@ -6490,7 +3791,6 @@ export type Database = {
           planned_start_at: string | null
           status: string
           tenant_id: string
-          tracker_link_id: string | null
           updated_at: string
           vehicle_id: string | null
         }
@@ -6507,7 +3807,6 @@ export type Database = {
           planned_start_at?: string | null
           status?: string
           tenant_id: string
-          tracker_link_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
         }
@@ -6524,7 +3823,6 @@ export type Database = {
           planned_start_at?: string | null
           status?: string
           tenant_id?: string
-          tracker_link_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
         }
@@ -6558,73 +3856,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "dispatch_trips_tracker_link_id_fkey"
-            columns: ["tracker_link_id"]
-            isOneToOne: false
-            referencedRelation: "vehicle_tracker_links"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "dispatch_trips_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      driver_app_observability_snapshots: {
-        Row: {
-          actor_id: string
-          app_version: string
-          build_hash: string
-          document_conflicts: number
-          geofence_errors: Json
-          installation_id: string
-          last_successful_sync_at: string | null
-          outbox_by_kind: Json
-          outbox_by_state: Json
-          outbox_total: number
-          seen_at: string
-          tenant_id: string
-          upload_failures: Json
-        }
-        Insert: {
-          actor_id: string
-          app_version: string
-          build_hash: string
-          document_conflicts: number
-          geofence_errors: Json
-          installation_id: string
-          last_successful_sync_at?: string | null
-          outbox_by_kind: Json
-          outbox_by_state: Json
-          outbox_total: number
-          seen_at?: string
-          tenant_id: string
-          upload_failures: Json
-        }
-        Update: {
-          actor_id?: string
-          app_version?: string
-          build_hash?: string
-          document_conflicts?: number
-          geofence_errors?: Json
-          installation_id?: string
-          last_successful_sync_at?: string | null
-          outbox_by_kind?: Json
-          outbox_by_state?: Json
-          outbox_total?: number
-          seen_at?: string
-          tenant_id?: string
-          upload_failures?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_app_observability_snapshots_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -6643,10 +3878,8 @@ export type Database = {
           id: string
           monitor_id: string
           observation: string | null
-          payload_hash: string | null
           remaining_cities: Json
           remaining_cities_text: string | null
-          request_id: string | null
           status: string
           tenant_id: string
         }
@@ -6663,10 +3896,8 @@ export type Database = {
           id?: string
           monitor_id: string
           observation?: string | null
-          payload_hash?: string | null
           remaining_cities?: Json
           remaining_cities_text?: string | null
-          request_id?: string | null
           status?: string
           tenant_id: string
         }
@@ -6683,138 +3914,24 @@ export type Database = {
           id?: string
           monitor_id?: string
           observation?: string | null
-          payload_hash?: string | null
           remaining_cities?: Json
           remaining_cities_text?: string | null
-          request_id?: string | null
           status?: string
           tenant_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "driver_arrival_forecasts_driver_tenant_fk"
-            columns: ["tenant_id", "driver_id"]
+            foreignKeyName: "driver_arrival_forecasts_driver_id_fkey"
+            columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_arrival_forecasts_monitor_tenant_fk"
-            columns: ["tenant_id", "monitor_id"]
+            foreignKeyName: "driver_arrival_forecasts_monitor_id_fkey"
+            columns: ["monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_arrival_forecasts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      driver_delivery_fiscal_conflicts: {
-        Row: {
-          actor_id: string
-          actual_revision: string
-          actual_snapshot: Json
-          created_at: string
-          delivery_payload: Json
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          expected_revision: string | null
-          expected_snapshot: Json | null
-          request_hash: string
-          request_id: string
-          resolution_action: string | null
-          resolution_payload_hash: string | null
-          resolution_reason: string | null
-          resolution_request_id: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          result: Json
-          status: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actual_revision: string
-          actual_snapshot: Json
-          created_at?: string
-          delivery_payload: Json
-          dispatch_stop_id: string
-          dispatch_trip_id: string
-          expected_revision?: string | null
-          expected_snapshot?: Json | null
-          request_hash: string
-          request_id: string
-          resolution_action?: string | null
-          resolution_payload_hash?: string | null
-          resolution_reason?: string | null
-          resolution_request_id?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          result: Json
-          status?: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actual_revision?: string
-          actual_snapshot?: Json
-          created_at?: string
-          delivery_payload?: Json
-          dispatch_stop_id?: string
-          dispatch_trip_id?: string
-          expected_revision?: string | null
-          expected_snapshot?: Json | null
-          request_hash?: string
-          request_id?: string
-          resolution_action?: string | null
-          resolution_payload_hash?: string | null
-          resolution_reason?: string | null
-          resolution_request_id?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          result?: Json
-          status?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_delivery_fiscal_conflicts_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_delivery_fiscal_conflicts_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "driver_delivery_fiscal_conflicts_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_delivery_fiscal_conflicts_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "driver_delivery_fiscal_conflicts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -6822,13 +3939,10 @@ export type Database = {
       driver_direct_messages: {
         Row: {
           attachment_url: string | null
-          client_request_id: string | null
-          conversation_user_id: string | null
           created_at: string
           driver_id: string
           id: string
           message: string
-          request_hash: string | null
           sender_id: string | null
           sender_name: string | null
           sender_role: string
@@ -6836,13 +3950,10 @@ export type Database = {
         }
         Insert: {
           attachment_url?: string | null
-          client_request_id?: string | null
-          conversation_user_id?: string | null
           created_at?: string
           driver_id: string
           id?: string
           message: string
-          request_hash?: string | null
           sender_id?: string | null
           sender_name?: string | null
           sender_role?: string
@@ -6850,136 +3961,16 @@ export type Database = {
         }
         Update: {
           attachment_url?: string | null
-          client_request_id?: string | null
-          conversation_user_id?: string | null
           created_at?: string
           driver_id?: string
           id?: string
           message?: string
-          request_hash?: string | null
           sender_id?: string | null
           sender_name?: string | null
           sender_role?: string
           tenant_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "driver_chat_driver_scope_fkey"
-            columns: ["tenant_id", "driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      driver_expense_creations: {
-        Row: {
-          actor_id: string
-          created_at: string
-          driver_id: string
-          expense_id: string
-          expense_snapshot: Json
-          id: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          source_id: string
-          source_snapshot: Json
-          source_type: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          created_at?: string
-          driver_id: string
-          expense_id: string
-          expense_snapshot: Json
-          id: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          source_id: string
-          source_snapshot: Json
-          source_type: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          created_at?: string
-          driver_id?: string
-          expense_id?: string
-          expense_snapshot?: Json
-          id?: string
-          payload_hash?: string
-          request_id?: string
-          response?: Json
-          source_id?: string
-          source_snapshot?: Json
-          source_type?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_expense_creations_tenant_id_expense_id_fkey"
-            columns: ["tenant_id", "expense_id"]
-            isOneToOne: false
-            referencedRelation: "driver_expenses"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      driver_expense_reviews: {
-        Row: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at: string
-          expense_id: string
-          id: string
-          payload_hash: string
-          reason: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at?: string
-          expense_id: string
-          id: string
-          payload_hash: string
-          reason: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          after_snapshot?: Json
-          before_snapshot?: Json
-          created_at?: string
-          expense_id?: string
-          id?: string
-          payload_hash?: string
-          reason?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_expense_reviews_tenant_id_expense_id_fkey"
-            columns: ["tenant_id", "expense_id"]
-            isOneToOne: false
-            referencedRelation: "driver_expenses"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
+        Relationships: []
       }
       driver_expenses: {
         Row: {
@@ -6991,13 +3982,11 @@ export type Database = {
           city: string | null
           cost_center: string | null
           created_at: string
-          creation_command_id: string | null
           dispatch_trip_id: string | null
           document_number: string | null
           driver_id: string | null
           expense_at: string
           id: string
-          manual_settlement_id: string | null
           no_receipt: boolean
           no_receipt_reason: string | null
           notes: string | null
@@ -7006,7 +3995,6 @@ export type Database = {
           payment_source: string
           receipt_url: string | null
           reimbursable: boolean
-          review_command_id: string | null
           state: string | null
           supplier_name: string | null
           tenant_id: string
@@ -7021,13 +4009,11 @@ export type Database = {
           city?: string | null
           cost_center?: string | null
           created_at?: string
-          creation_command_id?: string | null
           dispatch_trip_id?: string | null
           document_number?: string | null
           driver_id?: string | null
           expense_at?: string
           id?: string
-          manual_settlement_id?: string | null
           no_receipt?: boolean
           no_receipt_reason?: string | null
           notes?: string | null
@@ -7036,7 +4022,6 @@ export type Database = {
           payment_source?: string
           receipt_url?: string | null
           reimbursable?: boolean
-          review_command_id?: string | null
           state?: string | null
           supplier_name?: string | null
           tenant_id: string
@@ -7051,13 +4036,11 @@ export type Database = {
           city?: string | null
           cost_center?: string | null
           created_at?: string
-          creation_command_id?: string | null
           dispatch_trip_id?: string | null
           document_number?: string | null
           driver_id?: string | null
           expense_at?: string
           id?: string
-          manual_settlement_id?: string | null
           no_receipt?: boolean
           no_receipt_reason?: string | null
           notes?: string | null
@@ -7066,7 +4049,6 @@ export type Database = {
           payment_source?: string
           receipt_url?: string | null
           reimbursable?: boolean
-          review_command_id?: string | null
           state?: string | null
           supplier_name?: string | null
           tenant_id?: string
@@ -7101,27 +4083,6 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "expense_creation_command_fkey"
-            columns: ["tenant_id", "creation_command_id"]
-            isOneToOne: false
-            referencedRelation: "driver_expense_creations"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "expense_manual_settlement_scope_fkey"
-            columns: ["tenant_id", "manual_settlement_id"]
-            isOneToOne: false
-            referencedRelation: "driver_settlements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "expense_review_command_fkey"
-            columns: ["tenant_id", "review_command_id"]
-            isOneToOne: false
-            referencedRelation: "driver_expense_reviews"
-            referencedColumns: ["tenant_id", "id"]
-          },
         ]
       }
       driver_monitoring_history: {
@@ -7129,12 +4090,10 @@ export type Database = {
           action: string
           created_at: string
           created_by: string | null
-          driver_monitor_command_id: string | null
           field_name: string | null
           id: string
           metadata: Json
           monitor_id: string
-          monitor_revision: number | null
           new_value: string | null
           old_value: string | null
           reason: string | null
@@ -7144,12 +4103,10 @@ export type Database = {
           action: string
           created_at?: string
           created_by?: string | null
-          driver_monitor_command_id?: string | null
           field_name?: string | null
           id?: string
           metadata?: Json
           monitor_id: string
-          monitor_revision?: number | null
           new_value?: string | null
           old_value?: string | null
           reason?: string | null
@@ -7159,12 +4116,10 @@ export type Database = {
           action?: string
           created_at?: string
           created_by?: string | null
-          driver_monitor_command_id?: string | null
           field_name?: string | null
           id?: string
           metadata?: Json
           monitor_id?: string
-          monitor_revision?: number | null
           new_value?: string | null
           old_value?: string | null
           reason?: string | null
@@ -7172,17 +4127,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_monitoring_history_monitor_tenant_fk"
-            columns: ["tenant_id", "monitor_id"]
+            foreignKeyName: "driver_monitoring_history_monitor_id_fkey"
+            columns: ["monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_monitoring_history_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -7194,15 +4142,12 @@ export type Database = {
           duplicated_count: number
           error_count: number
           errors: Json
-          file_fingerprint: string | null
           file_name: string | null
           id: string
           imported_forecasts: number
           imported_monitors: number
           imported_updates: number
           metadata: Json
-          payload_hash: string | null
-          request_id: string | null
           row_count: number
           status: string
           tenant_id: string
@@ -7213,15 +4158,12 @@ export type Database = {
           duplicated_count?: number
           error_count?: number
           errors?: Json
-          file_fingerprint?: string | null
           file_name?: string | null
           id?: string
           imported_forecasts?: number
           imported_monitors?: number
           imported_updates?: number
           metadata?: Json
-          payload_hash?: string | null
-          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id: string
@@ -7232,83 +4174,17 @@ export type Database = {
           duplicated_count?: number
           error_count?: number
           errors?: Json
-          file_fingerprint?: string | null
           file_name?: string | null
           id?: string
           imported_forecasts?: number
           imported_monitors?: number
           imported_updates?: number
           metadata?: Json
-          payload_hash?: string | null
-          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "driver_monitoring_import_batches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      driver_operational_command_receipts: {
-        Row: {
-          actor_id: string
-          command: string
-          created_at: string
-          payload_hash: string
-          request_id: string
-          result: Json
-          tenant_id: string
-          trip_id: string
-        }
-        Insert: {
-          actor_id: string
-          command: string
-          created_at?: string
-          payload_hash: string
-          request_id: string
-          result: Json
-          tenant_id: string
-          trip_id: string
-        }
-        Update: {
-          actor_id?: string
-          command?: string
-          created_at?: string
-          payload_hash?: string
-          request_id?: string
-          result?: Json
-          tenant_id?: string
-          trip_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_operational_command_receipts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_operational_command_receipts_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_operational_command_receipts_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
       }
       driver_route_monitors: {
         Row: {
@@ -7336,7 +4212,6 @@ export type Database = {
           remaining_cities: Json
           remaining_deliveries: number
           return_deadline_days: number | null
-          revision: number
           route_id: string | null
           source_type: string
           started_at: string | null
@@ -7373,7 +4248,6 @@ export type Database = {
           remaining_cities?: Json
           remaining_deliveries?: number
           return_deadline_days?: number | null
-          revision?: number
           route_id?: string | null
           source_type?: string
           started_at?: string | null
@@ -7410,7 +4284,6 @@ export type Database = {
           remaining_cities?: Json
           remaining_deliveries?: number
           return_deadline_days?: number | null
-          revision?: number
           route_id?: string | null
           source_type?: string
           started_at?: string | null
@@ -7424,46 +4297,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_route_monitors_driver_tenant_fk"
-            columns: ["tenant_id", "driver_id"]
+            foreignKeyName: "driver_route_monitors_driver_id_fkey"
+            columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_route_monitors_import_batch_tenant_fk"
-            columns: ["tenant_id", "import_batch_id"]
-            isOneToOne: false
-            referencedRelation: "driver_monitoring_import_batches"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_route_monitors_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_route_monitors_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_route_monitors_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_route_monitors_vehicle_tenant_fk"
-            columns: ["tenant_id", "vehicle_id"]
+            foreignKeyName: "driver_route_monitors_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -7486,8 +4345,6 @@ export type Database = {
           next_deadline_to_finish: string | null
           next_state: string | null
           observation: string | null
-          payload_hash: string | null
-          request_id: string | null
           source_type: string
           state: string | null
           status: string | null
@@ -7513,8 +4370,6 @@ export type Database = {
           next_deadline_to_finish?: string | null
           next_state?: string | null
           observation?: string | null
-          payload_hash?: string | null
-          request_id?: string | null
           source_type?: string
           state?: string | null
           status?: string | null
@@ -7540,8 +4395,6 @@ export type Database = {
           next_deadline_to_finish?: string | null
           next_state?: string | null
           observation?: string | null
-          payload_hash?: string | null
-          request_id?: string | null
           source_type?: string
           state?: string | null
           status?: string | null
@@ -7551,165 +4404,31 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_route_progress_updates_driver_tenant_fk"
-            columns: ["tenant_id", "driver_id"]
+            foreignKeyName: "driver_route_progress_updates_driver_id_fkey"
+            columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
+            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
+            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_monitor_tenant_fk"
-            columns: ["tenant_id", "monitor_id"]
+            foreignKeyName: "driver_route_progress_updates_monitor_id_fkey"
+            columns: ["monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "driver_route_progress_updates_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      driver_settlement_adjustments: {
-        Row: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at: string
-          id: string
-          item_id: string
-          payload_hash: string
-          reason: string
-          request_id: string
-          response: Json
-          settlement_id: string
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at?: string
-          id: string
-          item_id: string
-          payload_hash: string
-          reason: string
-          request_id: string
-          response: Json
-          settlement_id: string
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          after_snapshot?: Json
-          before_snapshot?: Json
-          created_at?: string
-          id?: string
-          item_id?: string
-          payload_hash?: string
-          reason?: string
-          request_id?: string
-          response?: Json
-          settlement_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_settlement_adjustments_tenant_id_settlement_id_fkey"
-            columns: ["tenant_id", "settlement_id"]
-            isOneToOne: false
-            referencedRelation: "driver_settlements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      driver_settlement_cargo_quarantines: {
-        Row: {
-          detected_at: string
-          detected_snapshot: Json
-          dispatch_trip_id: string
-          reason: string
-          resolution_reason: string | null
-          resolution_snapshot: Json | null
-          resolved_at: string | null
-          resolved_by: string | null
-          settlement_id: string
-          status: string
-          tenant_id: string
-        }
-        Insert: {
-          detected_at?: string
-          detected_snapshot: Json
-          dispatch_trip_id: string
-          reason: string
-          resolution_reason?: string | null
-          resolution_snapshot?: Json | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          settlement_id: string
-          status?: string
-          tenant_id: string
-        }
-        Update: {
-          detected_at?: string
-          detected_snapshot?: Json
-          dispatch_trip_id?: string
-          reason?: string
-          resolution_reason?: string | null
-          resolution_snapshot?: Json | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          settlement_id?: string
-          status?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "driver_settlement_cargo_quarantines_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_settlement_cargo_quarantines_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "driver_settlement_cargo_quarantines_settlement_id_fkey"
-            columns: ["settlement_id"]
-            isOneToOne: true
-            referencedRelation: "driver_settlements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_settlement_cargo_quarantines_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -8265,7 +4984,6 @@ export type Database = {
           updated_by: string | null
           user_id: string | null
           weight_kg: number | null
-          workspace_id: string
         }
         Insert: {
           active?: boolean
@@ -8356,7 +5074,6 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           weight_kg?: number | null
-          workspace_id: string
         }
         Update: {
           active?: boolean
@@ -8447,28 +5164,20 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           weight_kg?: number | null
-          workspace_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "drivers_tenant_current_vehicle_fkey"
-            columns: ["tenant_id", "current_vehicle_id"]
+            foreignKeyName: "drivers_current_vehicle_id_fkey"
+            columns: ["current_vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "drivers_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "drivers_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -8600,8 +5309,6 @@ export type Database = {
           payment_cycle: string
           payment_method: string | null
           position_title: string | null
-          request_hash: string | null
-          request_id: string | null
           start_date: string
           tenant_id: string
           updated_at: string
@@ -8628,8 +5335,6 @@ export type Database = {
           payment_cycle?: string
           payment_method?: string | null
           position_title?: string | null
-          request_hash?: string | null
-          request_id?: string | null
           start_date: string
           tenant_id: string
           updated_at?: string
@@ -8656,8 +5361,6 @@ export type Database = {
           payment_cycle?: string
           payment_method?: string | null
           position_title?: string | null
-          request_hash?: string | null
-          request_id?: string | null
           start_date?: string
           tenant_id?: string
           updated_at?: string
@@ -8787,18 +5490,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "employee_incident_actions_employee_tenant_fk"
-            columns: ["tenant_id", "employee_id"]
+            foreignKeyName: "employee_incident_actions_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "employee_incident_actions_incident_tenant_fk"
-            columns: ["tenant_id", "incident_id"]
+            foreignKeyName: "employee_incident_actions_incident_id_fkey"
+            columns: ["incident_id"]
             isOneToOne: false
             referencedRelation: "incidents"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_incident_actions_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
           },
           {
             foreignKeyName: "employee_incident_actions_tenant_id_fkey"
@@ -8840,7 +5550,6 @@ export type Database = {
           updated_by: string | null
           user_id: string | null
           version: number
-          workspace_id: string
         }
         Insert: {
           address?: Json | null
@@ -8872,7 +5581,6 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           version?: number
-          workspace_id: string
         }
         Update: {
           address?: Json | null
@@ -8904,7 +5612,6 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           version?: number
-          workspace_id?: string
         }
         Relationships: [
           {
@@ -8919,13 +5626,6 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employees_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -9064,3255 +5764,6 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_account_opening_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          opening_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          opening_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          opening_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_account_opening_reversals_opening_id_fkey"
-            columns: ["opening_id"]
-            isOneToOne: true
-            referencedRelation: "finance_account_openings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_account_opening_reversals_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_account_openings: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          balance_cents: number
-          bank_account_id: string
-          created_at: string
-          effective_from: string
-          evidence: Json
-          evidence_to: string
-          evidence_type: string
-          id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          balance_cents: number
-          bank_account_id: string
-          created_at?: string
-          effective_from: string
-          evidence: Json
-          evidence_to: string
-          evidence_type?: string
-          id?: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          balance_cents?: number
-          bank_account_id?: string
-          created_at?: string
-          effective_from?: string
-          evidence?: Json
-          evidence_to?: string
-          evidence_type?: string
-          id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_account_openings_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_account_openings_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_account_period_closures: {
-        Row: {
-          account_id: string
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          opening_id: string
-          period_end: string
-          period_start: string
-          predecessor_id: string | null
-          previous_closure_id: string | null
-          reason: string
-          request_id: string
-          snapshot: Json
-          snapshot_revision: string
-          tenant_id: string
-        }
-        Insert: {
-          account_id: string
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          opening_id: string
-          period_end: string
-          period_start: string
-          predecessor_id?: string | null
-          previous_closure_id?: string | null
-          reason: string
-          request_id: string
-          snapshot: Json
-          snapshot_revision: string
-          tenant_id: string
-        }
-        Update: {
-          account_id?: string
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          opening_id?: string
-          period_end?: string
-          period_start?: string
-          predecessor_id?: string | null
-          previous_closure_id?: string | null
-          reason?: string
-          request_id?: string
-          snapshot?: Json
-          snapshot_revision?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_account_period_closur_tenant_id_previous_closure_i_fkey"
-            columns: ["tenant_id", "previous_closure_id"]
-            isOneToOne: false
-            referencedRelation: "finance_account_period_closures"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_account_period_closures_tenant_id_predecessor_id_fkey"
-            columns: ["tenant_id", "predecessor_id"]
-            isOneToOne: false
-            referencedRelation: "finance_account_period_closures"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_account_period_dependencies: {
-        Row: {
-          account_id: string | null
-          affected_from: string | null
-          affected_to: string | null
-          closure_id: string
-          dependency_role: string
-          source_id: string
-          source_kind: string
-          source_revision: string
-          tenant_id: string
-        }
-        Insert: {
-          account_id?: string | null
-          affected_from?: string | null
-          affected_to?: string | null
-          closure_id: string
-          dependency_role: string
-          source_id: string
-          source_kind: string
-          source_revision: string
-          tenant_id: string
-        }
-        Update: {
-          account_id?: string | null
-          affected_from?: string | null
-          affected_to?: string | null
-          closure_id?: string
-          dependency_role?: string
-          source_id?: string
-          source_kind?: string
-          source_revision?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_account_period_dependencies_tenant_id_closure_id_fkey"
-            columns: ["tenant_id", "closure_id"]
-            isOneToOne: false
-            referencedRelation: "finance_account_period_closures"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_account_period_reopenings: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          closure_id: string
-          created_at: string
-          expected_snapshot_revision: string
-          id: string
-          reason: string
-          request_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          closure_id: string
-          created_at?: string
-          expected_snapshot_revision: string
-          id?: string
-          reason: string
-          request_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          closure_id?: string
-          created_at?: string
-          expected_snapshot_revision?: string
-          id?: string
-          reason?: string
-          request_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_account_period_reopenings_tenant_id_closure_id_fkey"
-            columns: ["tenant_id", "closure_id"]
-            isOneToOne: true
-            referencedRelation: "finance_account_period_closures"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_automatic_reconciliation_jobs: {
-        Row: {
-          actor_id: string
-          cursor_id: string | null
-          import_id: string
-          issue: string | null
-          matched_count: number
-          status: string
-          tenant_id: string
-          updated_at: string
-          verification_id: string
-        }
-        Insert: {
-          actor_id: string
-          cursor_id?: string | null
-          import_id: string
-          issue?: string | null
-          matched_count?: number
-          status?: string
-          tenant_id: string
-          updated_at?: string
-          verification_id: string
-        }
-        Update: {
-          actor_id?: string
-          cursor_id?: string | null
-          import_id?: string
-          issue?: string | null
-          matched_count?: number
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-          verification_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_automatic_reconciliation_jobs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_automatic_reconciliation_jobs_tenant_id_import_id_fkey"
-            columns: ["tenant_id", "import_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_imports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_automatic_reconciliation_jobs_verification_id_fkey"
-            columns: ["verification_id"]
-            isOneToOne: true
-            referencedRelation: "finance_statement_verifications"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_bank_entries: {
-        Row: {
-          amount_cents: number
-          bank_account_id: string
-          bank_id: string | null
-          counterparty_document: string | null
-          counterparty_name: string | null
-          created_at: string
-          currency: string
-          description: string
-          document_number: string | null
-          first_import_id: string
-          id: string
-          posted_on: string
-          raw: Json
-          source_row: number
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          bank_account_id: string
-          bank_id?: string | null
-          counterparty_document?: string | null
-          counterparty_name?: string | null
-          created_at?: string
-          currency: string
-          description: string
-          document_number?: string | null
-          first_import_id: string
-          id?: string
-          posted_on: string
-          raw: Json
-          source_row: number
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          bank_account_id?: string
-          bank_id?: string | null
-          counterparty_document?: string | null
-          counterparty_name?: string | null
-          created_at?: string
-          currency?: string
-          description?: string
-          document_number?: string | null
-          first_import_id?: string
-          id?: string
-          posted_on?: string
-          raw?: Json
-          source_row?: number
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_bank_entries_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_bank_entries_tenant_id_first_import_id_fkey"
-            columns: ["tenant_id", "first_import_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_imports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_cash_period_count_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          count_id: string
-          created_at: string
-          expected_revision: string
-          id: string
-          reason: string
-          request_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          count_id: string
-          created_at?: string
-          expected_revision: string
-          id?: string
-          reason: string
-          request_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          count_id?: string
-          created_at?: string
-          expected_revision?: string
-          id?: string
-          reason?: string
-          request_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_cash_period_count_reversals_tenant_id_count_id_fkey"
-            columns: ["tenant_id", "count_id"]
-            isOneToOne: true
-            referencedRelation: "finance_cash_period_counts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_cash_period_counts: {
-        Row: {
-          account_id: string
-          actor_id: string
-          actor_name: string
-          boundary: string
-          counts: Json
-          created_at: string
-          currency: string
-          custodian_name: string
-          evidence_type: string
-          id: string
-          period_end: string
-          reason: string
-          request_id: string
-          revision: string
-          tenant_id: string
-          timezone: string
-          total_cents: number
-        }
-        Insert: {
-          account_id: string
-          actor_id: string
-          actor_name: string
-          boundary?: string
-          counts: Json
-          created_at?: string
-          currency?: string
-          custodian_name: string
-          evidence_type?: string
-          id?: string
-          period_end: string
-          reason: string
-          request_id: string
-          revision: string
-          tenant_id: string
-          timezone?: string
-          total_cents: number
-        }
-        Update: {
-          account_id?: string
-          actor_id?: string
-          actor_name?: string
-          boundary?: string
-          counts?: Json
-          created_at?: string
-          currency?: string
-          custodian_name?: string
-          evidence_type?: string
-          id?: string
-          period_end?: string
-          reason?: string
-          request_id?: string
-          revision?: string
-          tenant_id?: string
-          timezone?: string
-          total_cents?: number
-        }
-        Relationships: []
-      }
-      finance_commands: {
-        Row: {
-          action: string
-          actor_id: string
-          created_at: string
-          payload: Json
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          created_at?: string
-          payload: Json
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          created_at?: string
-          payload?: Json
-          request_id?: string
-          result?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_commands_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_customer_credits: {
-        Row: {
-          amount_cents: number
-          bank_transaction_id: string
-          created_at: string
-          created_by: string | null
-          evidence_level: string
-          id: string
-          observation_id: string
-          origin_id: string
-          payer_id: string
-          payment_id: string
-          receipt_snapshot: Json
-          receivable_id: string
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          bank_transaction_id: string
-          created_at?: string
-          created_by?: string | null
-          evidence_level?: string
-          id?: string
-          observation_id: string
-          origin_id: string
-          payer_id: string
-          payment_id: string
-          receipt_snapshot: Json
-          receivable_id: string
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          bank_transaction_id?: string
-          created_at?: string
-          created_by?: string | null
-          evidence_level?: string
-          id?: string
-          observation_id?: string
-          origin_id?: string
-          payer_id?: string
-          payment_id?: string
-          receipt_snapshot?: Json
-          receivable_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_customer_credits_bank_transaction_id_fkey"
-            columns: ["bank_transaction_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_observation_id_fkey"
-            columns: ["observation_id"]
-            isOneToOne: false
-            referencedRelation: "finance_fiscal_observations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_origin_id_fkey"
-            columns: ["origin_id"]
-            isOneToOne: false
-            referencedRelation: "finance_fiscal_receivable_origins"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_payer_id_fkey"
-            columns: ["payer_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_receivable_id_fkey"
-            columns: ["receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_customer_credits_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_events: {
-        Row: {
-          action: string
-          actor_id: string
-          actor_name: string
-          after_data: Json
-          before_data: Json | null
-          created_at: string
-          entity_id: string
-          entity_type: string
-          id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          actor_name: string
-          after_data: Json
-          before_data?: Json | null
-          created_at?: string
-          entity_id: string
-          entity_type: string
-          id?: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          actor_name?: string
-          after_data?: Json
-          before_data?: Json | null
-          created_at?: string
-          entity_id?: string
-          entity_type?: string
-          id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_expense_allocations: {
-        Row: {
-          amount_cents: number
-          created_at: string
-          created_by: string
-          expense_id: string
-          id: string
-          movement_id: string
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          created_at?: string
-          created_by: string
-          expense_id: string
-          id?: string
-          movement_id: string
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          created_at?: string
-          created_by?: string
-          expense_id?: string
-          id?: string
-          movement_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_expense_allocations_tenant_id_expense_id_fkey"
-            columns: ["tenant_id", "expense_id"]
-            isOneToOne: false
-            referencedRelation: "finance_expense_items"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_expense_allocations_tenant_id_movement_id_fkey"
-            columns: ["tenant_id", "movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_expense_batches: {
-        Row: {
-          context: string
-          created_at: string
-          created_by: string
-          description: string
-          driver_id: string | null
-          id: string
-          tenant_id: string
-          trip_id: string | null
-        }
-        Insert: {
-          context: string
-          created_at?: string
-          created_by: string
-          description: string
-          driver_id?: string | null
-          id?: string
-          tenant_id: string
-          trip_id?: string | null
-        }
-        Update: {
-          context?: string
-          created_at?: string
-          created_by?: string
-          description?: string
-          driver_id?: string | null
-          id?: string
-          tenant_id?: string
-          trip_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_expense_batches_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_expense_batches_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_expense_batches_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_expense_batches_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-        ]
-      }
-      finance_expense_cancellations: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          expense_id: string
-          id: string
-          reason: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          expense_id: string
-          id?: string
-          reason: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          expense_id?: string
-          id?: string
-          reason?: string
-          request_id?: string
-          revision?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_expense_cancellations_tenant_id_expense_id_fkey"
-            columns: ["tenant_id", "expense_id"]
-            isOneToOne: true
-            referencedRelation: "finance_expense_items"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_expense_items: {
-        Row: {
-          amount_cents: number
-          batch_id: string
-          category: string
-          cost_center_id: string | null
-          created_at: string
-          created_by: string
-          description: string
-          document_number: string | null
-          id: string
-          no_receipt_reason: string | null
-          occurred_on: string
-          payable_id: string | null
-          receipt_evidence: Json | null
-          receipt_path: string | null
-          supplier_id: string | null
-          supplier_name: string
-          tenant_id: string
-          unloading_id: string | null
-        }
-        Insert: {
-          amount_cents: number
-          batch_id: string
-          category: string
-          cost_center_id?: string | null
-          created_at?: string
-          created_by: string
-          description: string
-          document_number?: string | null
-          id: string
-          no_receipt_reason?: string | null
-          occurred_on: string
-          payable_id?: string | null
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          supplier_id?: string | null
-          supplier_name: string
-          tenant_id: string
-          unloading_id?: string | null
-        }
-        Update: {
-          amount_cents?: number
-          batch_id?: string
-          category?: string
-          cost_center_id?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string
-          document_number?: string | null
-          id?: string
-          no_receipt_reason?: string | null
-          occurred_on?: string
-          payable_id?: string | null
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          supplier_id?: string | null
-          supplier_name?: string
-          tenant_id?: string
-          unloading_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_expense_items_payable_id_fkey"
-            columns: ["payable_id"]
-            isOneToOne: true
-            referencedRelation: "payables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_expense_items_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_expense_items_tenant_cost_center_fkey"
-            columns: ["tenant_id", "cost_center_id"]
-            isOneToOne: false
-            referencedRelation: "cost_centers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_expense_items_tenant_id_batch_id_fkey"
-            columns: ["tenant_id", "batch_id"]
-            isOneToOne: false
-            referencedRelation: "finance_expense_batches"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_expense_items_unloading_id_fkey"
-            columns: ["unloading_id"]
-            isOneToOne: true
-            referencedRelation: "finance_unloading_charges"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_fiscal_observations: {
-        Row: {
-          created_at: string
-          emission_id: string
-          id: string
-          observed_by: string | null
-          observed_order: number
-          snapshot: Json
-          snapshot_hash: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          emission_id: string
-          id?: string
-          observed_by?: string | null
-          observed_order?: never
-          snapshot: Json
-          snapshot_hash: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          emission_id?: string
-          id?: string
-          observed_by?: string | null
-          observed_order?: never
-          snapshot?: Json
-          snapshot_hash?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_fiscal_observations_emission_id_fkey"
-            columns: ["emission_id"]
-            isOneToOne: false
-            referencedRelation: "hub_fiscal_emissions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_observations_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_fiscal_projection_events: {
-        Row: {
-          action: string
-          actor_id: string | null
-          after_data: Json
-          before_data: Json | null
-          created_at: string
-          id: string
-          observation_id: string
-          origin_id: string | null
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          after_data: Json
-          before_data?: Json | null
-          created_at?: string
-          id?: string
-          observation_id: string
-          origin_id?: string | null
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          after_data?: Json
-          before_data?: Json | null
-          created_at?: string
-          id?: string
-          observation_id?: string
-          origin_id?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_fiscal_projection_events_observation_id_fkey"
-            columns: ["observation_id"]
-            isOneToOne: false
-            referencedRelation: "finance_fiscal_observations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_projection_events_origin_id_fkey"
-            columns: ["origin_id"]
-            isOneToOne: false
-            referencedRelation: "finance_fiscal_receivable_origins"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_projection_events_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_fiscal_projection_jobs: {
-        Row: {
-          attempts: number
-          automatic_failures: number
-          available_at: string
-          created_at: string
-          issue: string | null
-          last_error_code: string | null
-          observation_id: string
-          result: Json | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attempts?: number
-          automatic_failures?: number
-          available_at?: string
-          created_at?: string
-          issue?: string | null
-          last_error_code?: string | null
-          observation_id: string
-          result?: Json | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attempts?: number
-          automatic_failures?: number
-          available_at?: string
-          created_at?: string
-          issue?: string | null
-          last_error_code?: string | null
-          observation_id?: string
-          result?: Json | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_fiscal_projection_jobs_observation_id_fkey"
-            columns: ["observation_id"]
-            isOneToOne: true
-            referencedRelation: "finance_fiscal_observations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_projection_jobs_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_fiscal_receivable_origins: {
-        Row: {
-          basis: Json
-          created_at: string
-          doc_type: string
-          emission_id: string
-          fiscal_identity: string
-          id: string
-          observation_id: string
-          receivable_id: string
-          source_id: string
-          state: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          basis: Json
-          created_at?: string
-          doc_type: string
-          emission_id: string
-          fiscal_identity: string
-          id?: string
-          observation_id: string
-          receivable_id: string
-          source_id: string
-          state: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          basis?: Json
-          created_at?: string
-          doc_type?: string
-          emission_id?: string
-          fiscal_identity?: string
-          id?: string
-          observation_id?: string
-          receivable_id?: string
-          source_id?: string
-          state?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_fiscal_receivable_origins_emission_id_fkey"
-            columns: ["emission_id"]
-            isOneToOne: false
-            referencedRelation: "hub_fiscal_emissions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_receivable_origins_observation_id_fkey"
-            columns: ["observation_id"]
-            isOneToOne: false
-            referencedRelation: "finance_fiscal_observations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_receivable_origins_receivable_id_fkey"
-            columns: ["receivable_id"]
-            isOneToOne: true
-            referencedRelation: "receivables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_fiscal_receivable_origins_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_internal_transfers: {
-        Row: {
-          created_at: string
-          created_by: string
-          id: string
-          incoming_id: string
-          outgoing_id: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          id?: string
-          incoming_id: string
-          outgoing_id: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          id?: string
-          incoming_id?: string
-          outgoing_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_internal_transfers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_internal_transfers_tenant_id_incoming_id_fkey"
-            columns: ["tenant_id", "incoming_id"]
-            isOneToOne: true
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_internal_transfers_tenant_id_outgoing_id_fkey"
-            columns: ["tenant_id", "outgoing_id"]
-            isOneToOne: true
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_legacy_cut_reviews: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          bank_account_id: string
-          created_at: string
-          id: string
-          period_end: string
-          period_start: string
-          reason: string
-          revision: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          bank_account_id: string
-          created_at?: string
-          id?: string
-          period_end: string
-          period_start: string
-          reason: string
-          revision: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          bank_account_id?: string
-          created_at?: string
-          id?: string
-          period_end?: string
-          period_start?: string
-          reason?: string
-          revision?: string
-          snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_legacy_cut_reviews_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_legacy_expense_cost_links: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at: string
-          expense_id: string
-          id: string
-          reason: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at?: string
-          expense_id: string
-          id?: string
-          reason: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          amount_cents?: number
-          cost_id?: string
-          created_at?: string
-          expense_id?: string
-          id?: string
-          reason?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_legacy_expense_cost_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_legacy_expense_cost_reversals_tenant_id_link_id_fkey"
-            columns: ["tenant_id", "link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_legacy_expense_cost_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_legacy_receipt_link_reversals: {
-        Row: {
-          actor_name: string
-          created_at: string
-          created_by: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_name: string
-          created_at?: string
-          created_by: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_name?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_legacy_receipt_link_reversals_tenant_id_link_id_fkey"
-            columns: ["tenant_id", "link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_legacy_receipt_movement_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_legacy_receipt_movement_links: {
-        Row: {
-          actor_name: string
-          amount_cents: number
-          created_at: string
-          created_by: string
-          id: string
-          movement_id: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_name: string
-          amount_cents: number
-          created_at?: string
-          created_by: string
-          id?: string
-          movement_id: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_name?: string
-          amount_cents?: number
-          created_at?: string
-          created_by?: string
-          id?: string
-          movement_id?: string
-          payment_id?: string
-          reason?: string
-          receivable_id?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_legacy_receipt_movement_links_movement_id_fkey"
-            columns: ["movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_legacy_receipt_movement_links_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_legacy_receipt_movement_links_receivable_id_fkey"
-            columns: ["receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_legacy_receipt_movement_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_maintenance_cost_claims: {
-        Row: {
-          cost_id: string
-          link_id: string
-          source_id: string
-          source_kind: string
-          tenant_id: string
-        }
-        Insert: {
-          cost_id: string
-          link_id: string
-          source_id: string
-          source_kind: string
-          tenant_id: string
-        }
-        Update: {
-          cost_id?: string
-          link_id?: string
-          source_id?: string
-          source_kind?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_maintenance_direct_part_links: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at: string
-          id: string
-          order_id: string
-          part_id: string
-          reason: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at?: string
-          id?: string
-          order_id: string
-          part_id: string
-          reason: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          amount_cents?: number
-          cost_id?: string
-          created_at?: string
-          id?: string
-          order_id?: string
-          part_id?: string
-          reason?: string
-          source_snapshot?: Json
-          supplier_id?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_maintenance_direct_part_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_maintenance_direct_part_reversal_tenant_id_link_id_fkey"
-            columns: ["tenant_id", "link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_maintenance_direct_part_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_maintenance_labor_links: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at: string
-          id: string
-          order_id: string
-          reason: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at?: string
-          id?: string
-          order_id: string
-          reason: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          amount_cents?: number
-          cost_id?: string
-          created_at?: string
-          id?: string
-          order_id?: string
-          reason?: string
-          source_snapshot?: Json
-          supplier_id?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_maintenance_labor_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_maintenance_labor_reversals_tenant_id_link_id_fkey"
-            columns: ["tenant_id", "link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_maintenance_labor_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_manual_expense_cancellations: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          original_request_id: string
-          payable_id: string
-          reason: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          original_request_id: string
-          payable_id: string
-          reason: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          original_request_id?: string
-          payable_id?: string
-          reason?: string
-          request_id?: string
-          revision?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_manual_expense_cancel_tenant_id_original_request_i_fkey"
-            columns: ["tenant_id", "original_request_id"]
-            isOneToOne: true
-            referencedRelation: "finance_commands"
-            referencedColumns: ["tenant_id", "request_id"]
-          },
-          {
-            foreignKeyName: "finance_manual_expense_cancellations_payable_id_fkey"
-            columns: ["payable_id"]
-            isOneToOne: false
-            referencedRelation: "payables"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_manual_expense_evidence: {
-        Row: {
-          created_at: string
-          created_by: string
-          evidence: Json
-          id: string
-          payable_id: string
-          receipt_path: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          evidence: Json
-          id?: string
-          payable_id: string
-          receipt_path: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          evidence?: Json
-          id?: string
-          payable_id?: string
-          receipt_path?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_manual_expense_evidence_payable_id_fkey"
-            columns: ["payable_id"]
-            isOneToOne: true
-            referencedRelation: "payables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_manual_expense_evidence_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_movement_voids: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          duplicate_of_movement_id: string | null
-          id: string
-          kind: string
-          movement_id: string
-          original_request_id: string
-          reason: string
-          replacement_movement_id: string | null
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          duplicate_of_movement_id?: string | null
-          id?: string
-          kind: string
-          movement_id: string
-          original_request_id: string
-          reason: string
-          replacement_movement_id?: string | null
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          duplicate_of_movement_id?: string | null
-          id?: string
-          kind?: string
-          movement_id?: string
-          original_request_id?: string
-          reason?: string
-          replacement_movement_id?: string | null
-          request_id?: string
-          revision?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_duplicate_of_movement_id_fkey"
-            columns: ["tenant_id", "duplicate_of_movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_movement_id_fkey"
-            columns: ["tenant_id", "movement_id"]
-            isOneToOne: true
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_original_request_id_fkey"
-            columns: ["tenant_id", "original_request_id"]
-            isOneToOne: false
-            referencedRelation: "finance_commands"
-            referencedColumns: ["tenant_id", "request_id"]
-          },
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_replacement_movement_id_fkey"
-            columns: ["tenant_id", "replacement_movement_id"]
-            isOneToOne: true
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_movement_voids_tenant_id_request_id_fkey"
-            columns: ["tenant_id", "request_id"]
-            isOneToOne: true
-            referencedRelation: "finance_commands"
-            referencedColumns: ["tenant_id", "request_id"]
-          },
-        ]
-      }
-      finance_movements: {
-        Row: {
-          amount_cents: number
-          bank_account_id: string
-          bank_reference: string | null
-          beneficiary_document: string | null
-          beneficiary_name: string
-          cost_center_id: string | null
-          cost_center_name: string | null
-          created_at: string
-          created_by: string
-          description: string
-          direction: string
-          driver_id: string | null
-          id: string
-          nature: string
-          occurred_on: string
-          receipt_evidence: Json | null
-          receipt_path: string | null
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          bank_account_id: string
-          bank_reference?: string | null
-          beneficiary_document?: string | null
-          beneficiary_name: string
-          cost_center_id?: string | null
-          cost_center_name?: string | null
-          created_at?: string
-          created_by: string
-          description: string
-          direction: string
-          driver_id?: string | null
-          id?: string
-          nature: string
-          occurred_on: string
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          bank_account_id?: string
-          bank_reference?: string | null
-          beneficiary_document?: string | null
-          beneficiary_name?: string
-          cost_center_id?: string | null
-          cost_center_name?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string
-          direction?: string
-          driver_id?: string | null
-          id?: string
-          nature?: string
-          occurred_on?: string
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_movements_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_movements_cost_center_fkey"
-            columns: ["tenant_id", "cost_center_id"]
-            isOneToOne: false
-            referencedRelation: "cost_centers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_movements_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_movements_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_payable_link_reversals: {
-        Row: {
-          actor_name: string
-          created_at: string
-          created_by: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_name: string
-          created_at?: string
-          created_by: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_name?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_payable_link_reversals_link_id_fkey"
-            columns: ["link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_payable_movement_links"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_payable_link_reversals_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_payable_movement_links: {
-        Row: {
-          actor_name: string | null
-          amount_cents: number
-          created_at: string
-          created_by: string
-          id: string
-          movement_id: string
-          origin: string
-          payable_id: string
-          payment_id: string
-          reason: string | null
-          source_snapshot: Json | null
-          tenant_id: string
-        }
-        Insert: {
-          actor_name?: string | null
-          amount_cents: number
-          created_at?: string
-          created_by: string
-          id?: string
-          movement_id: string
-          origin?: string
-          payable_id: string
-          payment_id: string
-          reason?: string | null
-          source_snapshot?: Json | null
-          tenant_id: string
-        }
-        Update: {
-          actor_name?: string | null
-          amount_cents?: number
-          created_at?: string
-          created_by?: string
-          id?: string
-          movement_id?: string
-          origin?: string
-          payable_id?: string
-          payment_id?: string
-          reason?: string | null
-          source_snapshot?: Json | null
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_payable_movement_links_movement_id_fkey"
-            columns: ["movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_payable_movement_links_payable_id_fkey"
-            columns: ["payable_id"]
-            isOneToOne: false
-            referencedRelation: "payables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_payable_movement_links_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "payables_payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_payable_movement_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_period_evidence_reviews: {
-        Row: {
-          actor_id: string
-          bank_account_id: string
-          created_at: string
-          id: string
-          period_end: string
-          period_start: string
-          reason: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          bank_account_id: string
-          created_at?: string
-          id?: string
-          period_end: string
-          period_start: string
-          reason: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          bank_account_id?: string
-          created_at?: string
-          id?: string
-          period_end?: string
-          period_start?: string
-          reason?: string
-          snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_period_evidence_reviews_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_period_evidence_reviews_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_receipt_allocation_corrections: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          movement_id: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          movement_id: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          movement_id?: string
-          payment_id?: string
-          reason?: string
-          receivable_id?: string
-          request_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_receipt_allocation_correct_tenant_id_receivable_id_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_receipt_allocation_correctio_tenant_id_movement_id_fkey"
-            columns: ["tenant_id", "movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_receipt_allocation_correction_tenant_id_payment_id_fkey"
-            columns: ["tenant_id", "payment_id"]
-            isOneToOne: true
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_receivable_movement_links: {
-        Row: {
-          action: string
-          bank_transaction_id: string
-          command_id: string
-          created_at: string
-          movement_id: string
-          payment_id: string
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          bank_transaction_id: string
-          command_id: string
-          created_at?: string
-          movement_id: string
-          payment_id: string
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          bank_transaction_id?: string
-          command_id?: string
-          created_at?: string
-          movement_id?: string
-          payment_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_receivable_movement_l_tenant_id_bank_transaction_i_fkey"
-            columns: ["tenant_id", "bank_transaction_id"]
-            isOneToOne: true
-            referencedRelation: "bank_transactions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_receivable_movement_links_tenant_id_command_id_fkey"
-            columns: ["tenant_id", "command_id"]
-            isOneToOne: true
-            referencedRelation: "receivable_financial_commands"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_receivable_movement_links_tenant_id_movement_id_fkey"
-            columns: ["tenant_id", "movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_receivable_movement_links_tenant_id_payment_id_fkey"
-            columns: ["tenant_id", "payment_id"]
-            isOneToOne: false
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_reconciliation_groups: {
-        Row: {
-          account_evidence: string
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          bank_account_id: string
-          bank_entry_ids: string[]
-          created_at: string
-          direction: string
-          evidence_snapshot: Json
-          id: string
-          method: string
-          movement_ids: string[]
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          account_evidence: string
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          bank_account_id: string
-          bank_entry_ids: string[]
-          created_at?: string
-          direction: string
-          evidence_snapshot: Json
-          id?: string
-          method: string
-          movement_ids: string[]
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          account_evidence?: string
-          actor_id?: string
-          actor_name?: string
-          amount_cents?: number
-          bank_account_id?: string
-          bank_entry_ids?: string[]
-          created_at?: string
-          direction?: string
-          evidence_snapshot?: Json
-          id?: string
-          method?: string
-          movement_ids?: string[]
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_reconciliation_groups_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_reconciliation_groups_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_reconciliation_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          group_id: string
-          id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          group_id: string
-          id?: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          group_id?: string
-          id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_reconciliation_reversals_tenant_id_group_id_fkey"
-            columns: ["tenant_id", "group_id"]
-            isOneToOne: true
-            referencedRelation: "finance_reconciliation_groups"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_settlement_link_reversals: {
-        Row: {
-          actor_name: string
-          created_at: string
-          created_by: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_name: string
-          created_at?: string
-          created_by: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_name?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_settlement_link_reversals_link_id_fkey"
-            columns: ["link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_settlement_movement_links"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_settlement_link_reversals_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_settlement_movement_links: {
-        Row: {
-          amount_cents: number
-          created_at: string
-          created_by: string
-          id: string
-          movement_id: string
-          payment_id: string
-          settlement_id: string
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          created_at?: string
-          created_by: string
-          id?: string
-          movement_id: string
-          payment_id: string
-          settlement_id: string
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          created_at?: string
-          created_by?: string
-          id?: string
-          movement_id?: string
-          payment_id?: string
-          settlement_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_settlement_movement_links_movement_id_fkey"
-            columns: ["movement_id"]
-            isOneToOne: false
-            referencedRelation: "finance_movements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_settlement_movement_links_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "driver_settlement_payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_settlement_movement_links_settlement_id_fkey"
-            columns: ["settlement_id"]
-            isOneToOne: false
-            referencedRelation: "driver_settlements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_settlement_movement_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_statement_coverage_approvals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          bank_account_id: string
-          created_at: string
-          declarations: Json
-          id: string
-          period_end: string
-          period_start: string
-          reason: string
-          revision: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          bank_account_id: string
-          created_at?: string
-          declarations: Json
-          id?: string
-          period_end: string
-          period_start: string
-          reason: string
-          revision: string
-          snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          bank_account_id?: string
-          created_at?: string
-          declarations?: Json
-          id?: string
-          period_end?: string
-          period_start?: string
-          reason?: string
-          revision?: string
-          snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_coverage_approvals_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_statement_coverage_approvals_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_statement_coverage_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          approval_id: string
-          created_at: string
-          id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          approval_id: string
-          created_at?: string
-          id?: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          approval_id?: string
-          created_at?: string
-          id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_coverage_reversals_tenant_id_approval_id_fkey"
-            columns: ["tenant_id", "approval_id"]
-            isOneToOne: true
-            referencedRelation: "finance_statement_coverage_approvals"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_statement_identity_reviews: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          bank_entry_id: string
-          created_at: string
-          decision: string
-          id: string
-          reason: string
-          row_id: string
-          source_verification_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          bank_entry_id: string
-          created_at?: string
-          decision: string
-          id?: string
-          reason: string
-          row_id: string
-          source_verification_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          bank_entry_id?: string
-          created_at?: string
-          decision?: string
-          id?: string
-          reason?: string
-          row_id?: string
-          source_verification_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_identity_reviews_source_verification_id_fkey"
-            columns: ["source_verification_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_verifications"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_statement_identity_reviews_tenant_id_bank_entry_id_fkey"
-            columns: ["tenant_id", "bank_entry_id"]
-            isOneToOne: false
-            referencedRelation: "finance_bank_entries"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_statement_identity_reviews_tenant_id_row_id_fkey"
-            columns: ["tenant_id", "row_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_rows"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_statement_imports: {
-        Row: {
-          bank_account_id: string
-          closing_cents: number | null
-          created_at: string
-          created_by: string
-          currency: string
-          file_hash: string
-          file_name: string
-          id: string
-          input_rows: number
-          mapping: Json
-          opening_cents: number | null
-          parser_version: string
-          period_end: string
-          period_start: string
-          source_path: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          bank_account_id: string
-          closing_cents?: number | null
-          created_at?: string
-          created_by: string
-          currency: string
-          file_hash: string
-          file_name: string
-          id?: string
-          input_rows: number
-          mapping: Json
-          opening_cents?: number | null
-          parser_version: string
-          period_end: string
-          period_start: string
-          source_path: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          bank_account_id?: string
-          closing_cents?: number | null
-          created_at?: string
-          created_by?: string
-          currency?: string
-          file_hash?: string
-          file_name?: string
-          id?: string
-          input_rows?: number
-          mapping?: Json
-          opening_cents?: number | null
-          parser_version?: string
-          period_end?: string
-          period_start?: string
-          source_path?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_imports_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_statement_imports_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_statement_review_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          reason: string
-          review_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          reason: string
-          review_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          reason?: string
-          review_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_review_reversals_tenant_id_review_id_fkey"
-            columns: ["tenant_id", "review_id"]
-            isOneToOne: true
-            referencedRelation: "finance_statement_identity_reviews"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_statement_rows: {
-        Row: {
-          bank_entry_id: string | null
-          candidate_ids: string[]
-          classification: string
-          created_at: string
-          id: string
-          import_id: string
-          raw: Json
-          source_row: number
-          tenant_id: string
-        }
-        Insert: {
-          bank_entry_id?: string | null
-          candidate_ids?: string[]
-          classification: string
-          created_at?: string
-          id?: string
-          import_id: string
-          raw: Json
-          source_row: number
-          tenant_id: string
-        }
-        Update: {
-          bank_entry_id?: string | null
-          candidate_ids?: string[]
-          classification?: string
-          created_at?: string
-          id?: string
-          import_id?: string
-          raw?: Json
-          source_row?: number
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_rows_tenant_id_bank_entry_id_fkey"
-            columns: ["tenant_id", "bank_entry_id"]
-            isOneToOne: false
-            referencedRelation: "finance_bank_entries"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_statement_rows_tenant_id_import_id_fkey"
-            columns: ["tenant_id", "import_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_imports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_statement_verifications: {
-        Row: {
-          actor_id: string
-          created_at: string
-          id: string
-          import_id: string
-          outcome: string
-          reader_version: string
-          report: Json
-          source_revision: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          created_at?: string
-          id?: string
-          import_id: string
-          outcome: string
-          reader_version: string
-          report: Json
-          source_revision: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          created_at?: string
-          id?: string
-          import_id?: string
-          outcome?: string
-          reader_version?: string
-          report?: Json
-          source_revision?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_statement_verifications_tenant_id_import_id_fkey"
-            columns: ["tenant_id", "import_id"]
-            isOneToOne: false
-            referencedRelation: "finance_statement_imports"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_stock_acquisition_dependencies: {
-        Row: {
-          acquisition_link_id: string
-          amount_cents: number
-          quantity: number
-          source_id: string
-          source_kind: string
-          tenant_id: string
-        }
-        Insert: {
-          acquisition_link_id: string
-          amount_cents: number
-          quantity: number
-          source_id: string
-          source_kind: string
-          tenant_id: string
-        }
-        Update: {
-          acquisition_link_id?: string
-          amount_cents?: number
-          quantity?: number
-          source_id?: string
-          source_kind?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_stock_acquisition_dep_tenant_id_acquisition_link_i_fkey"
-            columns: ["tenant_id", "acquisition_link_id"]
-            isOneToOne: false
-            referencedRelation: "finance_stock_acquisition_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_stock_acquisition_links: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at: string
-          id: string
-          inbound_movement_id: string
-          quantity: number
-          reason: string
-          source_snapshot: Json
-          stock_item_id: string
-          supplier_id: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          amount_cents: number
-          cost_id: string
-          created_at?: string
-          id?: string
-          inbound_movement_id: string
-          quantity: number
-          reason: string
-          source_snapshot: Json
-          stock_item_id: string
-          supplier_id: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          amount_cents?: number
-          cost_id?: string
-          created_at?: string
-          id?: string
-          inbound_movement_id?: string
-          quantity?: number
-          reason?: string
-          source_snapshot?: Json
-          stock_item_id?: string
-          supplier_id?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_stock_acquisition_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          created_at: string
-          id: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          created_at?: string
-          id?: string
-          link_id: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          created_at?: string
-          id?: string
-          link_id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_stock_acquisition_reversals_tenant_id_link_id_fkey"
-            columns: ["tenant_id", "link_id"]
-            isOneToOne: true
-            referencedRelation: "finance_stock_acquisition_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_stock_consumption_attributions: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          consumption_movement_id: string
-          created_at: string
-          id: string
-          order_id: string
-          part_id: string
-          policy: string
-          reason: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          consumption_movement_id: string
-          created_at?: string
-          id?: string
-          order_id: string
-          part_id: string
-          policy: string
-          reason: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          consumption_movement_id?: string
-          created_at?: string
-          id?: string
-          order_id?: string
-          part_id?: string
-          policy?: string
-          reason?: string
-          revision?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      finance_stock_consumption_lines: {
-        Row: {
-          acquisition_link_id: string
-          amount_cents: number
-          attribution_id: string
-          balance_snapshot: Json
-          id: string
-          quantity: number
-          tenant_id: string
-        }
-        Insert: {
-          acquisition_link_id: string
-          amount_cents: number
-          attribution_id: string
-          balance_snapshot: Json
-          id?: string
-          quantity: number
-          tenant_id: string
-        }
-        Update: {
-          acquisition_link_id?: string
-          amount_cents?: number
-          attribution_id?: string
-          balance_snapshot?: Json
-          id?: string
-          quantity?: number
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_stock_consumption_lin_tenant_id_acquisition_link_i_fkey"
-            columns: ["tenant_id", "acquisition_link_id"]
-            isOneToOne: false
-            referencedRelation: "finance_stock_acquisition_links"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "finance_stock_consumption_lines_tenant_id_attribution_id_fkey"
-            columns: ["tenant_id", "attribution_id"]
-            isOneToOne: false
-            referencedRelation: "finance_stock_consumption_attributions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_stock_consumption_reversals: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          attribution_id: string
-          created_at: string
-          id: string
-          reason: string
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          attribution_id: string
-          created_at?: string
-          id?: string
-          reason: string
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          attribution_id?: string
-          created_at?: string
-          id?: string
-          reason?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_stock_consumption_reversa_tenant_id_attribution_id_fkey"
-            columns: ["tenant_id", "attribution_id"]
-            isOneToOne: true
-            referencedRelation: "finance_stock_consumption_attributions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_transfer_departures: {
-        Row: {
-          created_at: string
-          created_by: string
-          destination_account_id: string
-          id: string
-          outgoing_id: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          destination_account_id: string
-          id?: string
-          outgoing_id: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          destination_account_id?: string
-          id?: string
-          outgoing_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_transfer_departures_destination_account_id_fkey"
-            columns: ["destination_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_transfer_departures_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_transfer_departures_tenant_id_outgoing_id_fkey"
-            columns: ["tenant_id", "outgoing_id"]
-            isOneToOne: true
-            referencedRelation: "finance_movements"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      finance_unloading_charges: {
-        Row: {
-          amount_cents: number
-          created_at: string
-          created_by: string
-          delivery_stop_id: string
-          id: string
-          occurred_on: string
-          receipt_evidence: Json | null
-          receipt_path: string | null
-          receivable_id: string
-          recorded_stop_id: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Insert: {
-          amount_cents: number
-          created_at?: string
-          created_by: string
-          delivery_stop_id: string
-          id?: string
-          occurred_on: string
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          receivable_id: string
-          recorded_stop_id: string
-          source_snapshot: Json
-          supplier_id: string
-          tenant_id: string
-        }
-        Update: {
-          amount_cents?: number
-          created_at?: string
-          created_by?: string
-          delivery_stop_id?: string
-          id?: string
-          occurred_on?: string
-          receipt_evidence?: Json | null
-          receipt_path?: string | null
-          receivable_id?: string
-          recorded_stop_id?: string
-          source_snapshot?: Json
-          supplier_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_unloading_charges_delivery_stop_id_fkey"
-            columns: ["delivery_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_delivery_stop_id_fkey"
-            columns: ["delivery_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_receivable_id_fkey"
-            columns: ["receivable_id"]
-            isOneToOne: true
-            referencedRelation: "receivables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_recorded_stop_id_fkey"
-            columns: ["recorded_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_recorded_stop_id_fkey"
-            columns: ["recorded_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "finance_unloading_charges_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_unloading_projection_repairs: {
-        Row: {
-          actor_id: string
-          actor_name: string
-          after_data: Json
-          before_data: Json
-          charge_id: string
-          created_at: string
-          id: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          actor_name: string
-          after_data: Json
-          before_data: Json
-          charge_id: string
-          created_at?: string
-          id?: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          revision: string
-          source_snapshot: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          actor_name?: string
-          after_data?: Json
-          before_data?: Json
-          charge_id?: string
-          created_at?: string
-          id?: string
-          reason?: string
-          receivable_id?: string
-          request_id?: string
-          revision?: string
-          source_snapshot?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_unloading_projection_repairs_charge_id_fkey"
-            columns: ["charge_id"]
-            isOneToOne: false
-            referencedRelation: "finance_unloading_charges"
             referencedColumns: ["id"]
           },
         ]
@@ -12505,81 +5956,6 @@ export type Database = {
           },
         ]
       }
-      fiscal_certificates: {
-        Row: {
-          certificate_ciphertext: string
-          certificate_cnpj: string | null
-          created_at: string
-          emitter_id: string
-          id: string
-          label: string
-          last_test_error: string | null
-          last_tested_at: string | null
-          serial_number: string | null
-          status: string
-          subject_name: string | null
-          tenant_id: string
-          thumbprint_sha256: string
-          updated_at: string
-          uploaded_by: string | null
-          valid_from: string
-          valid_to: string
-        }
-        Insert: {
-          certificate_ciphertext: string
-          certificate_cnpj?: string | null
-          created_at?: string
-          emitter_id: string
-          id?: string
-          label?: string
-          last_test_error?: string | null
-          last_tested_at?: string | null
-          serial_number?: string | null
-          status?: string
-          subject_name?: string | null
-          tenant_id: string
-          thumbprint_sha256: string
-          updated_at?: string
-          uploaded_by?: string | null
-          valid_from: string
-          valid_to: string
-        }
-        Update: {
-          certificate_ciphertext?: string
-          certificate_cnpj?: string | null
-          created_at?: string
-          emitter_id?: string
-          id?: string
-          label?: string
-          last_test_error?: string | null
-          last_tested_at?: string | null
-          serial_number?: string | null
-          status?: string
-          subject_name?: string | null
-          tenant_id?: string
-          thumbprint_sha256?: string
-          updated_at?: string
-          uploaded_by?: string | null
-          valid_from?: string
-          valid_to?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_certificates_emitter_fk"
-            columns: ["tenant_id", "emitter_id"]
-            isOneToOne: false
-            referencedRelation: "tenant_emitters"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "fiscal_certificates_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fiscal_documents: {
         Row: {
           access_key: string | null
@@ -12590,7 +5966,6 @@ export type Database = {
           client_load_number: string | null
           client_load_source: Json | null
           control_lot: string | null
-          cost_center: string | null
           created_at: string
           created_by: string | null
           cte_consignee_client_id: string | null
@@ -12600,7 +5975,6 @@ export type Database = {
           cte_payload: Json | null
           cte_taker_role: string | null
           cte_vehicle_id: string | null
-          current_delivery_attempt_id: string | null
           deleted_at: string | null
           deleted_by: string | null
           delivery_meta: Json
@@ -12640,8 +6014,6 @@ export type Database = {
           invoice_series: string | null
           is_duplicate: boolean
           issue_date: string | null
-          last_status_check_at: string | null
-          last_status_response: Json | null
           load_id: string | null
           nfse_emitted_at: string | null
           nfse_emitted_document_id: string | null
@@ -12667,7 +6039,6 @@ export type Database = {
           sefaz_status: string | null
           sefaz_status_code: string | null
           status: string
-          status_check_attempts: number
           supplier_id: string | null
           tenant_id: string
           updated_at: string
@@ -12684,7 +6055,6 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
-          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -12694,7 +6064,6 @@ export type Database = {
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
-          current_delivery_attempt_id?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           delivery_meta?: Json
@@ -12734,8 +6103,6 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
-          last_status_check_at?: string | null
-          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -12761,7 +6128,6 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
-          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -12778,7 +6144,6 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
-          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -12788,7 +6153,6 @@ export type Database = {
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
-          current_delivery_attempt_id?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           delivery_meta?: Json
@@ -12828,8 +6192,6 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
-          last_status_check_at?: string | null
-          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -12855,7 +6217,6 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
-          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -12869,13 +6230,6 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_documents_current_delivery_attempt_id_fkey"
-            columns: ["current_delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
             referencedColumns: ["id"]
           },
           {
@@ -12898,20 +6252,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_documents_load_tenant_fkey"
-            columns: ["load_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id", "tenant_id"]
-          },
-          {
-            foreignKeyName: "fiscal_documents_load_tenant_fkey"
-            columns: ["load_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id", "tenant_id"]
           },
           {
             foreignKeyName: "fiscal_documents_order_id_fkey"
@@ -12943,206 +6283,10 @@ export type Database = {
           },
         ]
       }
-      fiscal_party_registry: {
-        Row: {
-          cnpj: string
-          created_at: string
-          economic_activity_code: string | null
-          id: string
-          legal_name: string | null
-          official_address: Json
-          raw_record: Json
-          registry_status: string
-          source: string
-          source_query_id: string | null
-          state_registration: string | null
-          status_code: string | null
-          tax_regime: string | null
-          tenant_id: string
-          trade_name: string | null
-          uf: string
-          updated_at: string
-          verified_at: string
-        }
-        Insert: {
-          cnpj: string
-          created_at?: string
-          economic_activity_code?: string | null
-          id?: string
-          legal_name?: string | null
-          official_address?: Json
-          raw_record?: Json
-          registry_status?: string
-          source?: string
-          source_query_id?: string | null
-          state_registration?: string | null
-          status_code?: string | null
-          tax_regime?: string | null
-          tenant_id: string
-          trade_name?: string | null
-          uf: string
-          updated_at?: string
-          verified_at: string
-        }
-        Update: {
-          cnpj?: string
-          created_at?: string
-          economic_activity_code?: string | null
-          id?: string
-          legal_name?: string | null
-          official_address?: Json
-          raw_record?: Json
-          registry_status?: string
-          source?: string
-          source_query_id?: string | null
-          state_registration?: string | null
-          status_code?: string | null
-          tax_regime?: string | null
-          tenant_id?: string
-          trade_name?: string | null
-          uf?: string
-          updated_at?: string
-          verified_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_party_registry_source_query_id_fkey"
-            columns: ["source_query_id"]
-            isOneToOne: false
-            referencedRelation: "tax_registry_queries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_party_registry_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fiscal_poll_dead_letters: {
-        Row: {
-          attempt_count: number
-          context: Json
-          created_at: string
-          document_id: string
-          document_kind: string
-          document_number: string | null
-          first_seen_at: string
-          id: string
-          last_attempt_at: string
-          reason_code: string
-          resolution_notes: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attempt_count?: number
-          context?: Json
-          created_at?: string
-          document_id: string
-          document_kind: string
-          document_number?: string | null
-          first_seen_at: string
-          id?: string
-          last_attempt_at?: string
-          reason_code: string
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attempt_count?: number
-          context?: Json
-          created_at?: string
-          document_id?: string
-          document_kind?: string
-          document_number?: string | null
-          first_seen_at?: string
-          id?: string
-          last_attempt_at?: string
-          reason_code?: string
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_poll_dead_letters_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fiscal_source_reservations: {
-        Row: {
-          environment: string
-          nfse_id: string | null
-          outbound_id: string | null
-          source_id: string
-          tenant_id: string
-        }
-        Insert: {
-          environment: string
-          nfse_id?: string | null
-          outbound_id?: string | null
-          source_id: string
-          tenant_id: string
-        }
-        Update: {
-          environment?: string
-          nfse_id?: string | null
-          outbound_id?: string | null
-          source_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_source_reservations_nfse_id_fkey"
-            columns: ["nfse_id"]
-            isOneToOne: false
-            referencedRelation: "nfse_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_source_reservations_outbound_id_fkey"
-            columns: ["outbound_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_source_reservations_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fiscal_source_reservations_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fiscal_webhook_inbox: {
         Row: {
-          attempt_count: number
-          created_at: string
+          attempt_count: number | null
+          created_at: string | null
           delivery_id: string
           emission_id: string | null
           event_timestamp: string
@@ -13154,11 +6298,11 @@ export type Database = {
           raw_payload: Json
           status: string
           tenant_id: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          attempt_count?: number
-          created_at?: string
+          attempt_count?: number | null
+          created_at?: string | null
           delivery_id: string
           emission_id?: string | null
           event_timestamp: string
@@ -13170,11 +6314,11 @@ export type Database = {
           raw_payload: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          attempt_count?: number
-          created_at?: string
+          attempt_count?: number | null
+          created_at?: string | null
           delivery_id?: string
           emission_id?: string | null
           event_timestamp?: string
@@ -13186,7 +6330,7 @@ export type Database = {
           raw_payload?: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -13530,10 +6674,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "freight_tables_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "freight_tables_tenant_id_fkey"
@@ -13643,56 +6787,6 @@ export type Database = {
           },
         ]
       }
-      geocoding_provider_rate_limits: {
-        Row: {
-          next_allowed_at: string
-          provider: string
-          updated_at: string
-        }
-        Insert: {
-          next_allowed_at?: string
-          provider: string
-          updated_at?: string
-        }
-        Update: {
-          next_allowed_at?: string
-          provider?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      geocoding_rate_limits: {
-        Row: {
-          next_allowed_at: string
-          request_count: number
-          tenant_id: string
-          updated_at: string
-          window_started_at: string
-        }
-        Insert: {
-          next_allowed_at?: string
-          request_count?: number
-          tenant_id: string
-          updated_at?: string
-          window_started_at?: string
-        }
-        Update: {
-          next_allowed_at?: string
-          request_count?: number
-          tenant_id?: string
-          updated_at?: string
-          window_started_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "geocoding_rate_limits_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: true
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       geofence_events: {
         Row: {
           direction: string
@@ -13745,63 +6839,12 @@ export type Database = {
           },
         ]
       }
-      geofence_radius_policies: {
-        Row: {
-          category: string
-          enter_margin_m: number
-          exit_margin_m: number
-          radius_m: number
-          scope_kind: string
-          tenant_id: string
-          transition_confirmations: number
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          category: string
-          enter_margin_m?: number
-          exit_margin_m?: number
-          radius_m: number
-          scope_kind: string
-          tenant_id: string
-          transition_confirmations?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          category?: string
-          enter_margin_m?: number
-          exit_margin_m?: number
-          radius_m?: number
-          scope_kind?: string
-          tenant_id?: string
-          transition_confirmations?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "geofence_radius_policies_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       geofence_states: {
         Row: {
           geofence_id: string
           is_inside: boolean
           last_changed_at: string | null
           last_checked_at: string | null
-          last_lat: number | null
-          last_lng: number | null
-          last_point_at: string | null
-          last_point_key: string | null
-          pending_bracketed_from_outside: boolean
-          pending_count: number
-          pending_inside: boolean | null
           tenant_id: string
           vehicle_id: string
         }
@@ -13810,13 +6853,6 @@ export type Database = {
           is_inside?: boolean
           last_changed_at?: string | null
           last_checked_at?: string | null
-          last_lat?: number | null
-          last_lng?: number | null
-          last_point_at?: string | null
-          last_point_key?: string | null
-          pending_bracketed_from_outside?: boolean
-          pending_count?: number
-          pending_inside?: boolean | null
           tenant_id: string
           vehicle_id: string
         }
@@ -13825,13 +6861,6 @@ export type Database = {
           is_inside?: boolean
           last_changed_at?: string | null
           last_checked_at?: string | null
-          last_lat?: number | null
-          last_lng?: number | null
-          last_point_at?: string | null
-          last_point_key?: string | null
-          pending_bracketed_from_outside?: boolean
-          pending_count?: number
-          pending_inside?: boolean | null
           tenant_id?: string
           vehicle_id?: string
         }
@@ -13861,117 +6890,33 @@ export type Database = {
       }
       geofences: {
         Row: {
-          auto_sync_address: boolean
-          canonical_address_id: string | null
           category: string | null
-          center_lat: number | null
-          center_lng: number | null
-          client_id: string | null
           created_at: string
-          dispatch_stop_id: string | null
           enabled: boolean
-          enter_margin_m: number
-          exit_margin_m: number
           geometry: unknown
           id: string
-          location_accuracy_m: number | null
-          location_audit: Json
-          location_confidence: number | null
-          location_provider: string | null
-          location_resolved_at: string | null
-          location_resolved_by: string | null
           name: string
-          radius_m: number | null
-          radius_policy_key: string | null
-          scope_kind: string
-          shape_kind: string
-          source_address: string | null
-          source_kind: string
           tenant_id: string
-          transition_confirmations: number
         }
         Insert: {
-          auto_sync_address?: boolean
-          canonical_address_id?: string | null
           category?: string | null
-          center_lat?: number | null
-          center_lng?: number | null
-          client_id?: string | null
           created_at?: string
-          dispatch_stop_id?: string | null
           enabled?: boolean
-          enter_margin_m?: number
-          exit_margin_m?: number
           geometry?: unknown
           id?: string
-          location_accuracy_m?: number | null
-          location_audit?: Json
-          location_confidence?: number | null
-          location_provider?: string | null
-          location_resolved_at?: string | null
-          location_resolved_by?: string | null
           name: string
-          radius_m?: number | null
-          radius_policy_key?: string | null
-          scope_kind?: string
-          shape_kind?: string
-          source_address?: string | null
-          source_kind?: string
           tenant_id: string
-          transition_confirmations?: number
         }
         Update: {
-          auto_sync_address?: boolean
-          canonical_address_id?: string | null
           category?: string | null
-          center_lat?: number | null
-          center_lng?: number | null
-          client_id?: string | null
           created_at?: string
-          dispatch_stop_id?: string | null
           enabled?: boolean
-          enter_margin_m?: number
-          exit_margin_m?: number
           geometry?: unknown
           id?: string
-          location_accuracy_m?: number | null
-          location_audit?: Json
-          location_confidence?: number | null
-          location_provider?: string | null
-          location_resolved_at?: string | null
-          location_resolved_by?: string | null
           name?: string
-          radius_m?: number | null
-          radius_policy_key?: string | null
-          scope_kind?: string
-          shape_kind?: string
-          source_address?: string | null
-          source_kind?: string
           tenant_id?: string
-          transition_confirmations?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "geofences_canonical_address_tenant_fk"
-            columns: ["tenant_id", "canonical_address_id"]
-            isOneToOne: false
-            referencedRelation: "canonical_addresses"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "geofences_client_tenant_fk"
-            columns: ["tenant_id", "client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "geofences_dispatch_stop_tenant_fk"
-            columns: ["tenant_id", "dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["tenant_id", "id"]
-          },
           {
             foreignKeyName: "geofences_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -14027,10 +6972,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "hub_fiscal_credentials_emitter_id_fkey"
-            columns: ["tenant_id", "emitter_id"]
+            columns: ["emitter_id"]
             isOneToOne: false
             referencedRelation: "tenant_emitters"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "hub_fiscal_credentials_tenant_id_fkey"
@@ -14044,7 +6989,6 @@ export type Database = {
       hub_fiscal_emissions: {
         Row: {
           access_key: string | null
-          archived_cte_document_id: string | null
           authorization_protocol: string | null
           c_stat: number | null
           cancel_reason: string | null
@@ -14052,9 +6996,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           cte_document_id: string | null
-          dispatch_key: string | null
-          dispatch_reconciliation: Json | null
-          dispatch_state: string
           doc_type: string
           emitter_cnpj: string | null
           emitter_id: string | null
@@ -14073,16 +7014,12 @@ export type Database = {
           last_callback: Json | null
           last_response: Json | null
           last_synced_at: string | null
-          load_manifest_id: string | null
           message: string | null
           nfse_document_id: string | null
           number: string | null
           pdf_url: string | null
           plugnotas_id: string | null
           plugnotas_status: string | null
-          provider_document_version: number | null
-          provider_effect_id: string | null
-          provider_occurred_at: string | null
           request_payload: Json | null
           series: string | null
           status: string
@@ -14093,7 +7030,6 @@ export type Database = {
         }
         Insert: {
           access_key?: string | null
-          archived_cte_document_id?: string | null
           authorization_protocol?: string | null
           c_stat?: number | null
           cancel_reason?: string | null
@@ -14101,9 +7037,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cte_document_id?: string | null
-          dispatch_key?: string | null
-          dispatch_reconciliation?: Json | null
-          dispatch_state?: string
           doc_type: string
           emitter_cnpj?: string | null
           emitter_id?: string | null
@@ -14122,16 +7055,12 @@ export type Database = {
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null
-          load_manifest_id?: string | null
           message?: string | null
           nfse_document_id?: string | null
           number?: string | null
           pdf_url?: string | null
           plugnotas_id?: string | null
           plugnotas_status?: string | null
-          provider_document_version?: number | null
-          provider_effect_id?: string | null
-          provider_occurred_at?: string | null
           request_payload?: Json | null
           series?: string | null
           status?: string
@@ -14142,7 +7071,6 @@ export type Database = {
         }
         Update: {
           access_key?: string | null
-          archived_cte_document_id?: string | null
           authorization_protocol?: string | null
           c_stat?: number | null
           cancel_reason?: string | null
@@ -14150,9 +7078,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cte_document_id?: string | null
-          dispatch_key?: string | null
-          dispatch_reconciliation?: Json | null
-          dispatch_state?: string
           doc_type?: string
           emitter_cnpj?: string | null
           emitter_id?: string | null
@@ -14171,16 +7096,12 @@ export type Database = {
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null
-          load_manifest_id?: string | null
           message?: string | null
           nfse_document_id?: string | null
           number?: string | null
           pdf_url?: string | null
           plugnotas_id?: string | null
           plugnotas_status?: string | null
-          provider_document_version?: number | null
-          provider_effect_id?: string | null
-          provider_occurred_at?: string | null
           request_payload?: Json | null
           series?: string | null
           status?: string
@@ -14212,13 +7133,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "hub_fiscal_emissions_load_manifest_id_fkey"
-            columns: ["load_manifest_id"]
-            isOneToOne: false
-            referencedRelation: "load_manifests"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "hub_fiscal_emissions_nfse_document_id_fkey"
             columns: ["nfse_document_id"]
             isOneToOne: false
@@ -14238,34 +7152,19 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          idempotency_key: string | null
           key_value: string
-          operation: string | null
-          payload_hash: string | null
-          response_body: Json | null
-          result_id: string | null
           tenant_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
-          idempotency_key?: string | null
           key_value: string
-          operation?: string | null
-          payload_hash?: string | null
-          response_body?: Json | null
-          result_id?: string | null
           tenant_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
-          idempotency_key?: string | null
           key_value?: string
-          operation?: string | null
-          payload_hash?: string | null
-          response_body?: Json | null
-          result_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -14422,25 +7321,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "incident_responsible_employee_tenant_fk"
-            columns: ["tenant_id", "employee_id"]
+            foreignKeyName: "incident_responsible_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "incident_responsible_incident_tenant_fk"
-            columns: ["tenant_id", "incident_id"]
+            foreignKeyName: "incident_responsible_incident_id_fkey"
+            columns: ["incident_id"]
             isOneToOne: false
             referencedRelation: "incidents"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "incident_responsible_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: "incident_responsible_incident_id_fkey"
+            columns: ["incident_id"]
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
           },
         ]
       }
@@ -14579,102 +7478,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "incidents_asset_tenant_fk"
-            columns: ["tenant_id", "asset_id"]
+            foreignKeyName: "incidents_asset_id_fkey"
+            columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_client_tenant_fk"
-            columns: ["tenant_id", "client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_dispatch_trip_tenant_fk"
-            columns: ["tenant_id", "dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_dispatch_trip_tenant_fk"
-            columns: ["tenant_id", "dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["tenant_id", "trip_id"]
-          },
-          {
-            foreignKeyName: "incidents_driver_tenant_fk"
-            columns: ["tenant_id", "driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_employee_tenant_fk"
-            columns: ["tenant_id", "employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_fiscal_document_tenant_fk"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_load_tenant_fk"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_operational_event_tenant_fk"
-            columns: ["tenant_id", "operational_event_id"]
-            isOneToOne: false
-            referencedRelation: "operational_events"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_operational_event_tenant_fk"
-            columns: ["tenant_id", "operational_event_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["tenant_id", "event_id"]
-          },
-          {
-            foreignKeyName: "incidents_order_tenant_fk"
-            columns: ["tenant_id", "order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "incidents_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "incidents_vehicle_tenant_fk"
-            columns: ["tenant_id", "vehicle_id"]
+            foreignKeyName: "incidents_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_id_fkey"
+            columns: ["operational_event_id"]
+            isOneToOne: false
+            referencedRelation: "operational_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_id_fkey"
+            columns: ["operational_event_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["event_id"]
           },
         ]
       }
@@ -14804,7 +7633,6 @@ export type Database = {
           last_error: string | null
           last_login_at: string | null
           password_encrypted: string
-          poll_cooldown_until: string | null
           provider: string
           settings: Json
           status: string
@@ -14813,7 +7641,6 @@ export type Database = {
           token_expires_at: string | null
           updated_at: string
           username: string
-          workspace_id: string
         }
         Insert: {
           base_url?: string
@@ -14824,7 +7651,6 @@ export type Database = {
           last_error?: string | null
           last_login_at?: string | null
           password_encrypted: string
-          poll_cooldown_until?: string | null
           provider?: string
           settings?: Json
           status?: string
@@ -14833,7 +7659,6 @@ export type Database = {
           token_expires_at?: string | null
           updated_at?: string
           username: string
-          workspace_id: string
         }
         Update: {
           base_url?: string
@@ -14844,7 +7669,6 @@ export type Database = {
           last_error?: string | null
           last_login_at?: string | null
           password_encrypted?: string
-          poll_cooldown_until?: string | null
           provider?: string
           settings?: Json
           status?: string
@@ -14853,7 +7677,6 @@ export type Database = {
           token_expires_at?: string | null
           updated_at?: string
           username?: string
-          workspace_id?: string
         }
         Relationships: [
           {
@@ -14861,13 +7684,6 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "integration_accounts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -15036,7 +7852,6 @@ export type Database = {
       }
       inventory_movements: {
         Row: {
-          adjustment_direction: string | null
           client_id: string | null
           created_at: string
           created_by: string | null
@@ -15049,14 +7864,11 @@ export type Database = {
           notes: string | null
           pallet_count: number | null
           quantity: number
-          request_hash: string | null
-          request_id: string | null
           tenant_id: string
           volume_m3: number | null
           weight_kg: number | null
         }
         Insert: {
-          adjustment_direction?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -15069,14 +7881,11 @@ export type Database = {
           notes?: string | null
           pallet_count?: number | null
           quantity?: number
-          request_hash?: string | null
-          request_id?: string | null
           tenant_id: string
           volume_m3?: number | null
           weight_kg?: number | null
         }
         Update: {
-          adjustment_direction?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -15089,8 +7898,6 @@ export type Database = {
           notes?: string | null
           pallet_count?: number | null
           quantity?: number
-          request_hash?: string | null
-          request_id?: string | null
           tenant_id?: string
           volume_m3?: number | null
           weight_kg?: number | null
@@ -15218,13 +8025,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "load_documents_fiscal_tenant_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "load_documents_load_id_fkey"
             columns: ["load_id"]
             isOneToOne: false
@@ -15237,20 +8037,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_documents_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_documents_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "load_documents_tenant_id_fkey"
@@ -15315,7 +8101,6 @@ export type Database = {
       load_items: {
         Row: {
           created_at: string
-          delivery_attempt_id: string | null
           fiscal_document_id: string | null
           id: string
           item_description: string
@@ -15324,7 +8109,6 @@ export type Database = {
           order_id: string | null
           pallet_count: number
           quantity: number
-          source_delivery_item_id: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -15333,7 +8117,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          delivery_attempt_id?: string | null
           fiscal_document_id?: string | null
           id?: string
           item_description?: string
@@ -15342,7 +8125,6 @@ export type Database = {
           order_id?: string | null
           pallet_count?: number
           quantity?: number
-          source_delivery_item_id?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -15351,7 +8133,6 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          delivery_attempt_id?: string | null
           fiscal_document_id?: string | null
           id?: string
           item_description?: string
@@ -15360,7 +8141,6 @@ export type Database = {
           order_id?: string | null
           pallet_count?: number
           quantity?: number
-          source_delivery_item_id?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
@@ -15369,13 +8149,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "load_items_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "load_items_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
             isOneToOne: false
@@ -15383,13 +8156,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "load_items_fiscal_tenant_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "load_items_load_id_fkey"
             columns: ["load_id"]
             isOneToOne: false
@@ -15402,20 +8168,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "load_items_order_id_fkey"
@@ -15423,27 +8175,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "current_load_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "load_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_composition"
-            referencedColumns: ["item_id"]
           },
           {
             foreignKeyName: "load_items_tenant_id_fkey"
@@ -15456,36 +8187,17 @@ export type Database = {
       }
       load_manifests: {
         Row: {
-          access_key: string | null
-          attempt_count: number
-          authorization_protocol: string | null
-          closed_at: string | null
-          closure_dispatch_state: string | null
-          closure_protocol: string | null
-          closure_requested_at: string | null
-          closure_requested_by: string | null
           created_at: string
           created_by: string | null
           cte_document_ids: string[]
           destination: string | null
-          document_number: string | null
-          document_series: string | null
-          emitter_id: string | null
-          environment: string | null
-          external_id: string | null
           fiscal_document_ids: string[]
-          hub_document_id: string | null
-          hub_emission_id: string | null
           id: string
-          issued_at: string | null
-          last_event_response: Json | null
           load_id: string
           manifest_number: string
           observations: string | null
           origin: string | null
-          pdf_url: string | null
           receipt_number: string | null
-          request_payload: Json | null
           responsible_address: string | null
           responsible_city: string | null
           responsible_cnpj: string | null
@@ -15493,44 +8205,23 @@ export type Database = {
           responsible_name: string | null
           responsible_neighborhood: string | null
           status: string
-          status_message: string | null
           tenant_id: string
           toll_value: number | null
           uf_route: string[] | null
           updated_at: string
-          xml_url: string | null
         }
         Insert: {
-          access_key?: string | null
-          attempt_count?: number
-          authorization_protocol?: string | null
-          closed_at?: string | null
-          closure_dispatch_state?: string | null
-          closure_protocol?: string | null
-          closure_requested_at?: string | null
-          closure_requested_by?: string | null
           created_at?: string
           created_by?: string | null
           cte_document_ids?: string[]
           destination?: string | null
-          document_number?: string | null
-          document_series?: string | null
-          emitter_id?: string | null
-          environment?: string | null
-          external_id?: string | null
           fiscal_document_ids?: string[]
-          hub_document_id?: string | null
-          hub_emission_id?: string | null
           id?: string
-          issued_at?: string | null
-          last_event_response?: Json | null
           load_id: string
           manifest_number: string
           observations?: string | null
           origin?: string | null
-          pdf_url?: string | null
           receipt_number?: string | null
-          request_payload?: Json | null
           responsible_address?: string | null
           responsible_city?: string | null
           responsible_cnpj?: string | null
@@ -15538,44 +8229,23 @@ export type Database = {
           responsible_name?: string | null
           responsible_neighborhood?: string | null
           status?: string
-          status_message?: string | null
           tenant_id: string
           toll_value?: number | null
           uf_route?: string[] | null
           updated_at?: string
-          xml_url?: string | null
         }
         Update: {
-          access_key?: string | null
-          attempt_count?: number
-          authorization_protocol?: string | null
-          closed_at?: string | null
-          closure_dispatch_state?: string | null
-          closure_protocol?: string | null
-          closure_requested_at?: string | null
-          closure_requested_by?: string | null
           created_at?: string
           created_by?: string | null
           cte_document_ids?: string[]
           destination?: string | null
-          document_number?: string | null
-          document_series?: string | null
-          emitter_id?: string | null
-          environment?: string | null
-          external_id?: string | null
           fiscal_document_ids?: string[]
-          hub_document_id?: string | null
-          hub_emission_id?: string | null
           id?: string
-          issued_at?: string | null
-          last_event_response?: Json | null
           load_id?: string
           manifest_number?: string
           observations?: string | null
           origin?: string | null
-          pdf_url?: string | null
           receipt_number?: string | null
-          request_payload?: Json | null
           responsible_address?: string | null
           responsible_city?: string | null
           responsible_cnpj?: string | null
@@ -15583,50 +8253,12 @@ export type Database = {
           responsible_name?: string | null
           responsible_neighborhood?: string | null
           status?: string
-          status_message?: string | null
           tenant_id?: string
           toll_value?: number | null
           uf_route?: string[] | null
           updated_at?: string
-          xml_url?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "load_manifests_emitter_id_fkey"
-            columns: ["emitter_id"]
-            isOneToOne: false
-            referencedRelation: "tenant_emitters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_manifests_hub_emission_id_fkey"
-            columns: ["hub_emission_id"]
-            isOneToOne: false
-            referencedRelation: "hub_fiscal_emissions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_manifests_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_manifests_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_manifests_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       load_note_audit_events: {
         Row: {
@@ -15772,94 +8404,43 @@ export type Database = {
         Row: {
           amount: number
           bank_account_id: string | null
-          bank_transaction_id: string | null
           created_at: string
           created_by: string | null
           id: string
           load_id: string
-          load_payment_command_id: string | null
           notes: string | null
           payment_date: string
           payment_method: string | null
           receivable_id: string | null
-          receivable_payment_id: string | null
           tenant_id: string
         }
         Insert: {
           amount: number
           bank_account_id?: string | null
-          bank_transaction_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           load_id: string
-          load_payment_command_id?: string | null
           notes?: string | null
           payment_date: string
           payment_method?: string | null
           receivable_id?: string | null
-          receivable_payment_id?: string | null
           tenant_id: string
         }
         Update: {
           amount?: number
           bank_account_id?: string | null
-          bank_transaction_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           load_id?: string
-          load_payment_command_id?: string | null
           notes?: string | null
           payment_date?: string
           payment_method?: string | null
           receivable_id?: string | null
-          receivable_payment_id?: string | null
           tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "load_payment_bank_account_tenant_fkey"
-            columns: ["tenant_id", "bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_payment_bank_transaction_tenant_fkey"
-            columns: ["tenant_id", "bank_transaction_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transactions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_payment_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_payment_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_payment_receivable_payment_tenant_fkey"
-            columns: ["tenant_id", "receivable_payment_id"]
-            isOneToOne: false
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_payment_receivable_tenant_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
-          },
           {
             foreignKeyName: "load_payments_load_id_fkey"
             columns: ["load_id"]
@@ -15932,20 +8513,6 @@ export type Database = {
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "load_status_history_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_status_history_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
         ]
       }
       load_unloading_charges: {
@@ -16002,13 +8569,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "load_unloading_batch_tenant_fkey"
-            columns: ["tenant_id", "import_batch_id"]
-            isOneToOne: false
-            referencedRelation: "load_import_batches"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "load_unloading_charges_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
             isOneToOne: false
@@ -16035,27 +8595,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_unloading_fiscal_tenant_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_unloading_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_unloading_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -16287,11 +8826,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "loads_tenant_driver_fkey"
-            columns: ["tenant_id", "driver_id"]
+            foreignKeyName: "loads_driver_id_fkey"
+            columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "loads_tenant_id_fkey"
@@ -16301,25 +8840,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "loads_tenant_trip_fkey"
-            columns: ["tenant_id", "trip_id"]
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "dispatch_trips"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "loads_tenant_trip_fkey"
-            columns: ["tenant_id", "trip_id"]
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["tenant_id", "trip_id"]
+            referencedColumns: ["trip_id"]
           },
           {
-            foreignKeyName: "loads_tenant_vehicle_fkey"
-            columns: ["tenant_id", "vehicle_id"]
+            foreignKeyName: "loads_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -16466,13 +9005,6 @@ export type Database = {
             columns: ["schedule_id"]
             isOneToOne: false
             referencedRelation: "maintenance_schedules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_orders_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -16657,7 +9189,6 @@ export type Database = {
           responsible_driver_id: string | null
           responsible_party_type: string | null
           responsible_supplier_id: string | null
-          revision: number
           shortage_number: string | null
           shortage_type: string | null
           source_type: string
@@ -16707,7 +9238,6 @@ export type Database = {
           responsible_driver_id?: string | null
           responsible_party_type?: string | null
           responsible_supplier_id?: string | null
-          revision?: number
           shortage_number?: string | null
           shortage_type?: string | null
           source_type?: string
@@ -16757,7 +9287,6 @@ export type Database = {
           responsible_driver_id?: string | null
           responsible_party_type?: string | null
           responsible_supplier_id?: string | null
-          revision?: number
           shortage_number?: string | null
           shortage_type?: string | null
           source_type?: string
@@ -16922,13 +9451,10 @@ export type Database = {
           created_by: string | null
           error_count: number
           errors: Json
-          file_hash: string | null
           file_name: string | null
           id: string
           imported_count: number
           metadata: Json
-          payload_hash: string | null
-          request_id: string | null
           row_count: number
           status: string
           tenant_id: string
@@ -16940,13 +9466,10 @@ export type Database = {
           created_by?: string | null
           error_count?: number
           errors?: Json
-          file_hash?: string | null
           file_name?: string | null
           id?: string
           imported_count?: number
           metadata?: Json
-          payload_hash?: string | null
-          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id: string
@@ -16958,13 +9481,10 @@ export type Database = {
           created_by?: string | null
           error_count?: number
           errors?: Json
-          file_hash?: string | null
           file_name?: string | null
           id?: string
           imported_count?: number
           metadata?: Json
-          payload_hash?: string | null
-          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id?: string
@@ -18014,8 +10534,6 @@ export type Database = {
           id: string
           imported_count: number
           metadata: Json
-          request_hash: string | null
-          request_id: string | null
           row_count: number
           source_type: string
           status: string
@@ -18033,8 +10551,6 @@ export type Database = {
           id?: string
           imported_count?: number
           metadata?: Json
-          request_hash?: string | null
-          request_id?: string | null
           row_count?: number
           source_type?: string
           status?: string
@@ -18052,8 +10568,6 @@ export type Database = {
           id?: string
           imported_count?: number
           metadata?: Json
-          request_hash?: string | null
-          request_id?: string | null
           row_count?: number
           source_type?: string
           status?: string
@@ -18288,14 +10802,10 @@ export type Database = {
       operational_event_messages: {
         Row: {
           attachment_url: string | null
-          client_request_id: string | null
-          conversation_driver_id: string | null
-          conversation_user_id: string | null
           created_at: string
           event_id: string
           id: string
           message: string
-          request_hash: string | null
           sender_id: string | null
           sender_name: string | null
           sender_role: string
@@ -18303,14 +10813,10 @@ export type Database = {
         }
         Insert: {
           attachment_url?: string | null
-          client_request_id?: string | null
-          conversation_driver_id?: string | null
-          conversation_user_id?: string | null
           created_at?: string
           event_id: string
           id?: string
           message: string
-          request_hash?: string | null
           sender_id?: string | null
           sender_name?: string | null
           sender_role?: string
@@ -18318,34 +10824,16 @@ export type Database = {
         }
         Update: {
           attachment_url?: string | null
-          client_request_id?: string | null
-          conversation_driver_id?: string | null
-          conversation_user_id?: string | null
           created_at?: string
           event_id?: string
           id?: string
           message?: string
-          request_hash?: string | null
           sender_id?: string | null
           sender_name?: string | null
           sender_role?: string
           tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "event_chat_event_scope_fkey"
-            columns: ["tenant_id", "event_id"]
-            isOneToOne: false
-            referencedRelation: "operational_events"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "event_chat_event_scope_fkey"
-            columns: ["tenant_id", "event_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["tenant_id", "event_id"]
-          },
           {
             foreignKeyName: "operational_event_messages_event_id_fkey"
             columns: ["event_id"]
@@ -18528,20 +11016,6 @@ export type Database = {
             foreignKeyName: "operational_events_proof_of_delivery_id_fkey"
             columns: ["proof_of_delivery_id"]
             isOneToOne: false
-            referencedRelation: "available_delivery_proofs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "operational_events_proof_of_delivery_id_fkey"
-            columns: ["proof_of_delivery_id"]
-            isOneToOne: false
-            referencedRelation: "current_delivery_proofs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "operational_events_proof_of_delivery_id_fkey"
-            columns: ["proof_of_delivery_id"]
-            isOneToOne: false
             referencedRelation: "proof_of_delivery"
             referencedColumns: ["id"]
           },
@@ -18671,50 +11145,6 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
-      }
-      operator_command_ledger: {
-        Row: {
-          action: string
-          actor_id: string
-          created_at: string
-          entity_id: string
-          entity_type: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          created_at?: string
-          entity_id: string
-          entity_type: string
-          payload_hash: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          created_at?: string
-          entity_id?: string
-          entity_type?: string
-          payload_hash?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "operator_command_ledger_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       orders: {
         Row: {
@@ -18894,10 +11324,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "orders_client_id_fkey"
-            columns: ["tenant_id", "client_id"]
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "orders_tenant_id_fkey"
@@ -19032,10 +11462,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_history_protocol_id_fkey"
-            columns: ["tenant_id", "protocol_id"]
+            columns: ["protocol_id"]
             isOneToOne: false
             referencedRelation: "pallet_return_protocols"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -19130,17 +11560,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_items_pallet_type_id_fkey"
-            columns: ["tenant_id", "pallet_type_id"]
+            columns: ["pallet_type_id"]
             isOneToOne: false
             referencedRelation: "pallet_types"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pallet_return_items_protocol_id_fkey"
-            columns: ["tenant_id", "protocol_id"]
+            columns: ["protocol_id"]
             isOneToOne: false
             referencedRelation: "pallet_return_protocols"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -19250,38 +11680,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_protocols_driver_id_fkey"
-            columns: ["tenant_id", "driver_id"]
+            columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_load_id_fkey"
-            columns: ["tenant_id", "load_id"]
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_load_id_fkey"
-            columns: ["tenant_id", "load_id"]
+            columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_supplier_id_fkey"
-            columns: ["tenant_id", "supplier_id"]
+            columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_vehicle_id_fkey"
-            columns: ["tenant_id", "vehicle_id"]
+            columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -19382,7 +11812,6 @@ export type Database = {
           supplier_name: string
           tenant_id: string
           updated_at: string
-          updated_by: string | null
           vehicle_id: string | null
         }
         Insert: {
@@ -19415,7 +11844,6 @@ export type Database = {
           supplier_name: string
           tenant_id: string
           updated_at?: string
-          updated_by?: string | null
           vehicle_id?: string | null
         }
         Update: {
@@ -19448,7 +11876,6 @@ export type Database = {
           supplier_name?: string
           tenant_id?: string
           updated_at?: string
-          updated_by?: string | null
           vehicle_id?: string | null
         }
         Relationships: [
@@ -19922,199 +12349,6 @@ export type Database = {
           },
         ]
       }
-      physical_journey_stops: {
-        Row: {
-          created_at: string
-          dispatch_stop_id: string
-          journey_order: number
-          physical_journey_id: string
-          source_tenant_id: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          dispatch_stop_id: string
-          journey_order: number
-          physical_journey_id: string
-          source_tenant_id: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          dispatch_stop_id?: string
-          journey_order?: number
-          physical_journey_id?: string
-          source_tenant_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "physical_journey_stops_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: true
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_stops_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: true
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "physical_journey_stops_physical_journey_id_fkey"
-            columns: ["physical_journey_id"]
-            isOneToOne: false
-            referencedRelation: "physical_journeys"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_stops_source_tenant_id_fkey"
-            columns: ["source_tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_stops_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      physical_journey_trips: {
-        Row: {
-          created_at: string
-          dispatch_trip_id: string
-          physical_journey_id: string
-          source_tenant_id: string
-          trip_order: number
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          dispatch_trip_id: string
-          physical_journey_id: string
-          source_tenant_id: string
-          trip_order?: number
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          dispatch_trip_id?: string
-          physical_journey_id?: string
-          source_tenant_id?: string
-          trip_order?: number
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "physical_journey_trips_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: true
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_trips_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: true
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "physical_journey_trips_physical_journey_id_fkey"
-            columns: ["physical_journey_id"]
-            isOneToOne: false
-            referencedRelation: "physical_journeys"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_trips_source_tenant_id_fkey"
-            columns: ["source_tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journey_trips_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      physical_journeys: {
-        Row: {
-          actual_end_at: string | null
-          actual_start_at: string | null
-          created_at: string
-          id: string
-          metadata: Json
-          planned_end_at: string | null
-          planned_start_at: string | null
-          status: string
-          updated_at: string
-          workspace_id: string
-          workspace_person_id: string | null
-          workspace_vehicle_id: string | null
-        }
-        Insert: {
-          actual_end_at?: string | null
-          actual_start_at?: string | null
-          created_at?: string
-          id?: string
-          metadata?: Json
-          planned_end_at?: string | null
-          planned_start_at?: string | null
-          status?: string
-          updated_at?: string
-          workspace_id: string
-          workspace_person_id?: string | null
-          workspace_vehicle_id?: string | null
-        }
-        Update: {
-          actual_end_at?: string | null
-          actual_start_at?: string | null
-          created_at?: string
-          id?: string
-          metadata?: Json
-          planned_end_at?: string | null
-          planned_start_at?: string | null
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-          workspace_person_id?: string | null
-          workspace_vehicle_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "physical_journeys_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journeys_workspace_person_id_fkey"
-            columns: ["workspace_person_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "physical_journeys_workspace_vehicle_id_fkey"
-            columns: ["workspace_vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       pickup_orders: {
         Row: {
           created_at: string
@@ -20126,16 +12360,10 @@ export type Database = {
           notes: string | null
           pickup_at: string
           pickup_number: string
-          portal_cancel_request_id: string | null
-          portal_cancellation_reason: string | null
-          portal_cancelled_at: string | null
-          portal_cancelled_by: string | null
           recipient_name: string | null
           remitter_client_id: string | null
           remitter_cnpj: string | null
           remitter_name: string | null
-          request_hash: string | null
-          request_id: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -20152,16 +12380,10 @@ export type Database = {
           notes?: string | null
           pickup_at?: string
           pickup_number: string
-          portal_cancel_request_id?: string | null
-          portal_cancellation_reason?: string | null
-          portal_cancelled_at?: string | null
-          portal_cancelled_by?: string | null
           recipient_name?: string | null
           remitter_client_id?: string | null
           remitter_cnpj?: string | null
           remitter_name?: string | null
-          request_hash?: string | null
-          request_id?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -20178,16 +12400,10 @@ export type Database = {
           notes?: string | null
           pickup_at?: string
           pickup_number?: string
-          portal_cancel_request_id?: string | null
-          portal_cancellation_reason?: string | null
-          portal_cancelled_at?: string | null
-          portal_cancelled_by?: string | null
           recipient_name?: string | null
           remitter_client_id?: string | null
           remitter_cnpj?: string | null
           remitter_name?: string | null
-          request_hash?: string | null
-          request_id?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
@@ -20278,62 +12494,6 @@ export type Database = {
           },
         ]
       }
-      portal_download_audit: {
-        Row: {
-          actor_id: string
-          completed_at: string | null
-          file_format: string
-          id: string
-          outcome: string
-          parent_id: string | null
-          requested_at: string
-          resource_id: string
-          resource_type: string
-          response_status: number | null
-          source_host: string | null
-          tenant_id: string
-          user_agent: string | null
-        }
-        Insert: {
-          actor_id: string
-          completed_at?: string | null
-          file_format: string
-          id?: string
-          outcome: string
-          parent_id?: string | null
-          requested_at?: string
-          resource_id: string
-          resource_type: string
-          response_status?: number | null
-          source_host?: string | null
-          tenant_id: string
-          user_agent?: string | null
-        }
-        Update: {
-          actor_id?: string
-          completed_at?: string | null
-          file_format?: string
-          id?: string
-          outcome?: string
-          parent_id?: string | null
-          requested_at?: string
-          resource_id?: string
-          resource_type?: string
-          response_status?: number | null
-          source_host?: string | null
-          tenant_id?: string
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "portal_download_audit_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       positions_last: {
         Row: {
           captured_at: string
@@ -20393,51 +12553,39 @@ export type Database = {
           captured_at: string
           heading: number | null
           id: string
-          integration_account_id: string | null
           lat: number
           lng: number
           provider_payload_hash: string | null
-          provider_position_id: number | null
-          provider_unit_id: string | null
           received_at: string
           speed: number | null
           telemetry: Json | null
           tenant_id: string
-          tracker_link_id: string | null
           vehicle_id: string
         }
         Insert: {
           captured_at: string
           heading?: number | null
           id?: string
-          integration_account_id?: string | null
           lat: number
           lng: number
           provider_payload_hash?: string | null
-          provider_position_id?: number | null
-          provider_unit_id?: string | null
           received_at?: string
           speed?: number | null
           telemetry?: Json | null
           tenant_id: string
-          tracker_link_id?: string | null
           vehicle_id: string
         }
         Update: {
           captured_at?: string
           heading?: number | null
           id?: string
-          integration_account_id?: string | null
           lat?: number
           lng?: number
           provider_payload_hash?: string | null
-          provider_position_id?: number | null
-          provider_unit_id?: string | null
           received_at?: string
           speed?: number | null
           telemetry?: Json | null
           tenant_id?: string
-          tracker_link_id?: string | null
           vehicle_id?: string
         }
         Relationships: [
@@ -20503,8 +12651,6 @@ export type Database = {
           receiver_name: string | null
           receiver_role: string | null
           rejection_reason: string | null
-          retired_at: string | null
-          retired_event_id: string | null
           signature_url: string | null
           status: string
           storage_bucket: string | null
@@ -20536,8 +12682,6 @@ export type Database = {
           receiver_name?: string | null
           receiver_role?: string | null
           rejection_reason?: string | null
-          retired_at?: string | null
-          retired_event_id?: string | null
           signature_url?: string | null
           status?: string
           storage_bucket?: string | null
@@ -20569,8 +12713,6 @@ export type Database = {
           receiver_name?: string | null
           receiver_role?: string | null
           rejection_reason?: string | null
-          retired_at?: string | null
-          retired_event_id?: string | null
           signature_url?: string | null
           status?: string
           storage_bucket?: string | null
@@ -20613,7 +12755,7 @@ export type Database = {
           {
             foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
@@ -20629,13 +12771,6 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_retired_event_id_fkey"
-            columns: ["retired_event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
             referencedColumns: ["id"]
           },
           {
@@ -20693,142 +12828,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "provider_units_tenant_account_fkey"
-            columns: ["tenant_id", "integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "provider_units_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      receivable_financial_commands: {
-        Row: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at: string
-          id: string
-          payload_hash: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          after_snapshot: Json
-          before_snapshot: Json
-          created_at?: string
-          id: string
-          payload_hash: string
-          reason: string
-          receivable_id: string
-          request_id: string
-          response: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          after_snapshot?: Json
-          before_snapshot?: Json
-          created_at?: string
-          id?: string
-          payload_hash?: string
-          reason?: string
-          receivable_id?: string
-          request_id?: string
-          response?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "receivable_financial_commands_tenant_id_receivable_id_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
-          },
-        ]
-      }
-      receivable_payment_reversals: {
-        Row: {
-          amount: number
-          bank_transaction_id: string
-          created_at: string
-          created_by: string
-          effective_at: string
-          financial_command_id: string
-          id: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          tenant_id: string
-        }
-        Insert: {
-          amount: number
-          bank_transaction_id: string
-          created_at?: string
-          created_by: string
-          effective_at: string
-          financial_command_id: string
-          id?: string
-          payment_id: string
-          reason: string
-          receivable_id: string
-          tenant_id: string
-        }
-        Update: {
-          amount?: number
-          bank_transaction_id?: string
-          created_at?: string
-          created_by?: string
-          effective_at?: string
-          financial_command_id?: string
-          id?: string
-          payment_id?: string
-          reason?: string
-          receivable_id?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "receivable_payment_reversals_tenant_id_bank_transaction_id_fkey"
-            columns: ["tenant_id", "bank_transaction_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transactions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_reversals_tenant_id_financial_command_i_fkey"
-            columns: ["tenant_id", "financial_command_id"]
-            isOneToOne: true
-            referencedRelation: "receivable_financial_commands"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_reversals_tenant_id_payment_id_fkey"
-            columns: ["tenant_id", "payment_id"]
-            isOneToOne: true
-            referencedRelation: "receivables_payments"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_reversals_tenant_id_receivable_id_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -20841,7 +12845,6 @@ export type Database = {
           cost_center: string | null
           created_at: string
           created_by: string | null
-          cte_document_id: string | null
           description: string | null
           due_date: string | null
           fiscal_document_id: string | null
@@ -20865,7 +12868,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
-          cte_document_id?: string | null
           description?: string | null
           due_date?: string | null
           fiscal_document_id?: string | null
@@ -20889,7 +12891,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
-          cte_document_id?: string | null
           description?: string | null
           due_date?: string | null
           fiscal_document_id?: string | null
@@ -20905,71 +12906,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "receivables_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_client_invoice_id_fkey"
-            columns: ["client_invoice_id"]
-            isOneToOne: false
-            referencedRelation: "client_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_closing_report_id_fkey"
-            columns: ["closing_report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_tenant_cte_document_fkey"
-            columns: ["tenant_id", "cte_document_id"]
-            isOneToOne: false
-            referencedRelation: "cte_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivables_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       receivables_payments: {
         Row: {
@@ -20980,7 +12917,6 @@ export type Database = {
           cost_center: string | null
           created_at: string
           created_by: string | null
-          financial_command_id: string | null
           id: string
           method: string
           notes: string | null
@@ -20996,7 +12932,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
-          financial_command_id?: string | null
           id?: string
           method?: string
           notes?: string | null
@@ -21012,7 +12947,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
-          financial_command_id?: string | null
           id?: string
           method?: string
           notes?: string | null
@@ -21021,34 +12955,6 @@ export type Database = {
           tenant_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "receivable_payment_bank_account_tenant_fkey"
-            columns: ["tenant_id", "bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_bank_transaction_tenant_fkey"
-            columns: ["tenant_id", "bank_transaction_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transactions"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_command_fkey"
-            columns: ["tenant_id", "financial_command_id"]
-            isOneToOne: false
-            referencedRelation: "receivable_financial_commands"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "receivable_payment_target_tenant_fkey"
-            columns: ["tenant_id", "receivable_id"]
-            isOneToOne: false
-            referencedRelation: "receivables"
-            referencedColumns: ["tenant_id", "id"]
-          },
           {
             foreignKeyName: "receivables_payments_bank_account_id_fkey"
             columns: ["bank_account_id"]
@@ -21404,9 +13310,6 @@ export type Database = {
           end_poi_id: string | null
           id: string
           name: string
-          request_hash: string | null
-          request_id: string | null
-          revision: number
           route_speed_limit_kmh: number | null
           start_poi_id: string | null
           tenant_id: string
@@ -21420,9 +13323,6 @@ export type Database = {
           end_poi_id?: string | null
           id?: string
           name: string
-          request_hash?: string | null
-          request_id?: string | null
-          revision?: number
           route_speed_limit_kmh?: number | null
           start_poi_id?: string | null
           tenant_id: string
@@ -21436,9 +13336,6 @@ export type Database = {
           end_poi_id?: string | null
           id?: string
           name?: string
-          request_hash?: string | null
-          request_id?: string | null
-          revision?: number
           route_speed_limit_kmh?: number | null
           start_poi_id?: string | null
           tenant_id?: string
@@ -21605,431 +13502,6 @@ export type Database = {
         }
         Relationships: []
       }
-      secure_upload_rate_events: {
-        Row: {
-          action: string
-          actor_fingerprint: string
-          id: number
-          occurred_at: string
-        }
-        Insert: {
-          action: string
-          actor_fingerprint: string
-          id?: never
-          occurred_at?: string
-        }
-        Update: {
-          action?: string
-          actor_fingerprint?: string
-          id?: never
-          occurred_at?: string
-        }
-        Relationships: []
-      }
-      ssx_mapping_conflicts: {
-        Row: {
-          candidate_vehicle_ids: string[]
-          conflict_type: string
-          created_at: string
-          due_at: string
-          external_code: string
-          first_observed_at: string
-          id: string
-          integration_account_id: string
-          last_observed_at: string
-          linked_vehicle_id: string | null
-          normalized_plate: string | null
-          observed_plate: string | null
-          occurrence_count: number
-          owner_role: string
-          provider_unit_id: string
-          resolution_reason: string | null
-          resolution_request_id: string | null
-          resolution_result: Json | null
-          resolved_at: string | null
-          resolved_by: string | null
-          resolved_vehicle_id: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          candidate_vehicle_ids?: string[]
-          conflict_type: string
-          created_at?: string
-          due_at?: string
-          external_code: string
-          first_observed_at?: string
-          id?: string
-          integration_account_id: string
-          last_observed_at?: string
-          linked_vehicle_id?: string | null
-          normalized_plate?: string | null
-          observed_plate?: string | null
-          occurrence_count?: number
-          owner_role?: string
-          provider_unit_id: string
-          resolution_reason?: string | null
-          resolution_request_id?: string | null
-          resolution_result?: Json | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolved_vehicle_id?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          candidate_vehicle_ids?: string[]
-          conflict_type?: string
-          created_at?: string
-          due_at?: string
-          external_code?: string
-          first_observed_at?: string
-          id?: string
-          integration_account_id?: string
-          last_observed_at?: string
-          linked_vehicle_id?: string | null
-          normalized_plate?: string | null
-          observed_plate?: string | null
-          occurrence_count?: number
-          owner_role?: string
-          provider_unit_id?: string
-          resolution_reason?: string | null
-          resolution_request_id?: string | null
-          resolution_result?: Json | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          resolved_vehicle_id?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_mapping_conflicts_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_mapping_conflicts_linked_vehicle_id_fkey"
-            columns: ["linked_vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_mapping_conflicts_provider_unit_id_fkey"
-            columns: ["provider_unit_id"]
-            isOneToOne: false
-            referencedRelation: "provider_units"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_mapping_conflicts_resolved_vehicle_id_fkey"
-            columns: ["resolved_vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_mapping_conflicts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_position_quarantine: {
-        Row: {
-          event_date: string | null
-          first_seen_at: string
-          id: string
-          integration_account_id: string
-          last_seen_at: string
-          occurrence_count: number
-          payload: Json
-          payload_hash: string
-          provider_position_id: string | null
-          reason: string
-          resolution_note: string | null
-          resolved_at: string | null
-          status: string
-          tenant_id: string
-          tracked_unit_integration_code: string | null
-          workspace_id: string
-        }
-        Insert: {
-          event_date?: string | null
-          first_seen_at?: string
-          id?: string
-          integration_account_id: string
-          last_seen_at?: string
-          occurrence_count?: number
-          payload: Json
-          payload_hash: string
-          provider_position_id?: string | null
-          reason: string
-          resolution_note?: string | null
-          resolved_at?: string | null
-          status?: string
-          tenant_id: string
-          tracked_unit_integration_code?: string | null
-          workspace_id: string
-        }
-        Update: {
-          event_date?: string | null
-          first_seen_at?: string
-          id?: string
-          integration_account_id?: string
-          last_seen_at?: string
-          occurrence_count?: number
-          payload?: Json
-          payload_hash?: string
-          provider_position_id?: string | null
-          reason?: string
-          resolution_note?: string | null
-          resolved_at?: string | null
-          status?: string
-          tenant_id?: string
-          tracked_unit_integration_code?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_position_quarantine_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_position_quarantine_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ssx_position_quarantine_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_rule_violation_cursors: {
-        Row: {
-          integration_account_id: string
-          last_error_code: string | null
-          last_position_id: number
-          last_success_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          integration_account_id: string
-          last_error_code?: string | null
-          last_position_id?: number
-          last_success_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          integration_account_id?: string
-          last_error_code?: string | null
-          last_position_id?: number
-          last_success_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_rule_violation_cursors_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: true
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_rule_violations: {
-        Row: {
-          driver_integration_code: string | null
-          final_date: string | null
-          first_seen_at: string
-          id: string
-          initial_date: string | null
-          integration_account_id: string
-          organizational_unit_integration_code: string | null
-          payload: Json
-          provider_violation_id: number
-          rule_integration_code: string | null
-          tracked_unit_integration_code: string | null
-          updated_at: string
-        }
-        Insert: {
-          driver_integration_code?: string | null
-          final_date?: string | null
-          first_seen_at?: string
-          id?: string
-          initial_date?: string | null
-          integration_account_id: string
-          organizational_unit_integration_code?: string | null
-          payload: Json
-          provider_violation_id: number
-          rule_integration_code?: string | null
-          tracked_unit_integration_code?: string | null
-          updated_at?: string
-        }
-        Update: {
-          driver_integration_code?: string | null
-          final_date?: string | null
-          first_seen_at?: string
-          id?: string
-          initial_date?: string | null
-          integration_account_id?: string
-          organizational_unit_integration_code?: string | null
-          payload?: Json
-          provider_violation_id?: number
-          rule_integration_code?: string | null
-          tracked_unit_integration_code?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_rule_violations_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_sync_checkpoints: {
-        Row: {
-          attempts: number
-          error_code: string | null
-          integration_account_id: string
-          last_success_at: string | null
-          lease_token: string | null
-          lease_until: string | null
-          resource: string
-          result: Json
-          retry_at: string | null
-          scope_key: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          attempts?: number
-          error_code?: string | null
-          integration_account_id: string
-          last_success_at?: string | null
-          lease_token?: string | null
-          lease_until?: string | null
-          resource: string
-          result?: Json
-          retry_at?: string | null
-          scope_key?: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          attempts?: number
-          error_code?: string | null
-          integration_account_id?: string
-          last_success_at?: string | null
-          lease_token?: string | null
-          lease_until?: string | null
-          resource?: string
-          result?: Json
-          retry_at?: string | null
-          scope_key?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_sync_checkpoints_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_tracking_reference_catalog: {
-        Row: {
-          external_id: string
-          integration_account_id: string
-          name: string | null
-          received_at: string
-          resource_type: string
-        }
-        Insert: {
-          external_id: string
-          integration_account_id: string
-          name?: string | null
-          received_at?: string
-          resource_type: string
-        }
-        Update: {
-          external_id?: string
-          integration_account_id?: string
-          name?: string | null
-          received_at?: string
-          resource_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_tracking_reference_catalog_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ssx_tracking_snapshots: {
-        Row: {
-          external_key: string
-          id: string
-          integration_account_id: string
-          payload: Json
-          received_at: string
-          resource_type: string
-          scope_key: string
-        }
-        Insert: {
-          external_key: string
-          id?: string
-          integration_account_id: string
-          payload: Json
-          received_at?: string
-          resource_type: string
-          scope_key?: string
-        }
-        Update: {
-          external_key?: string
-          id?: string
-          integration_account_id?: string
-          payload?: Json
-          received_at?: string
-          resource_type?: string
-          scope_key?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ssx_tracking_snapshots_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: false
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       stock_items: {
         Row: {
           active: boolean | null
@@ -22095,7 +13567,6 @@ export type Database = {
       }
       stock_movements: {
         Row: {
-          adjustment_direction: string | null
           approved_by: string | null
           asset_id: string | null
           cost_center: string | null
@@ -22111,8 +13582,6 @@ export type Database = {
           movement_type: string
           quantity: number
           reason: string
-          request_hash: string | null
-          request_id: string | null
           responsible_employee_id: string | null
           stock_item_id: string
           tenant_id: string
@@ -22122,7 +13591,6 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
-          adjustment_direction?: string | null
           approved_by?: string | null
           asset_id?: string | null
           cost_center?: string | null
@@ -22138,8 +13606,6 @@ export type Database = {
           movement_type: string
           quantity: number
           reason: string
-          request_hash?: string | null
-          request_id?: string | null
           responsible_employee_id?: string | null
           stock_item_id: string
           tenant_id: string
@@ -22149,7 +13615,6 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
-          adjustment_direction?: string | null
           approved_by?: string | null
           asset_id?: string | null
           cost_center?: string | null
@@ -22165,8 +13630,6 @@ export type Database = {
           movement_type?: string
           quantity?: number
           reason?: string
-          request_hash?: string | null
-          request_id?: string | null
           responsible_employee_id?: string | null
           stock_item_id?: string
           tenant_id?: string
@@ -22223,146 +13686,6 @@ export type Database = {
             columns: ["stock_item_id"]
             isOneToOne: false
             referencedRelation: "stock_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tax_registry_applied_changes: {
-        Row: {
-          after_data: Json
-          applied_at: string
-          applied_by: string | null
-          before_data: Json
-          id: string
-          query_id: string
-          registry_id: string
-          target_id: string
-          target_table: string
-          tenant_id: string
-        }
-        Insert: {
-          after_data: Json
-          applied_at?: string
-          applied_by?: string | null
-          before_data: Json
-          id?: string
-          query_id: string
-          registry_id: string
-          target_id: string
-          target_table: string
-          tenant_id: string
-        }
-        Update: {
-          after_data?: Json
-          applied_at?: string
-          applied_by?: string | null
-          before_data?: Json
-          id?: string
-          query_id?: string
-          registry_id?: string
-          target_id?: string
-          target_table?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tax_registry_applied_changes_query_id_fkey"
-            columns: ["query_id"]
-            isOneToOne: false
-            referencedRelation: "tax_registry_queries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tax_registry_applied_changes_registry_id_fkey"
-            columns: ["registry_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_party_registry"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tax_registry_applied_changes_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tax_registry_queries: {
-        Row: {
-          c_stat: number | null
-          certificate_id: string | null
-          created_at: string
-          duration_ms: number | null
-          emitter_id: string
-          endpoint: string
-          id: string
-          lookup_type: string
-          lookup_value: string
-          reason: string | null
-          requested_by: string | null
-          response_hash: string | null
-          response_payload: Json | null
-          result_status: string
-          tenant_id: string
-          uf: string
-        }
-        Insert: {
-          c_stat?: number | null
-          certificate_id?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          emitter_id: string
-          endpoint: string
-          id?: string
-          lookup_type: string
-          lookup_value: string
-          reason?: string | null
-          requested_by?: string | null
-          response_hash?: string | null
-          response_payload?: Json | null
-          result_status: string
-          tenant_id: string
-          uf: string
-        }
-        Update: {
-          c_stat?: number | null
-          certificate_id?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          emitter_id?: string
-          endpoint?: string
-          id?: string
-          lookup_type?: string
-          lookup_value?: string
-          reason?: string | null
-          requested_by?: string | null
-          response_hash?: string | null
-          response_payload?: Json | null
-          result_status?: string
-          tenant_id?: string
-          uf?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tax_registry_queries_certificate_id_fkey"
-            columns: ["certificate_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_certificates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tax_registry_queries_emitter_fk"
-            columns: ["tenant_id", "emitter_id"]
-            isOneToOne: false
-            referencedRelation: "tenant_emitters"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "tax_registry_queries_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -22508,10 +13831,6 @@ export type Database = {
           nome_fantasia: string | null
           razao_social: string
           regime_tributario: string | null
-          registry_profile_id: string | null
-          registry_source: string | null
-          registry_status: string | null
-          registry_verified_at: string | null
           tenant_id: string
           updated_at: string
         }
@@ -22530,10 +13849,6 @@ export type Database = {
           nome_fantasia?: string | null
           razao_social: string
           regime_tributario?: string | null
-          registry_profile_id?: string | null
-          registry_source?: string | null
-          registry_status?: string | null
-          registry_verified_at?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -22552,21 +13867,10 @@ export type Database = {
           nome_fantasia?: string | null
           razao_social?: string
           regime_tributario?: string | null
-          registry_profile_id?: string | null
-          registry_source?: string | null
-          registry_status?: string | null
-          registry_verified_at?: string | null
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "tenant_emitters_registry_profile_id_fkey"
-            columns: ["registry_profile_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_party_registry"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "tenant_emitters_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -22584,8 +13888,6 @@ export type Database = {
           id: string
           notes: string | null
           tenant_id: string
-          updated_at: string
-          updated_by: string | null
         }
         Insert: {
           created_at?: string
@@ -22594,8 +13896,6 @@ export type Database = {
           id?: string
           notes?: string | null
           tenant_id: string
-          updated_at?: string
-          updated_by?: string | null
         }
         Update: {
           created_at?: string
@@ -22604,8 +13904,6 @@ export type Database = {
           id?: string
           notes?: string | null
           tenant_id?: string
-          updated_at?: string
-          updated_by?: string | null
         }
         Relationships: [
           {
@@ -22655,59 +13953,6 @@ export type Database = {
           },
         ]
       }
-      tenant_tracking_schedules: {
-        Row: {
-          consecutive_failures: number
-          enabled: boolean
-          full_sync_interval_hours: number
-          last_error: string | null
-          last_finished_at: string | null
-          last_full_claimed_at: string | null
-          last_poll_claimed_at: string | null
-          last_status: string | null
-          poll_interval_minutes: number
-          tenant_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          consecutive_failures?: number
-          enabled?: boolean
-          full_sync_interval_hours?: number
-          last_error?: string | null
-          last_finished_at?: string | null
-          last_full_claimed_at?: string | null
-          last_poll_claimed_at?: string | null
-          last_status?: string | null
-          poll_interval_minutes?: number
-          tenant_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          consecutive_failures?: number
-          enabled?: boolean
-          full_sync_interval_hours?: number
-          last_error?: string | null
-          last_finished_at?: string | null
-          last_full_claimed_at?: string | null
-          last_poll_claimed_at?: string | null
-          last_status?: string | null
-          poll_interval_minutes?: number
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tenant_tracking_schedules_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: true
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       tenants: {
         Row: {
           created_at: string
@@ -22717,7 +13962,6 @@ export type Database = {
           settings: Json | null
           timezone: string
           updated_at: string
-          workspace_id: string
         }
         Insert: {
           created_at?: string
@@ -22727,7 +13971,6 @@ export type Database = {
           settings?: Json | null
           timezone?: string
           updated_at?: string
-          workspace_id: string
         }
         Update: {
           created_at?: string
@@ -22737,17 +13980,8 @@ export type Database = {
           settings?: Json | null
           timezone?: string
           updated_at?: string
-          workspace_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "tenants_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       trip_alerts: {
         Row: {
@@ -22809,590 +14043,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_operational_workspace"
             referencedColumns: ["trip_id"]
-          },
-        ]
-      }
-      trip_cargo_commands: {
-        Row: {
-          action: string
-          actor_id: string
-          control_id: string
-          created_at: string
-          payload_hash: string
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Insert: {
-          action: string
-          actor_id: string
-          control_id: string
-          created_at?: string
-          payload_hash: string
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string
-          control_id?: string
-          created_at?: string
-          payload_hash?: string
-          request_id?: string
-          result?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_commands_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-        ]
-      }
-      trip_cargo_controls: {
-        Row: {
-          accepted_at: string | null
-          accepted_by: string | null
-          cargo_confirmed_at: string | null
-          cargo_confirmed_by: string | null
-          close_override_reason: string | null
-          closed_at: string | null
-          closed_by: string | null
-          created_at: string
-          departed_at: string | null
-          departed_by: string | null
-          dispatch_trip_id: string
-          driver_id: string
-          id: string
-          loading_started_at: string | null
-          loading_started_by: string | null
-          returned_at: string | null
-          returned_by: string | null
-          seal_not_applicable_reason: string | null
-          status: string
-          tenant_id: string
-          tie_down_confirmed: boolean
-          updated_at: string
-          vehicle_checked: boolean
-          vehicle_id: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          cargo_confirmed_at?: string | null
-          cargo_confirmed_by?: string | null
-          close_override_reason?: string | null
-          closed_at?: string | null
-          closed_by?: string | null
-          created_at?: string
-          departed_at?: string | null
-          departed_by?: string | null
-          dispatch_trip_id: string
-          driver_id: string
-          id?: string
-          loading_started_at?: string | null
-          loading_started_by?: string | null
-          returned_at?: string | null
-          returned_by?: string | null
-          seal_not_applicable_reason?: string | null
-          status?: string
-          tenant_id: string
-          tie_down_confirmed?: boolean
-          updated_at?: string
-          vehicle_checked?: boolean
-          vehicle_id: string
-        }
-        Update: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          cargo_confirmed_at?: string | null
-          cargo_confirmed_by?: string | null
-          close_override_reason?: string | null
-          closed_at?: string | null
-          closed_by?: string | null
-          created_at?: string
-          departed_at?: string | null
-          departed_by?: string | null
-          dispatch_trip_id?: string
-          driver_id?: string
-          id?: string
-          loading_started_at?: string | null
-          loading_started_by?: string | null
-          returned_at?: string | null
-          returned_by?: string | null
-          seal_not_applicable_reason?: string | null
-          status?: string
-          tenant_id?: string
-          tie_down_confirmed?: boolean
-          updated_at?: string
-          vehicle_checked?: boolean
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_controls_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_controls_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_controls_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_controls_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_controls_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      trip_cargo_divergences: {
-        Row: {
-          control_id: string
-          created_at: string
-          description: string
-          divergence_kind: string
-          document_check_id: string | null
-          expected_value: string | null
-          id: string
-          load_id: string | null
-          observed_value: string | null
-          reported_at: string
-          reported_by: string
-          review_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          control_id: string
-          created_at?: string
-          description: string
-          divergence_kind: string
-          document_check_id?: string | null
-          expected_value?: string | null
-          id?: string
-          load_id?: string | null
-          observed_value?: string | null
-          reported_at?: string
-          reported_by: string
-          review_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          control_id?: string
-          created_at?: string
-          description?: string
-          divergence_kind?: string
-          document_check_id?: string | null
-          expected_value?: string | null
-          id?: string
-          load_id?: string | null
-          observed_value?: string | null
-          reported_at?: string
-          reported_by?: string
-          review_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_divergences_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_divergences_document_check_id_fkey"
-            columns: ["document_check_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_document_checks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_divergences_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_divergences_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      trip_cargo_document_checks: {
-        Row: {
-          confirmed_at: string | null
-          confirmed_by: string | null
-          control_id: string
-          created_at: string
-          driver_confirmed: boolean
-          id: string
-          load_id: string | null
-          notes: string | null
-          reference_number: string
-          source_id: string | null
-          source_kind: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          control_id: string
-          created_at?: string
-          driver_confirmed?: boolean
-          id?: string
-          load_id?: string | null
-          notes?: string | null
-          reference_number: string
-          source_id?: string | null
-          source_kind: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          control_id?: string
-          created_at?: string
-          driver_confirmed?: boolean
-          id?: string
-          load_id?: string | null
-          notes?: string | null
-          reference_number?: string
-          source_id?: string | null
-          source_kind?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_document_checks_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_document_checks_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_document_checks_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      trip_cargo_evidence: {
-        Row: {
-          captured_at: string
-          control_id: string
-          created_at: string
-          created_by: string
-          evidence_kind: string
-          id: string
-          storage_bucket: string
-          storage_path: string
-          tenant_id: string
-        }
-        Insert: {
-          captured_at?: string
-          control_id: string
-          created_at?: string
-          created_by: string
-          evidence_kind: string
-          id?: string
-          storage_bucket?: string
-          storage_path: string
-          tenant_id: string
-        }
-        Update: {
-          captured_at?: string
-          control_id?: string
-          created_at?: string
-          created_by?: string
-          evidence_kind?: string
-          id?: string
-          storage_bucket?: string
-          storage_path?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_evidence_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-        ]
-      }
-      trip_cargo_historical_reconciliations: {
-        Row: {
-          actor_id: string
-          control_id: string
-          created_at: string
-          dispatch_trip_id: string
-          evidence_snapshot: Json
-          payload_hash: string
-          reason: string
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Insert: {
-          actor_id: string
-          control_id: string
-          created_at?: string
-          dispatch_trip_id: string
-          evidence_snapshot: Json
-          payload_hash: string
-          reason: string
-          request_id: string
-          result: Json
-          tenant_id: string
-        }
-        Update: {
-          actor_id?: string
-          control_id?: string
-          created_at?: string
-          dispatch_trip_id?: string
-          evidence_snapshot?: Json
-          payload_hash?: string
-          reason?: string
-          request_id?: string
-          result?: Json
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_historical_reconciliations_control_id_fkey"
-            columns: ["control_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_historical_reconciliations_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_historical_reconciliations_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_historical_reconciliations_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      trip_cargo_load_checks: {
-        Row: {
-          confirmed_at: string | null
-          confirmed_by: string | null
-          confirmed_pallet_count: number | null
-          confirmed_volume_count: number | null
-          confirmed_weight_kg: number | null
-          control_id: string
-          created_at: string
-          expected_pallet_count: number | null
-          expected_volume_count: number | null
-          expected_weight_kg: number | null
-          id: string
-          load_id: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          confirmed_pallet_count?: number | null
-          confirmed_volume_count?: number | null
-          confirmed_weight_kg?: number | null
-          control_id: string
-          created_at?: string
-          expected_pallet_count?: number | null
-          expected_volume_count?: number | null
-          expected_weight_kg?: number | null
-          id?: string
-          load_id: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          confirmed_pallet_count?: number | null
-          confirmed_volume_count?: number | null
-          confirmed_weight_kg?: number | null
-          control_id?: string
-          created_at?: string
-          expected_pallet_count?: number | null
-          expected_volume_count?: number | null
-          expected_weight_kg?: number | null
-          id?: string
-          load_id?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_load_checks_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_load_checks_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_load_checks_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      trip_cargo_seals: {
-        Row: {
-          control_id: string
-          evidence_waived_legacy: boolean
-          id: string
-          installation_reason: string
-          installed_at: string
-          installed_by: string
-          installed_evidence_id: string | null
-          notes: string | null
-          removed_at: string | null
-          removed_by: string | null
-          resolution_evidence_id: string | null
-          resolution_reason: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          seal_number: string
-          status: string
-          tenant_id: string
-        }
-        Insert: {
-          control_id: string
-          evidence_waived_legacy?: boolean
-          id?: string
-          installation_reason?: string
-          installed_at?: string
-          installed_by: string
-          installed_evidence_id?: string | null
-          notes?: string | null
-          removed_at?: string | null
-          removed_by?: string | null
-          resolution_evidence_id?: string | null
-          resolution_reason?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          seal_number: string
-          status?: string
-          tenant_id: string
-        }
-        Update: {
-          control_id?: string
-          evidence_waived_legacy?: boolean
-          id?: string
-          installation_reason?: string
-          installed_at?: string
-          installed_by?: string
-          installed_evidence_id?: string | null
-          notes?: string | null
-          removed_at?: string | null
-          removed_by?: string | null
-          resolution_evidence_id?: string | null
-          resolution_reason?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          seal_number?: string
-          status?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trip_cargo_seals_control_id_tenant_id_fkey"
-            columns: ["control_id", "tenant_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_controls"
-            referencedColumns: ["id", "tenant_id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_seals_installed_evidence_id_fkey"
-            columns: ["installed_evidence_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_evidence"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "trip_cargo_seals_resolution_evidence_id_fkey"
-            columns: ["resolution_evidence_id"]
-            isOneToOne: false
-            referencedRelation: "trip_cargo_evidence"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -23484,7 +14134,6 @@ export type Database = {
           id: string
           origin_lat: number | null
           origin_lng: number | null
-          plan_revision: string | null
           provider: string
           tenant_id: string
           trip_id: string
@@ -23503,7 +14152,6 @@ export type Database = {
           id?: string
           origin_lat?: number | null
           origin_lng?: number | null
-          plan_revision?: string | null
           provider?: string
           tenant_id: string
           trip_id: string
@@ -23522,7 +14170,6 @@ export type Database = {
           id?: string
           origin_lat?: number | null
           origin_lng?: number | null
-          plan_revision?: string | null
           provider?: string
           tenant_id?: string
           trip_id?: string
@@ -23875,8 +14522,6 @@ export type Database = {
           notes: string | null
           odometer_km: number | null
           price_per_liter: number | null
-          request_hash: string | null
-          request_id: string | null
           route_trip_id: string | null
           station_address: string | null
           station_name: string | null
@@ -23898,8 +14543,6 @@ export type Database = {
           notes?: string | null
           odometer_km?: number | null
           price_per_liter?: number | null
-          request_hash?: string | null
-          request_id?: string | null
           route_trip_id?: string | null
           station_address?: string | null
           station_name?: string | null
@@ -23921,8 +14564,6 @@ export type Database = {
           notes?: string | null
           odometer_km?: number | null
           price_per_liter?: number | null
-          request_hash?: string | null
-          request_id?: string | null
           route_trip_id?: string | null
           station_address?: string | null
           station_name?: string | null
@@ -24087,39 +14728,11 @@ export type Database = {
             referencedColumns: ["incident_id"]
           },
           {
-            foreignKeyName: "vehicle_maintenance_tenant_asset_fkey"
-            columns: ["tenant_id", "asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "vehicle_maintenance_tenant_employee_fkey"
-            columns: ["tenant_id", "employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "vehicle_maintenance_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicle_maintenance_tenant_incident_fkey"
-            columns: ["tenant_id", "incident_id"]
-            isOneToOne: false
-            referencedRelation: "incidents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "vehicle_maintenance_tenant_vehicle_fkey"
-            columns: ["tenant_id", "vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "vehicle_maintenance_vehicle_id_fkey"
@@ -24184,11 +14797,8 @@ export type Database = {
       vehicle_processing_queue: {
         Row: {
           attempts: number
-          claim_token: string | null
-          claimed_position_at: string | null
           last_error: string | null
           last_position_at: string | null
-          lease_until: string | null
           processed_at: string | null
           queued_at: string
           tenant_id: string
@@ -24196,11 +14806,8 @@ export type Database = {
         }
         Insert: {
           attempts?: number
-          claim_token?: string | null
-          claimed_position_at?: string | null
           last_error?: string | null
           last_position_at?: string | null
-          lease_until?: string | null
           processed_at?: string | null
           queued_at?: string
           tenant_id: string
@@ -24208,11 +14815,8 @@ export type Database = {
         }
         Update: {
           attempts?: number
-          claim_token?: string | null
-          claimed_position_at?: string | null
           last_error?: string | null
           last_position_at?: string | null
-          lease_until?: string | null
           processed_at?: string | null
           queued_at?: string
           tenant_id?: string
@@ -24282,20 +14886,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "vehicle_tracker_links_tenant_unit_fkey"
-            columns: ["tenant_id", "provider_unit_id"]
-            isOneToOne: false
-            referencedRelation: "provider_units"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "vehicle_tracker_links_tenant_vehicle_fkey"
-            columns: ["tenant_id", "vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "vehicle_tracker_links_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
@@ -24358,7 +14948,6 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           vehicle_type_code: string | null
-          workspace_id: string
           year_of_manufacture: number | null
         }
         Insert: {
@@ -24414,7 +15003,6 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vehicle_type_code?: string | null
-          workspace_id: string
           year_of_manufacture?: number | null
         }
         Update: {
@@ -24470,29 +15058,21 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vehicle_type_code?: string | null
-          workspace_id?: string
           year_of_manufacture?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "vehicles_tenant_current_driver_fkey"
-            columns: ["tenant_id", "current_driver_id"]
+            foreignKeyName: "vehicles_current_driver_id_fkey"
+            columns: ["current_driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vehicles_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -24567,1236 +15147,8 @@ export type Database = {
           },
         ]
       }
-      workspace_memberships: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          updated_at: string
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_memberships_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_parties: {
-        Row: {
-          active: boolean
-          created_at: string
-          display_name: string
-          id: string
-          identity_key: string
-          is_client: boolean
-          is_supplier: boolean
-          legal_name: string | null
-          source_data: Json
-          tax_id: string | null
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          display_name: string
-          id: string
-          identity_key: string
-          is_client?: boolean
-          is_supplier?: boolean
-          legal_name?: string | null
-          source_data?: Json
-          tax_id?: string | null
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          display_name?: string
-          id?: string
-          identity_key?: string
-          is_client?: boolean
-          is_supplier?: boolean
-          legal_name?: string | null
-          source_data?: Json
-          tax_id?: string | null
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_parties_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_party_tenant_links: {
-        Row: {
-          client_id: string
-          created_at: string
-          fiscal_profile: Json
-          tenant_id: string
-          workspace_id: string
-          workspace_party_id: string
-        }
-        Insert: {
-          client_id: string
-          created_at?: string
-          fiscal_profile?: Json
-          tenant_id: string
-          workspace_id: string
-          workspace_party_id: string
-        }
-        Update: {
-          client_id?: string
-          created_at?: string
-          fiscal_profile?: Json
-          tenant_id?: string
-          workspace_id?: string
-          workspace_party_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_party_tenant_links_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_party_tenant_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_party_tenant_links_workspace_id_workspace_party__fkey"
-            columns: ["workspace_id", "workspace_party_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_parties"
-            referencedColumns: ["workspace_id", "id"]
-          },
-        ]
-      }
-      workspace_people: {
-        Row: {
-          active: boolean
-          cpf: string | null
-          created_at: string
-          email: string | null
-          id: string
-          identity_key: string
-          name: string
-          phone: string | null
-          source_data: Json
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          active?: boolean
-          cpf?: string | null
-          created_at?: string
-          email?: string | null
-          id: string
-          identity_key: string
-          name: string
-          phone?: string | null
-          source_data?: Json
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          active?: boolean
-          cpf?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          identity_key?: string
-          name?: string
-          phone?: string | null
-          source_data?: Json
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_people_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_person_tenant_links: {
-        Row: {
-          created_at: string
-          driver_id: string | null
-          employee_id: string | null
-          employment_profile: Json
-          tenant_id: string
-          workspace_id: string
-          workspace_person_id: string
-        }
-        Insert: {
-          created_at?: string
-          driver_id?: string | null
-          employee_id?: string | null
-          employment_profile?: Json
-          tenant_id: string
-          workspace_id: string
-          workspace_person_id: string
-        }
-        Update: {
-          created_at?: string
-          driver_id?: string | null
-          employee_id?: string | null
-          employment_profile?: Json
-          tenant_id?: string
-          workspace_id?: string
-          workspace_person_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_person_tenant_links_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_person_tenant_links_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_person_tenant_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_person_tenant_links_workspace_id_workspace_perso_fkey"
-            columns: ["workspace_id", "workspace_person_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_people"
-            referencedColumns: ["workspace_id", "id"]
-          },
-        ]
-      }
-      workspace_ssx_accounts: {
-        Row: {
-          created_at: string
-          dispatch_lease_mode: string | null
-          dispatch_lease_token: string | null
-          dispatch_lease_until: string | null
-          integration_account_id: string
-          last_dispatch_error_code: string | null
-          last_dispatch_finished_at: string | null
-          last_dispatch_started_at: string | null
-          last_dispatch_status: string | null
-          last_full_sync_at: string | null
-          last_full_sync_attempt_at: string | null
-          migration_state: string
-          next_dispatch_at: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          dispatch_lease_mode?: string | null
-          dispatch_lease_token?: string | null
-          dispatch_lease_until?: string | null
-          integration_account_id: string
-          last_dispatch_error_code?: string | null
-          last_dispatch_finished_at?: string | null
-          last_dispatch_started_at?: string | null
-          last_dispatch_status?: string | null
-          last_full_sync_at?: string | null
-          last_full_sync_attempt_at?: string | null
-          migration_state: string
-          next_dispatch_at?: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          dispatch_lease_mode?: string | null
-          dispatch_lease_token?: string | null
-          dispatch_lease_until?: string | null
-          integration_account_id?: string
-          last_dispatch_error_code?: string | null
-          last_dispatch_finished_at?: string | null
-          last_dispatch_started_at?: string | null
-          last_dispatch_status?: string | null
-          last_full_sync_at?: string | null
-          last_full_sync_attempt_at?: string | null
-          migration_state?: string
-          next_dispatch_at?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_ssx_accounts_integration_account_id_fkey"
-            columns: ["integration_account_id"]
-            isOneToOne: true
-            referencedRelation: "integration_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_ssx_accounts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: true
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_vehicle_tenant_links: {
-        Row: {
-          accounting_profile: Json
-          created_at: string
-          tenant_id: string
-          vehicle_id: string
-          workspace_id: string
-          workspace_vehicle_id: string
-        }
-        Insert: {
-          accounting_profile?: Json
-          created_at?: string
-          tenant_id: string
-          vehicle_id: string
-          workspace_id: string
-          workspace_vehicle_id: string
-        }
-        Update: {
-          accounting_profile?: Json
-          created_at?: string
-          tenant_id?: string
-          vehicle_id?: string
-          workspace_id?: string
-          workspace_vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_vehicle_tenant_link_workspace_id_workspace_vehic_fkey"
-            columns: ["workspace_id", "workspace_vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_vehicles"
-            referencedColumns: ["workspace_id", "id"]
-          },
-          {
-            foreignKeyName: "workspace_vehicle_tenant_links_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_vehicle_tenant_links_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_vehicles: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          nickname: string | null
-          plate: string
-          plate_normalized: string
-          source_data: Json
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id: string
-          nickname?: string | null
-          plate: string
-          plate_normalized: string
-          source_data?: Json
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          nickname?: string | null
-          plate?: string
-          plate_normalized?: string
-          source_data?: Json
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_vehicles_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspaces: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          name: string
-          settings: Json
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name: string
-          settings?: Json
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name?: string
-          settings?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
-      active_delivery_document_outcomes: {
-        Row: {
-          actor_id: string | null
-          delivery_attempt_id: string | null
-          dispatch_stop_document_id: string | null
-          dispatch_stop_id: string | null
-          dispatch_trip_id: string | null
-          document_snapshot: Json | null
-          event_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          items_snapshot: Json | null
-          load_id: string | null
-          occurred_at: string | null
-          outcome: string | null
-          proof_snapshot: Json | null
-          reason: string | null
-          recorded_at: string | null
-          source: string | null
-          tenant_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_outcomes_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "current_dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_allocation_documents"
-            referencedColumns: ["allocation_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      available_delivery_proofs: {
-        Row: {
-          accuracy: number | null
-          content_hash: string | null
-          created_at: string | null
-          created_by: string | null
-          dispatch_stop_id: string | null
-          dispatch_trip_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          is_active: boolean | null
-          latitude: number | null
-          load_id: string | null
-          longitude: number | null
-          metadata: Json | null
-          photo_url: string | null
-          proof_type: string | null
-          received_at: string | null
-          receiver_document: string | null
-          receiver_name: string | null
-          receiver_role: string | null
-          rejection_reason: string | null
-          retired_at: string | null
-          retired_event_id: string | null
-          signature_url: string | null
-          status: string | null
-          storage_bucket: string | null
-          storage_path: string | null
-          tenant_id: string | null
-          updated_at: string | null
-          validated_at: string | null
-          validated_by: string | null
-          version: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_retired_event_id_fkey"
-            columns: ["retired_event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      current_delivery_document_outcomes: {
-        Row: {
-          actor_id: string | null
-          delivery_attempt_id: string | null
-          dispatch_stop_document_id: string | null
-          dispatch_stop_id: string | null
-          dispatch_trip_id: string | null
-          document_snapshot: Json | null
-          event_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          items_snapshot: Json | null
-          load_id: string | null
-          occurred_at: string | null
-          outcome: string | null
-          proof_snapshot: Json | null
-          reason: string | null
-          recorded_at: string | null
-          source: string | null
-          tenant_id: string | null
-        }
-        Insert: {
-          actor_id?: string | null
-          delivery_attempt_id?: string | null
-          dispatch_stop_document_id?: string | null
-          dispatch_stop_id?: string | null
-          dispatch_trip_id?: string | null
-          document_snapshot?: Json | null
-          event_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          items_snapshot?: Json | null
-          load_id?: string | null
-          occurred_at?: string | null
-          outcome?: string | null
-          proof_snapshot?: Json | null
-          reason?: string | null
-          recorded_at?: string | null
-          source?: string | null
-          tenant_id?: string | null
-        }
-        Update: {
-          actor_id?: string | null
-          delivery_attempt_id?: string | null
-          dispatch_stop_document_id?: string | null
-          dispatch_stop_id?: string | null
-          dispatch_trip_id?: string | null
-          document_snapshot?: Json | null
-          event_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          items_snapshot?: Json | null
-          load_id?: string | null
-          occurred_at?: string | null
-          outcome?: string | null
-          proof_snapshot?: Json | null
-          reason?: string | null
-          recorded_at?: string | null
-          source?: string | null
-          tenant_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_document_outcomes_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "current_dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_allocation_documents"
-            referencedColumns: ["allocation_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_document_id_fkey"
-            columns: ["dispatch_stop_document_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stop_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_document_outcomes_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      current_delivery_proofs: {
-        Row: {
-          accuracy: number | null
-          content_hash: string | null
-          created_at: string | null
-          created_by: string | null
-          dispatch_stop_id: string | null
-          dispatch_trip_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          is_active: boolean | null
-          latitude: number | null
-          load_id: string | null
-          longitude: number | null
-          metadata: Json | null
-          photo_url: string | null
-          proof_type: string | null
-          received_at: string | null
-          receiver_document: string | null
-          receiver_name: string | null
-          receiver_role: string | null
-          rejection_reason: string | null
-          retired_at: string | null
-          retired_event_id: string | null
-          signature_url: string | null
-          status: string | null
-          storage_bucket: string | null
-          storage_path: string | null
-          tenant_id: string | null
-          updated_at: string | null
-          validated_at: string | null
-          validated_by: string | null
-          version: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
-            columns: ["dispatch_trip_id"]
-            isOneToOne: false
-            referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_retired_event_id_fkey"
-            columns: ["retired_event_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proof_of_delivery_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      current_dispatch_stop_documents: {
-        Row: {
-          created_at: string | null
-          delivery_attempt_id: string | null
-          dispatch_stop_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          load_id: string | null
-          tenant_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          delivery_attempt_id?: string | null
-          dispatch_stop_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          load_id?: string | null
-          tenant_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          delivery_attempt_id?: string | null
-          dispatch_stop_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          load_id?: string | null
-          tenant_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dispatch_stop_documents_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "dispatch_stops"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_dispatch_stop_id_fkey"
-            columns: ["dispatch_stop_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["stop_id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispatch_stop_documents_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      current_load_items: {
-        Row: {
-          created_at: string | null
-          delivery_attempt_id: string | null
-          fiscal_document_id: string | null
-          id: string | null
-          item_description: string | null
-          load_id: string | null
-          notes: string | null
-          order_id: string | null
-          pallet_count: number | null
-          quantity: number | null
-          source_delivery_item_id: string | null
-          status: string | null
-          tenant_id: string | null
-          updated_at: string | null
-          volume_m3: number | null
-          weight_kg: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          delivery_attempt_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          item_description?: string | null
-          load_id?: string | null
-          notes?: string | null
-          order_id?: string | null
-          pallet_count?: number | null
-          quantity?: number | null
-          source_delivery_item_id?: string | null
-          status?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-          volume_m3?: number | null
-          weight_kg?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          delivery_attempt_id?: string | null
-          fiscal_document_id?: string | null
-          id?: string | null
-          item_description?: string | null
-          load_id?: string | null
-          notes?: string | null
-          order_id?: string | null
-          pallet_count?: number | null
-          quantity?: number | null
-          source_delivery_item_id?: string | null
-          status?: string | null
-          tenant_id?: string | null
-          updated_at?: string | null
-          volume_m3?: number | null
-          weight_kg?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "load_items_delivery_attempt_id_fkey"
-            columns: ["delivery_attempt_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_attempts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_fiscal_tenant_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_items_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "current_load_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "load_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_source_delivery_item_id_fkey"
-            columns: ["source_delivery_item_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_composition"
-            referencedColumns: ["item_id"]
-          },
-          {
-            foreignKeyName: "load_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_allocation_documents: {
-        Row: {
-          access_key: string | null
-          allocation_id: string | null
-          cbs_base: number | null
-          cbs_rate: number | null
-          cbs_value: number | null
-          client_id: string | null
-          client_load_number: string | null
-          client_load_source: Json | null
-          control_lot: string | null
-          cost_center: string | null
-          created_at: string | null
-          created_by: string | null
-          cte_consignee_client_id: string | null
-          cte_driver_id: string | null
-          cte_emitted_at: string | null
-          cte_emitted_outbound_id: string | null
-          cte_payload: Json | null
-          cte_taker_role: string | null
-          cte_vehicle_id: string | null
-          current_delivery_attempt_id: string | null
-          deleted_at: string | null
-          deleted_by: string | null
-          delivery_meta: Json | null
-          document_type: string | null
-          duplicate_note: string | null
-          dynamic_lot: string | null
-          emission_id: string | null
-          emitter_id: string | null
-          fiscal_model: string | null
-          freight_breakdown: Json | null
-          freight_cif_value: number | null
-          freight_confirmed_at: string | null
-          freight_confirmed_by: string | null
-          freight_fob_value: number | null
-          freight_overridden: boolean | null
-          freight_overridden_at: string | null
-          freight_overridden_by: string | null
-          freight_override_reason: string | null
-          freight_table_id: string | null
-          freight_value: number | null
-          freight_value_original: number | null
-          hub_document_id: string | null
-          ibs_base: number | null
-          ibs_rate: number | null
-          ibs_value: number | null
-          id: string | null
-          import_batch_id: string | null
-          imported_at: string | null
-          imported_note_status: string | null
-          insurance_premium: number | null
-          insured_amount: number | null
-          insurer_cnpj: string | null
-          insurer_endorsement: string | null
-          insurer_name: string | null
-          insurer_policy: string | null
-          invoice_number: string | null
-          invoice_series: string | null
-          is_duplicate: boolean | null
-          issue_date: string | null
-          last_status_check_at: string | null
-          last_status_response: Json | null
-          load_id: string | null
-          nfse_emitted_at: string | null
-          nfse_emitted_document_id: string | null
-          operation_type: Database["public"]["Enums"]["operation_type"] | null
-          order_id: string | null
-          origin_city: string | null
-          origin_state: string | null
-          pallet_count: number | null
-          pickup_order_id: string | null
-          product_summary: string | null
-          recipient: string | null
-          recipient_city: string | null
-          recipient_cnpj: string | null
-          recipient_neighborhood: string | null
-          recipient_state: string | null
-          reference_number: string | null
-          remitter: string | null
-          remitter_cnpj: string | null
-          remitter_ie_indicator: string | null
-          remitter_state_registration: string | null
-          sefaz_message: string | null
-          sefaz_protocol: string | null
-          sefaz_status: string | null
-          sefaz_status_code: string | null
-          status: string | null
-          status_check_attempts: number | null
-          supplier_id: string | null
-          tenant_id: string | null
-          updated_at: string | null
-          value: number | null
-          volume_count: number | null
-          weight_kg: number | null
-        }
-        Relationships: []
-      }
       vw_load_composition: {
         Row: {
           access_key: string | null
@@ -25830,13 +15182,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "load_items_fiscal_tenant_fkey"
-            columns: ["tenant_id", "fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
             foreignKeyName: "load_items_load_id_fkey"
             columns: ["load_id"]
             isOneToOne: false
@@ -25849,20 +15194,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "load_items_load_tenant_fkey"
-            columns: ["tenant_id", "load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "load_items_order_id_fkey"
@@ -25922,18 +15253,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "loads_tenant_trip_fkey"
-            columns: ["tenant_id", "trip_id"]
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "dispatch_trips"
-            referencedColumns: ["tenant_id", "id"]
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "loads_tenant_trip_fkey"
-            columns: ["tenant_id", "trip_id"]
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "vw_operational_workspace"
-            referencedColumns: ["tenant_id", "trip_id"]
+            referencedColumns: ["trip_id"]
           },
         ]
       }
@@ -26018,28 +15349,12 @@ export type Database = {
       }
     }
     Functions: {
-      _apply_delivery_admin_patch: {
-        Args: {
-          _changes: Json
-          _document: string
-          _event?: string
-          _reason: string
-          _request: string
-          _source: string
-          _tenant: string
-        }
-        Returns: string
-      }
       _apply_match_amounts: {
         Args: {
           _delta: number
           _obligation_id: string
           _transaction_id: string
         }
-        Returns: undefined
-      }
-      _assert_closing_sources_current: {
-        Args: { _report: string }
         Returns: undefined
       }
       _assert_driver_owns_trip: {
@@ -26050,18 +15365,6 @@ export type Database = {
           tenant_id: string
         }[]
       }
-      _assert_invoice_sources_for_reactivation: {
-        Args: { _invoice: string; _tenant: string }
-        Returns: undefined
-      }
-      _assert_load_replanning_graph: {
-        Args: { _load_ids: string[]; _tenant_id: string }
-        Returns: undefined
-      }
-      _assert_load_transit_graph: {
-        Args: { p_load_id: string }
-        Returns: undefined
-      }
       _build_driver_settlement: {
         Args: { _dispatch_trip_id: string; _tenant_id: string }
         Returns: string
@@ -26070,357 +15373,12 @@ export type Database = {
         Args: { _settlement_id: string }
         Returns: string
       }
-      _change_load_documents: {
-        Args: {
-          _action: string
-          _document_ids: string[]
-          _load_id: string
-          _reason: string
-          _revision: string
-          _target_stop: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      _claim_closing_delivery_charges: {
-        Args: { _report: string }
-        Returns: undefined
-      }
-      _client_invoice_draft_before_fiscal_gate: {
-        Args: {
-          _draft: Json
-          _exclude_invoice?: string
-          _lock?: boolean
-          _tenant: string
-        }
-        Returns: Json
-      }
-      _client_invoice_draft_snapshot: {
-        Args: {
-          _draft: Json
-          _exclude_invoice?: string
-          _lock?: boolean
-          _tenant: string
-        }
-        Returns: Json
-      }
-      _closing_attempt_document_sources: {
-        Args: { _tenant: string }
-        Returns: {
-          source: Json
-        }[]
-      }
-      _closing_charge_blocks_new: { Args: { _id: string }; Returns: boolean }
-      _closing_fiscal_eligible: { Args: { c: Json }; Returns: boolean }
-      _closing_freight_share: {
-        Args: { c: Json; mode: string; s: Json; universe: Json }
-        Returns: number
-      }
-      _closing_import_content: { Args: { input: Json }; Returns: Json }
-      _closing_invoice_creation_snapshot: {
-        Args: { _report: string; _tenant: string }
-        Returns: Json
-      }
-      _closing_item_summaries: { Args: { items: Json }; Returns: Json }
-      _closing_item_totals: { Args: { items: Json }; Returns: Json }
-      _closing_source_fact: { Args: { item: Json }; Returns: Json }
-      _delivery_admin_fields: { Args: { _meta: Json }; Returns: Json }
-      _delivery_allocation_document: {
-        Args: { _allocation: string }
-        Returns: {
-          access_key: string | null
-          cbs_base: number | null
-          cbs_rate: number | null
-          cbs_value: number | null
-          client_id: string | null
-          client_load_number: string | null
-          client_load_source: Json | null
-          control_lot: string | null
-          cost_center: string | null
-          created_at: string
-          created_by: string | null
-          cte_consignee_client_id: string | null
-          cte_driver_id: string | null
-          cte_emitted_at: string | null
-          cte_emitted_outbound_id: string | null
-          cte_payload: Json | null
-          cte_taker_role: string | null
-          cte_vehicle_id: string | null
-          current_delivery_attempt_id: string | null
-          deleted_at: string | null
-          deleted_by: string | null
-          delivery_meta: Json
-          document_type: string
-          duplicate_note: string | null
-          dynamic_lot: string | null
-          emission_id: string | null
-          emitter_id: string | null
-          fiscal_model: string | null
-          freight_breakdown: Json | null
-          freight_cif_value: number | null
-          freight_confirmed_at: string | null
-          freight_confirmed_by: string | null
-          freight_fob_value: number | null
-          freight_overridden: boolean
-          freight_overridden_at: string | null
-          freight_overridden_by: string | null
-          freight_override_reason: string | null
-          freight_table_id: string | null
-          freight_value: number | null
-          freight_value_original: number | null
-          hub_document_id: string | null
-          ibs_base: number | null
-          ibs_rate: number | null
-          ibs_value: number | null
-          id: string
-          import_batch_id: string | null
-          imported_at: string | null
-          imported_note_status: string | null
-          insurance_premium: number | null
-          insured_amount: number | null
-          insurer_cnpj: string | null
-          insurer_endorsement: string | null
-          insurer_name: string | null
-          insurer_policy: string | null
-          invoice_number: string | null
-          invoice_series: string | null
-          is_duplicate: boolean
-          issue_date: string | null
-          last_status_check_at: string | null
-          last_status_response: Json | null
-          load_id: string | null
-          nfse_emitted_at: string | null
-          nfse_emitted_document_id: string | null
-          operation_type: Database["public"]["Enums"]["operation_type"] | null
-          order_id: string | null
-          origin_city: string | null
-          origin_state: string | null
-          pallet_count: number | null
-          pickup_order_id: string | null
-          product_summary: string | null
-          recipient: string | null
-          recipient_city: string | null
-          recipient_cnpj: string | null
-          recipient_neighborhood: string | null
-          recipient_state: string | null
-          reference_number: string | null
-          remitter: string | null
-          remitter_cnpj: string | null
-          remitter_ie_indicator: string | null
-          remitter_state_registration: string | null
-          sefaz_message: string | null
-          sefaz_protocol: string | null
-          sefaz_status: string | null
-          sefaz_status_code: string | null
-          status: string
-          status_check_attempts: number
-          supplier_id: string | null
-          tenant_id: string
-          updated_at: string
-          value: number | null
-          volume_count: number | null
-          weight_kg: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "fiscal_documents"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      _delivery_attempt_financial_snapshot: {
-        Args: { _tenant: string; _trip: string }
-        Returns: Json
-      }
-      _delivery_document_metadata_context: {
-        Args: { _document: string; _load: string; _tenant: string }
-        Returns: Json
-      }
-      _delivery_items_for_stop: {
-        Args: { _stop: string }
-        Returns: {
-          created_at: string
-          delivery_attempt_id: string | null
-          fiscal_document_id: string | null
-          id: string
-          item_description: string
-          load_id: string
-          notes: string | null
-          order_id: string | null
-          pallet_count: number
-          quantity: number
-          source_delivery_item_id: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-          volume_m3: number | null
-          weight_kg: number | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "load_items"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      _delivery_redelivery_remainder: {
-        Args: { _outcome: string }
-        Returns: Json
-      }
-      _delivery_result_from_statuses: {
-        Args: { _statuses: string[] }
-        Returns: string
-      }
-      _delivery_trip_financial_documents: {
-        Args: { _tenant: string; _trip: string }
-        Returns: {
-          access_key: string | null
-          cbs_base: number | null
-          cbs_rate: number | null
-          cbs_value: number | null
-          client_id: string | null
-          client_load_number: string | null
-          client_load_source: Json | null
-          control_lot: string | null
-          cost_center: string | null
-          created_at: string
-          created_by: string | null
-          cte_consignee_client_id: string | null
-          cte_driver_id: string | null
-          cte_emitted_at: string | null
-          cte_emitted_outbound_id: string | null
-          cte_payload: Json | null
-          cte_taker_role: string | null
-          cte_vehicle_id: string | null
-          current_delivery_attempt_id: string | null
-          deleted_at: string | null
-          deleted_by: string | null
-          delivery_meta: Json
-          document_type: string
-          duplicate_note: string | null
-          dynamic_lot: string | null
-          emission_id: string | null
-          emitter_id: string | null
-          fiscal_model: string | null
-          freight_breakdown: Json | null
-          freight_cif_value: number | null
-          freight_confirmed_at: string | null
-          freight_confirmed_by: string | null
-          freight_fob_value: number | null
-          freight_overridden: boolean
-          freight_overridden_at: string | null
-          freight_overridden_by: string | null
-          freight_override_reason: string | null
-          freight_table_id: string | null
-          freight_value: number | null
-          freight_value_original: number | null
-          hub_document_id: string | null
-          ibs_base: number | null
-          ibs_rate: number | null
-          ibs_value: number | null
-          id: string
-          import_batch_id: string | null
-          imported_at: string | null
-          imported_note_status: string | null
-          insurance_premium: number | null
-          insured_amount: number | null
-          insurer_cnpj: string | null
-          insurer_endorsement: string | null
-          insurer_name: string | null
-          insurer_policy: string | null
-          invoice_number: string | null
-          invoice_series: string | null
-          is_duplicate: boolean
-          issue_date: string | null
-          last_status_check_at: string | null
-          last_status_response: Json | null
-          load_id: string | null
-          nfse_emitted_at: string | null
-          nfse_emitted_document_id: string | null
-          operation_type: Database["public"]["Enums"]["operation_type"] | null
-          order_id: string | null
-          origin_city: string | null
-          origin_state: string | null
-          pallet_count: number | null
-          pickup_order_id: string | null
-          product_summary: string | null
-          recipient: string | null
-          recipient_city: string | null
-          recipient_cnpj: string | null
-          recipient_neighborhood: string | null
-          recipient_state: string | null
-          reference_number: string | null
-          remitter: string | null
-          remitter_cnpj: string | null
-          remitter_ie_indicator: string | null
-          remitter_state_registration: string | null
-          sefaz_message: string | null
-          sefaz_protocol: string | null
-          sefaz_status: string | null
-          sefaz_status_code: string | null
-          status: string
-          status_check_attempts: number
-          supplier_id: string | null
-          tenant_id: string
-          updated_at: string
-          value: number | null
-          volume_count: number | null
-          weight_kg: number | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "fiscal_documents"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      _derive_corrected_delivery_result: {
-        Args: { _event: string; p_tenant_id: string; p_trip_id: string }
-        Returns: undefined
-      }
-      _derive_driver_delivery_result: {
-        Args: { p_tenant_id: string; p_trip_id: string }
-        Returns: undefined
-      }
-      _expense_creation_source: {
-        Args: {
-          _actor: string
-          _source: string
-          _tenant: string
-          _type: string
-        }
-        Returns: Json
-      }
-      _expense_receipt_descriptor: {
-        Args: {
-          _actor: string
-          _receipt: Json
-          _request: string
-          _tenant: string
-        }
-        Returns: Json
-      }
-      _expense_receipt_status: {
-        Args: {
-          _actor: string
-          _receipt: Json
-          _request: string
-          _source: string
-          _tenant: string
-          _type: string
-        }
-        Returns: Json
-      }
-      _expense_review_snapshot: {
-        Args: { _expense: string; _tenant: string }
-        Returns: Json
-      }
-      _guard_expense_creation_release: { Args: never; Returns: undefined }
-      _invoice_lifecycle_snapshot: {
-        Args: { _id: string; _tenant: string }
-        Returns: Json
-      }
-      _invoice_money: { Args: { _value: Json }; Returns: number }
+      _driver_client_ids: { Args: never; Returns: string[] }
+      _driver_fiscal_document_ids: { Args: never; Returns: string[] }
+      _driver_load_ids: { Args: never; Returns: string[] }
+      _driver_order_ids: { Args: never; Returns: string[] }
+      _driver_pickup_order_ids: { Args: never; Returns: string[] }
+      _driver_trip_ids: { Args: never; Returns: string[] }
       _load_available_for_settlement: {
         Args: {
           _allow_settlement_id?: string
@@ -26429,128 +15387,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      _load_document_change_snapshot: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
       _load_is_locked: { Args: { _load_id: string }; Returns: boolean }
-      _load_replanning_snapshot: {
-        Args: { _load_ids: string[]; _tenant_id: string }
-        Returns: Json
-      }
-      _lock_closing_sources: {
-        Args: { _tenant: string; sources: Json }
-        Returns: undefined
-      }
-      _lock_delivery_trip_graph: {
-        Args: { _tenant_id: string; _trip_id: string }
-        Returns: {
-          actual_end_at: string | null
-          actual_start_at: string | null
-          created_at: string
-          created_by: string | null
-          driver_id: string | null
-          id: string
-          load_id: string | null
-          notes: string | null
-          planned_end_at: string | null
-          planned_start_at: string | null
-          status: string
-          tenant_id: string
-          tracker_link_id: string | null
-          updated_at: string
-          vehicle_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "dispatch_trips"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      _lock_driver_delivery_stop: {
-        Args: { _stop_id: string }
-        Returns: {
-          actual_arrival_at: string | null
-          actual_departure_at: string | null
-          canonical_address_id: string | null
-          client_id: string | null
-          created_at: string
-          delivery_window_end: string | null
-          delivery_window_start: string | null
-          destination: string | null
-          dispatch_trip_id: string
-          estimated_departure_at: string | null
-          geofence_radius_is_override: boolean
-          geofence_radius_m: number
-          id: string
-          latitude: number | null
-          location_accuracy_m: number | null
-          location_address: string | null
-          location_audit: Json
-          location_confidence: number | null
-          location_exception_at: string | null
-          location_exception_by: string | null
-          location_exception_reason: string | null
-          location_invalidated_at: string | null
-          location_provider: string | null
-          location_resolved_at: string | null
-          location_resolved_by: string | null
-          location_source: string
-          location_verification_status: string
-          longitude: number | null
-          notes: string | null
-          planned_arrival_at: string | null
-          risk_level: string | null
-          risk_reason: string | null
-          service_time_minutes: number | null
-          source_client_address_hash: string | null
-          status: string
-          stop_order: number
-          tenant_id: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "dispatch_stops"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      _lock_driver_journey_trip: {
-        Args: { _trip_id: string }
-        Returns: {
-          actual_end_at: string | null
-          actual_start_at: string | null
-          created_at: string
-          created_by: string | null
-          driver_id: string | null
-          id: string
-          load_id: string | null
-          notes: string | null
-          planned_end_at: string | null
-          planned_start_at: string | null
-          status: string
-          tenant_id: string
-          tracker_link_id: string | null
-          updated_at: string
-          vehicle_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "dispatch_trips"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      _lock_load_document_graph: {
-        Args: { _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      _lock_receivable_financial_graph: {
-        Args: { _id: string; _tenant: string }
-        Returns: undefined
-      }
       _log_entity_audit: {
         Args: {
           _action: string
@@ -26574,10 +15411,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      _operation_document_context: {
-        Args: { _document: string; _load: string; _tenant: string }
-        Returns: Json
-      }
       _portal_assert_client_access: {
         Args: { _client_id: string; _tenant_id: string }
         Returns: undefined
@@ -26590,114 +15423,14 @@ export type Database = {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
       }
-      _prepare_delivery_proof: {
-        Args: {
-          _document: string
-          _stop: string
-          _tenant: string
-          _trip: string
-        }
-        Returns: string
-      }
-      _project_closing_source_items: {
-        Args: { options: Json; sources: Json }
-        Returns: Json
-      }
       _recalculate_load_totals: {
         Args: { _load_id: string }
-        Returns: undefined
-      }
-      _receivable_financial_snapshot: {
-        Args: { _id: string; _tenant: string }
-        Returns: Json
-      }
-      _receivable_ledger_evidence: {
-        Args: { _id: string; _tenant: string }
-        Returns: {
-          net: number
-          payment_count: number
-          valid: boolean
-        }[]
-      }
-      _redelivery_context: {
-        Args: { _document: string; _tenant: string }
-        Returns: Json
-      }
-      _refresh_delivery_receipt_email_status: {
-        Args: { _receipt_id: string }
-        Returns: undefined
-      }
-      _retire_delivery_proof: {
-        Args: { _document: string; _event: string; _tenant: string }
-        Returns: string
-      }
-      _snapshot_delivery_document_outcome: {
-        Args: {
-          _document: string
-          _event: string
-          _occurred: string
-          _source: string
-        }
-        Returns: string
-      }
-      _sync_delivery_receipt_from_proof: {
-        Args: { _proof_id: string }
-        Returns: string
-      }
-      _sync_receivable_financial_projection: {
-        Args: { _id: string; _tenant: string }
-        Returns: undefined
-      }
-      _validate_delivery_admin_patch: {
-        Args: { _changes: Json }
         Returns: undefined
       }
       accept_financial_match: {
         Args: { _match_id: string }
         Returns: undefined
       }
-      ack_address_resolution_queue_item_v2: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      ack_ssx_rule_violation_window_v1: {
-        Args: {
-          _end_position_id: number
-          _error_code?: string
-          _expected_last_position_id: number
-          _integration_account_id: string
-          _success: boolean
-        }
-        Returns: boolean
-      }
-      ack_vehicle_processing_queue_v1: {
-        Args: {
-          _claim_token: string
-          _error?: string
-          _last_position_at: string
-          _success: boolean
-          _tenant_id: string
-          _vehicle_id: string
-        }
-        Returns: boolean
-      }
-      ack_workspace_ssx_dispatch_v1: {
-        Args: {
-          _error_code?: string
-          _lease_token: string
-          _next_delay_seconds?: number
-          _status: string
-          _success: boolean
-          _workspace_id: string
-        }
-        Returns: boolean
-      }
-      activate_fiscal_certificate: {
-        Args: { _certificate: string; _emitter: string; _tenant: string }
-        Returns: undefined
-      }
-      add_driver_forecast_v1: { Args: { _payload: Json }; Returns: Json }
-      add_driver_progress_v1: { Args: { _payload: Json }; Returns: Json }
       add_driver_settlement_adjustment: {
         Args: {
           _amount: number
@@ -26743,57 +15476,6 @@ export type Database = {
         }
         Returns: string
       }
-      aggregate_vehicle_metrics_daily_v1: {
-        Args: { _day: string; _tenant_id: string }
-        Returns: Json
-      }
-      apply_client_invoice_command: { Args: { _payload: Json }; Returns: Json }
-      apply_closing_report_action: { Args: { _payload: Json }; Returns: Json }
-      apply_delivery_receipt_email_webhook_v1: {
-        Args: {
-          _occurred_at: string
-          _provider_message_id: string
-          _status: string
-          _svix_id: string
-        }
-        Returns: Json
-      }
-      apply_driver_monitor_command: { Args: { _payload: Json }; Returns: Json }
-      apply_driver_settlement_adjustment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      apply_finance_employee_advance_action: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      apply_finance_payable_bulk_movement: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      apply_finance_payable_movement: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      apply_load_aggregate_command: { Args: { _payload: Json }; Returns: Json }
-      apply_load_import_command: { Args: { _payload: Json }; Returns: Json }
-      apply_load_payment_command: { Args: { _payload: Json }; Returns: Json }
-      apply_receivable_financial_command: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      apply_tax_registry_profile: {
-        Args: {
-          _query: string
-          _registry: string
-          _target_id: string
-          _target_table: string
-          _tenant: string
-          _user: string
-        }
-        Returns: Json
-      }
-      approve_finance_payable: { Args: { _payload: Json }; Returns: Json }
       approve_financial_obligation_v1: {
         Args: { _notes?: string; _obligation_id: string }
         Returns: boolean
@@ -26802,93 +15484,13 @@ export type Database = {
         Args: { _period_id: string }
         Returns: undefined
       }
-      approve_payroll_period_v2: { Args: { _period_id: string }; Returns: Json }
-      approve_payroll_period_v3: {
-        Args: { _period_id: string; _request_id: string }
-        Returns: Json
-      }
-      archive_finance_payables: { Args: { _payload: Json }; Returns: Json }
-      archive_route_template_v1: {
-        Args: { _route_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      assert_cte_dispatch_idle: {
-        Args: {
-          _emitter: string
-          _environment: string
-          _except?: string
-          _tenant: string
-        }
-        Returns: undefined
-      }
-      assert_tenant_integration_capability_v1: {
-        Args: { _capability: string; _tenant_id: string }
-        Returns: undefined
-      }
-      assign_finance_fiscal_review: { Args: { _payload: Json }; Returns: Json }
       assign_fiscal_documents_to_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      assign_fiscal_documents_to_load_v2: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      associate_finance_legacy_expense_cost: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      associate_finance_legacy_payable_payment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      associate_finance_legacy_receivable_payment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      associate_finance_maintenance_direct_part: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      associate_finance_maintenance_labor: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      associate_finance_stock_acquisition: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      attach_delivery_receipt_pdf_v1: {
-        Args: {
-          _expected_updated_at: string
-          _path: string
-          _receipt_id: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      attach_finance_expense_receipt_artifact: {
-        Args: { _payload: Json }
         Returns: Json
       }
       attach_loads_to_driver_settlement: {
         Args: { _load_ids: string[]; _settlement_id: string }
         Returns: undefined
-      }
-      attach_occurrence_return_sheet_signed_proof_v1: {
-        Args: {
-          _path: string
-          _receiver_document?: string
-          _receiver_name?: string
-          _return_sheet_id: string
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
-      attribute_finance_stock_consumption: {
-        Args: { _payload: Json }
-        Returns: Json
       }
       audit_data_consistency: {
         Args: { _tenant_id: string }
@@ -26927,10 +15529,6 @@ export type Database = {
           suggested_action: string
         }[]
       }
-      audit_imported_notes_v1: {
-        Args: { _document_ids: string[]; _tenant_id: string }
-        Returns: Json
-      }
       audit_operational_congruence_v1: {
         Args: { p_tenant_id: string }
         Returns: {
@@ -26941,18 +15539,6 @@ export type Database = {
           metadata: Json
           severity: string
         }[]
-      }
-      authorize_finance_statement_artifact_verification: {
-        Args: { _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      authorize_secure_upload_cleanup_v1: {
-        Args: { _bucket: string; _paths: string[]; _tenant_id: string }
-        Returns: Json
-      }
-      begin_mdfe_closure: {
-        Args: { _actor: string; _load_manifest_id: string; _tenant: string }
-        Returns: Json
       }
       build_fiscal_documents_deleted_recovery_dry_run: {
         Args: { _end_time: string; _start_time: string; _tenant_id?: string }
@@ -26966,10 +15552,6 @@ export type Database = {
         Args: { _end_at: string; _start_at: string; _vehicle_id: string }
         Returns: Json
       }
-      cancel_auth_invite: {
-        Args: { _email: string; _nonce: string }
-        Returns: undefined
-      }
       cancel_client_invoice: {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
@@ -26978,27 +15560,14 @@ export type Database = {
         Args: { _pickup_id: string; _tenant_id: string }
         Returns: undefined
       }
-      cancel_client_pickup_v2: {
-        Args: {
-          _pickup_id: string
-          _reason: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
       cancel_closing_report: {
         Args: { _closing_report_id: string; _reason: string }
         Returns: undefined
       }
-      cancel_dispatch_trip: { Args: { _payload: Json }; Returns: Json }
       cancel_doccob_export: {
         Args: { _export_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
-      cancel_finance_expense: { Args: { _payload: Json }; Returns: Json }
-      cancel_finance_manual_expense: { Args: { _payload: Json }; Returns: Json }
-      cancel_finance_unloading: { Args: { _payload: Json }; Returns: Json }
       cancel_occurrence_return_sheet: {
         Args: { _reason: string; _return_sheet_id: string }
         Returns: undefined
@@ -27006,17 +15575,6 @@ export type Database = {
       cancel_pallet_return_protocol: {
         Args: { _protocol_id: string; _reason: string }
         Returns: undefined
-      }
-      change_load_documents: { Args: { _payload: Json }; Returns: Json }
-      change_load_documents_v2: { Args: { _payload: Json }; Returns: Json }
-      change_payroll_period_state_v2: {
-        Args: {
-          _action: string
-          _period_id: string
-          _reason: string
-          _request_id: string
-        }
-        Returns: Json
       }
       check_resource_ownership: {
         Args: {
@@ -27030,106 +15588,6 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: undefined
       }
-      claim_address_resolution_queue_v2: {
-        Args: { _lease_seconds?: number; _limit?: number }
-        Returns: {
-          address_hash: string
-          address_snapshot: string
-          attempts: number
-          entity_id: string
-          entity_type: string
-          id: string
-          lease_token: string
-          tenant_id: string
-        }[]
-      }
-      claim_delivery_receipt_channel_jobs_v1: {
-        Args: { _job_id?: string; _limit?: number }
-        Returns: Json
-      }
-      claim_delivery_receipt_email_v1: {
-        Args: { _batch_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      claim_delivery_receipt_ocr_v1: { Args: never; Returns: Json }
-      claim_due_tracking_schedules_v1: {
-        Args: { _limit?: number }
-        Returns: {
-          pipeline_mode: string
-          tenant_id: string
-        }[]
-      }
-      claim_fiscal_webhook_delivery_v1: {
-        Args: {
-          p_delivery_id: string
-          p_event_timestamp?: string
-          p_event_type: string
-          p_payload_hash?: string
-          p_raw_payload: Json
-        }
-        Returns: {
-          claimed: boolean
-          inbox_id: string
-          inbox_status: string
-          retry_after_seconds: number
-        }[]
-      }
-      claim_hub_fiscal_emission: {
-        Args: {
-          _actor: string
-          _body: Json
-          _cte_id?: string
-          _emitter: string
-          _environment: string
-          _fiscal_id?: string
-          _nfse_id?: string
-          _tenant: string
-          _type: string
-        }
-        Returns: Json
-      }
-      claim_mdfe_fiscal_emission: {
-        Args: {
-          _actor: string
-          _body: Json
-          _emitter: string
-          _environment: string
-          _load_manifest_id: string
-          _tenant: string
-        }
-        Returns: Json
-      }
-      claim_ssx_sync_checkpoint_v1: {
-        Args: {
-          _account_id: string
-          _max_age_seconds?: number
-          _resource: string
-          _scope_key?: string
-        }
-        Returns: Json
-      }
-      claim_vehicle_processing_queue_v1: {
-        Args: { _limit?: number; _tenant_id: string }
-        Returns: {
-          attempts: number
-          claim_token: string
-          last_position_at: string
-          lease_until: string
-          queued_at: string
-          tenant_id: string
-          vehicle_id: string
-        }[]
-      }
-      claim_workspace_ssx_dispatch_v1: {
-        Args: { _lease_seconds?: number; _limit?: number }
-        Returns: {
-          integration_account_id: string
-          lease_token: string
-          pipeline_mode: string
-          tenant_id: string
-          workspace_id: string
-        }[]
-      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -27140,46 +15598,19 @@ export type Database = {
             }
             Returns: Json
           }
-      clear_ssx_account_cooldown_v1: {
-        Args: {
-          _integration_account_id: string
-          _observed_at: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      clear_ssx_admin_token_cache_v1: {
-        Args: { _integration_account_id: string }
-        Returns: undefined
-      }
       client_is_rural: { Args: { _client_id: string }; Returns: boolean }
       close_closing_report: {
         Args: { _closing_report_id: string }
         Returns: undefined
       }
-      close_finance_account_period: { Args: { _payload: Json }; Returns: Json }
-      close_finance_cash_period: { Args: { _payload: Json }; Returns: Json }
       close_payroll_period: {
         Args: { _period_id: string; _reason?: string }
         Returns: undefined
-      }
-      close_payroll_period_v2: {
-        Args: { _period_id: string; _reason: string; _request_id: string }
-        Returns: Json
       }
       close_reconciliation_session: {
         Args: { _session_id: string }
         Returns: undefined
       }
-      close_trip_cargo_v1: {
-        Args: {
-          _override_reason?: string
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      commit_legacy_fiscal_poll_v1: { Args: { _payload: Json }; Returns: Json }
       commit_load_import_v1: {
         Args: {
           p_file_name: string
@@ -27189,150 +15620,8 @@ export type Database = {
         }
         Returns: Json
       }
-      commit_ssx_position_batch_v1: {
-        Args: {
-          _integration_account_id: string
-          _poll_memo?: Json
-          _positions: Json
-          _provider_unit_id: string
-          _received_at: string
-          _tenant_id: string
-          _tracker_link_id: string
-          _vehicle_id: string
-        }
-        Returns: Json
-      }
-      commit_ssx_rule_violation_window_v2: {
-        Args: {
-          _end_position_id: number
-          _expected_last_position_id: number
-          _integration_account_id: string
-          _items: Json
-          _lease_token: string
-          _observed_at?: string
-        }
-        Returns: Json
-      }
-      commit_ssx_rule_violation_window_v3: {
-        Args: {
-          _end_position_id: number
-          _expected_last_position_id: number
-          _integration_account_id: string
-          _items: Json
-          _lease_token: string
-          _observed_at?: string
-          _window_end_position_id: number
-        }
-        Returns: Json
-      }
-      commit_trip_route_v1: {
-        Args: {
-          _attempt_id: string
-          _request_id: string
-          _route: Json
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      complete_delivery_receipt_channel_job_v1: {
-        Args: {
-          _external_reference: string
-          _job_id: string
-          _lease_token: string
-          _response_metadata?: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      complete_delivery_receipt_email_v1: {
-        Args: {
-          _batch_id: string
-          _lease_token: string
-          _provider_message_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      complete_delivery_receipt_ocr_v1: {
-        Args: {
-          _confidence: number
-          _error_code: string
-          _job_id: string
-          _lease_token: string
-          _processed_hash: string
-          _status: string
-          _text: string
-        }
-        Returns: Json
-      }
-      complete_delivery_receipt_pdf_download_v1: {
-        Args: { _receipt_id: string; _request_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      complete_fiscal_webhook_delivery_v1: {
-        Args: {
-          p_emission_id?: string
-          p_error?: string
-          p_inbox_id: string
-          p_success: boolean
-          p_tenant_id?: string
-        }
-        Returns: boolean
-      }
-      complete_hub_fiscal_emission: {
-        Args: {
-          _emission: string
-          _http_status: number
-          _response: Json
-          _tenant: string
-        }
-        Returns: Json
-      }
-      consume_geocoding_quota_v1: {
-        Args: { _provider?: string; _tenant_id: string }
-        Returns: Json
-      }
-      consume_secure_upload_quota_v1: {
-        Args: {
-          p_action: string
-          p_actor_fingerprint: string
-          p_max_requests: number
-          p_window_seconds: number
-        }
-        Returns: boolean
-      }
-      correct_dispatch_trip: { Args: { _payload: Json }; Returns: Json }
-      correct_finance_receipt_allocation: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      correct_finance_unloading_cost: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      correct_finance_unloading_open_complement: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      correct_finance_unloading_origin: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
-        Returns: Json
-      }
-      create_checklist_execution_v1: {
-        Args: {
-          _checked_items: Json
-          _checklist_id: string
-          _dispatch_trip_id?: string
-          _employee_id?: string
-          _notes?: string
-          _tenant_id: string
-          _vehicle_id?: string
-        }
         Returns: Json
       }
       create_client_invoice: { Args: { payload: Json }; Returns: string }
@@ -27348,33 +15637,10 @@ export type Database = {
         }
         Returns: string
       }
-      create_client_occurrence_v3: {
-        Args: {
-          _client_id: string
-          _description: string
-          _event_type: string
-          _fiscal_document_id?: string
-          _load_id?: string
-          _order_id?: string
-          _request_id: string
-          _severity?: string
-          _tenant_id: string
-        }
-        Returns: string
-      }
-      create_closing_report_draft: { Args: { _payload: Json }; Returns: Json }
-      create_driver_expense_command: { Args: { _payload: Json }; Returns: Json }
-      create_employee_contract_v1: { Args: { _payload: Json }; Returns: Json }
       create_employee_v1: {
         Args: { p_tenant_id: string; p_values: Json }
         Returns: string
       }
-      create_fiscal_document_with_freight_v1: {
-        Args: { _breakdown: Json; _document: Json; _tenant_id: string }
-        Returns: Json
-      }
-      create_grouped_load_v1: { Args: { _payload: Json }; Returns: Json }
-      create_inventory_movement_v1: { Args: { _payload: Json }; Returns: Json }
       create_ledger_entry_v1: {
         Args: {
           _amount: number
@@ -27402,7 +15668,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_load_with_documents_v1: { Args: { _payload: Json }; Returns: Json }
       create_load_with_next_number: {
         Args: {
           _destination?: string
@@ -27505,16 +15770,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_manual_driver_settlement_unchecked_v1: {
-        Args: {
-          _driver_id: string
-          _load_ids: string[]
-          _reference_date: string
-          _tenant_id: string
-          _vehicle_id: string
-        }
-        Returns: string
-      }
       create_manual_expense: { Args: { _payload: Json }; Returns: string }
       create_manual_financial_match: {
         Args: {
@@ -27530,38 +15785,16 @@ export type Database = {
         Args: { _payload: Json; _tenant_id: string }
         Returns: string
       }
-      create_or_reactivate_cost_center_v1: {
-        Args: { _name: string; _tenant_id: string }
-        Returns: Json
-      }
-      create_ort_pickup_v1: { Args: { _payload: Json }; Returns: Json }
       create_pallet_return_protocol: {
         Args: { _payload: Json; _tenant_id: string }
         Returns: Json
       }
-      create_pickup_order_v1: { Args: { _payload: Json }; Returns: Json }
-      create_stock_movement_v1: { Args: { _payload: Json }; Returns: Json }
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
         Returns: string
       }
-      create_vehicle_fueling_with_odometer_v1: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      create_workspace_tenant_v1: {
-        Args: {
-          _company?: Json
-          _initial_emitter?: Json
-          _name: string
-          _tenant_id: string
-          _timezone?: string
-        }
-        Returns: Json
-      }
       cte_defaults_for_group: { Args: { p_load_ids: string[] }; Returns: Json }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
-      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_driver_settlement: {
         Args: { _reason: string; _settlement_id: string }
         Returns: undefined
@@ -27570,14 +15803,6 @@ export type Database = {
         Args: { p_employee_id: string; p_tenant_id: string }
         Returns: undefined
       }
-      delete_failed_cte_attempt_v1: {
-        Args: { _fiscal_document_id: string }
-        Returns: boolean
-      }
-      delete_failed_cte_draft_v1: {
-        Args: { _cte_document_id: string }
-        Returns: boolean
-      }
       delete_load_if_empty: { Args: { v_load_id: string }; Returns: undefined }
       delete_load_item_v1: {
         Args: { p_item_id: string; p_tenant_id: string }
@@ -27585,14 +15810,6 @@ export type Database = {
       }
       delete_load_item_v2: {
         Args: { p_item_id: string; p_tenant_id: string }
-        Returns: boolean
-      }
-      delete_load_item_v3: {
-        Args: { p_item_id: string; p_tenant_id: string }
-        Returns: boolean
-      }
-      delete_load_item_v4: {
-        Args: { p_expected: Json; p_item_id: string; p_tenant_id: string }
         Returns: boolean
       }
       delete_load_safely: {
@@ -27607,25 +15824,9 @@ export type Database = {
         Args: { _load_ids: string[]; _tenant_id: string }
         Returns: Json
       }
-      delete_operational_route_v1: {
-        Args: {
-          _expected_updated_at: string
-          _route_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       delete_payroll_entry_item: {
         Args: { _item_id: string; _reason: string }
         Returns: undefined
-      }
-      delete_workspace_ssx_account_v1: {
-        Args: { _integration_account_id: string; _tenant_id: string }
-        Returns: undefined
-      }
-      delivery_receipt_baseline_quality_policy_v1: {
-        Args: never
-        Returns: Json
       }
       derive_trip_and_load_status_v1: {
         Args: { p_tenant_id: string; p_trip_id: string }
@@ -27647,34 +15848,10 @@ export type Database = {
           severity: string
         }[]
       }
-      disable_driver_app_observability_v1: {
-        Args: { _installation_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      discard_finance_payable_xml_upload_v1: {
-        Args: { _artifact_id: string; _tenant_id: string }
-        Returns: boolean
-      }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
-      dispatch_planned_route_v2: { Args: { _payload: Json }; Returns: string }
-      dispatch_planned_route_v3: { Args: { _payload: Json }; Returns: string }
-      driver_access_scope_v1: {
-        Args: {
-          _actor_id: string
-          _retire?: boolean
-          _tenant_id: string
-          _user_id: string
-        }
-        Returns: Json
-      }
-      driver_apply_offline_command_v1: {
-        Args: {
-          _command: string
-          _payload: Json
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
+      driver_can_access_vehicle: {
+        Args: { _vehicle_id: string }
+        Returns: boolean
       }
       driver_create_event: {
         Args: {
@@ -27730,63 +15907,9 @@ export type Database = {
         }
         Returns: Json
       }
-      driver_get_journey_context: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      driver_get_load_fiscal_file: {
-        Args: {
-          _document_id: string
-          _document_kind: string
-          _format: string
-          _load_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      driver_list_load_fiscal_catalog: {
-        Args: { _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      driver_mark_arrival: {
-        Args: {
-          _accuracy_m: number
-          _latitude: number
-          _longitude: number
-          _stop_id: string
-        }
-        Returns: string
-      }
+      driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
+      driver_owns_stop: { Args: { _stop_id: string }; Returns: boolean }
       driver_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
-      driver_record_delivery_note: {
-        Args: {
-          _client_event_id: string
-          _details: Json
-          _event_type: string
-          _stop_id: string
-        }
-        Returns: Json
-      }
-      driver_record_delivery_outcome: {
-        Args: {
-          _client_event_id?: string
-          _details?: Json
-          _expected_status?: string
-          _outcome: string
-          _stop_id: string
-        }
-        Returns: Json
-      }
-      driver_record_delivery_outcome_without_fiscal_gate_v1: {
-        Args: {
-          _client_event_id?: string
-          _details?: Json
-          _expected_status?: string
-          _outcome: string
-          _stop_id: string
-        }
-        Returns: Json
-      }
       driver_register_departure: {
         Args: { _notes?: string; _stop_id: string }
         Returns: string
@@ -27807,37 +15930,8 @@ export type Database = {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
       }
-      driver_start_trip: { Args: { _trip_id: string }; Returns: Json }
       driver_update_stop_status: {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
-        Returns: Json
-      }
-      driver_update_trip_cargo_v1: {
-        Args: {
-          _action: string
-          _payload?: Json
-          _request_id: string
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      driver_workspace_credential_status_v1: {
-        Args: {
-          _actor_id: string
-          _cancel?: boolean
-          _request_id: string
-          _tenant_id: string
-          _user_id: string
-        }
-        Returns: Json
-      }
-      edit_pallet_return_protocol_v1: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      evaluate_trip_live_status_v1: {
-        Args: { _tenant_id: string; _trip_id: string }
         Returns: Json
       }
       execute_data_repair_v1:
@@ -27850,46 +15944,6 @@ export type Database = {
             }
             Returns: Json
           }
-      extinguish_finance_open_complement: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      fail_delivery_receipt_channel_job_v1: {
-        Args: {
-          _error_code: string
-          _job_id: string
-          _lease_token: string
-          _retry_after_at?: string
-          _status: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      fail_delivery_receipt_email_v1: {
-        Args: {
-          _batch_id: string
-          _error_code: string
-          _lease_token: string
-          _retry_after_at: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      fail_ssx_rule_violation_window_v2: {
-        Args: {
-          _end_position_id: number
-          _error_code: string
-          _expected_last_position_id: number
-          _integration_account_id: string
-          _lease_token: string
-          _retry_seconds?: number
-        }
-        Returns: boolean
-      }
-      filter_billable_fiscal_sources: {
-        Args: { _ids: string[]; _tenant: string; _type: string }
-        Returns: string[]
-      }
       finalize_driver_delivery: {
         Args: {
           _fiscal_document_id?: string
@@ -27899,43 +15953,6 @@ export type Database = {
           _stop_id: string
         }
         Returns: Json
-      }
-      finalize_finance_upload_artifact: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      finance_statement_original_ready: {
-        Args: { _file_hash: string; _source_path: string; _tenant_id: string }
-        Returns: boolean
-      }
-      finish_finance_payable_xml: { Args: { _payload: Json }; Returns: Json }
-      finish_ssx_sync_checkpoint_v1: {
-        Args: {
-          _account_id: string
-          _error_code?: string
-          _lease_token: string
-          _resource: string
-          _result?: Json
-          _retry_seconds?: number
-          _scope_key: string
-        }
-        Returns: boolean
-      }
-      fiscal_preflight_failure_is_definitive: {
-        Args: { _doc_type: string; _response: Json }
-        Returns: boolean
-      }
-      fiscal_source_is_billable: {
-        Args: { _id: string; _tenant: string; _type: string }
-        Returns: boolean
-      }
-      fiscal_submission_failure_is_definitive: {
-        Args: { _response: Json }
-        Returns: boolean
-      }
-      generate_client_invoice_from_closing: {
-        Args: { _closing_report_id: string }
-        Returns: string
       }
       generate_driver_settlement: {
         Args: { _dispatch_trip_id: string; _tenant_id: string }
@@ -27964,45 +15981,9 @@ export type Database = {
         Args: { _tenant_id: string }
         Returns: Json
       }
-      get_active_address_resolution_queue_v2: {
-        Args: {
-          _cursor_id?: string
-          _cursor_updated_at?: string
-          _page_limit?: number
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: {
-          ambiguous_count: number
-          error_count: number
-          has_more: boolean
-          items: Json
-          next_cursor_id: string
-          next_cursor_updated_at: string
-          pending_count: number
-          snapshot_at: string
-          total_count: number
-        }[]
-      }
       get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
-      get_address_resolution_queue_v1: {
-        Args: { _limit?: number; _status?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_claimed_address_resolution_item_v1: {
-        Args: { _lease_token: string; _queue_id: string }
-        Returns: Json
-      }
       get_client_document_download_url: {
         Args: { _proof_id: string }
-        Returns: Json
-      }
-      get_client_invoice_action_context: {
-        Args: { _invoice_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_client_invoice_creation_context: {
-        Args: { _draft?: Json; _report_id?: string; _tenant_id: string }
         Returns: Json
       }
       get_client_pod_metadata: {
@@ -28022,15 +16003,6 @@ export type Database = {
       }
       get_client_portal_reports_summary: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_client_portal_reports_summary_raw_20260917: {
-        Args: {
-          _client_id?: string
-          _end_date?: string
-          _start_date?: string
-          _tenant_id: string
-        }
         Returns: Json
       }
       get_client_portal_reports_summary_v2: {
@@ -28079,814 +16051,13 @@ export type Database = {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
-      get_closing_report_action_context: {
-        Args: { _report_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_closing_report_sources: {
-        Args: { _filters: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_control_tower_snapshot_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_current_driver_journey_v1: { Args: never; Returns: Json }
-      get_current_memberships_v1: {
-        Args: never
-        Returns: {
-          plan_key: string
-          role: Database["public"]["Enums"]["app_role"]
-          tenant_id: string
-          tenant_name: string
-          timezone: string
-        }[]
-      }
-      get_delivery_receipt_filter_catalog_raw_20260917: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_delivery_receipt_filter_catalog_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_delivery_receipt_filter_summary_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_delivery_receipt_ocr_health_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_delivery_receipt_operations_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_delivery_receipt_supplier_channels_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_driver_app_observability_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_driver_chat_context: {
-        Args: { _driver_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_driver_delivery_fiscal_conflict_v1: {
-        Args: { _request_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_driver_delivery_fiscal_snapshot_v1: {
-        Args: { _stop_id: string; _tenant_id: string; _trip_id: string }
-        Returns: Json
-      }
-      get_driver_delivery_items: { Args: { _stop_id: string }; Returns: Json }
-      get_driver_expense_review_context: {
-        Args: { _expense_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_driver_settlement_adjustment_context: {
-        Args: { _settlement_id: string; _tenant_id: string }
-        Returns: Json
-      }
       get_driver_workspace_v1: {
         Args: { p_driver_id: string; p_tenant_id: string }
         Returns: Json
       }
-      get_event_chat_context: {
-        Args: { _event_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_expense_creation_context: {
-        Args: { _source_id: string; _source_type: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_expense_receipt_status: {
-        Args: {
-          _receipt: Json
-          _request_id: string
-          _source_id: string
-          _source_type: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_access: { Args: { _tenant_id: string }; Returns: boolean }
-      get_finance_account_opening: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_account_opening_history: {
-        Args: { _account_id: string; _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_account_period_evidence: {
-        Args: { _account_id: string; _closure_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_account_period_evidence_page: {
-        Args: {
-          _account_id: string
-          _closure_id: string
-          _dependency_offset?: number
-          _limit?: number
-          _movement_offset?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_account_period_history: {
-        Args: {
-          _account_id: string
-          _limit?: number
-          _offset?: number
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_account_period_review: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_approval_policy: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_automatic_reconciliation_status: {
-        Args: { _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_cash_forecast_comparison: {
-        Args: { _snapshot_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_cash_forecast_history: {
-        Args: { _expected_revision: string; _page: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_cash_forecast_snapshot: {
-        Args: { _snapshot_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_cash_forecast_sources: {
-        Args: {
-          _cutoff: string
-          _expected_revision: string
-          _kind: string
-          _page: number
-          _period_end: string
-          _snapshot_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_cash_period_counts: {
-        Args: {
-          _account_id: string
-          _page?: number
-          _period_end: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_closing_receivable_agreement: {
-        Args: { _report_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_cost_dispositions: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_cost_return_movement_options: {
-        Args: {
-          _disposition_id: string
-          _expected_revision?: string
-          _page?: number
-          _query?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_customer_credit_options: {
-        Args: { _query: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_customer_credit_refund_options: {
-        Args: { _credit_id: string; _query: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_delivery_context: {
-        Args: { _stop_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_driver_advance_positions: {
-        Args: { _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_driver_advance_return_options: {
-        Args: {
-          _advance_movement_id: string
-          _expected_revision?: string
-          _page?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_employee_advance_payment_history: {
-        Args: { _advance_id: string; _query: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_employee_advance_payment_options: {
-        Args: { _advance_id: string; _query: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_expense_options: {
-        Args: {
-          _kind: string
-          _page?: number
-          _search?: string
-          _tenant_id: string
-          _trip_id?: string
-        }
-        Returns: Json
-      }
-      get_finance_expense_receipt_artifacts: {
-        Args: { _expense_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_fiscal_dashboard_summary: {
-        Args: {
-          _client_id?: string
-          _doc_type?: string
-          _from?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_fiscal_receivable_basis: {
-        Args: { _observation_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_legacy_adoption_inventory: {
-        Args: {
-          _account_id: string
-          _from: string
-          _page?: number
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_legacy_cost_inventory: {
-        Args: { _page?: number; _source?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_legacy_cut_manifest_page: {
-        Args: {
-          _account_id: string
-          _from: string
-          _page?: number
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_legacy_cut_review: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_legacy_expense_cost_context: {
-        Args: { _expense_id: string; _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_legacy_integrity_inventory: {
-        Args: { _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_legacy_payable_association: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _payment_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_legacy_receivable_association: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _payment_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_legacy_reconciliation_summary: {
-        Args: {
-          _bank_account_id: string
-          _period_end: string
-          _period_start: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_maintenance_cost_context: {
-        Args: { _order_id: string; _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_maintenance_direct_part_context: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _part_id: string
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_maintenance_labor_context: {
-        Args: {
-          _expected_revision?: string
-          _order_id: string
-          _page?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_manual_expense_movements: {
-        Args: { _page: number; _search: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_movement_receipt_trace: {
-        Args: { _movement_id: string; _page: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_native_statement_account: {
-        Args: { _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_payable_bulk_context: {
-        Args: { _items: Json; _movement_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_payable_movements: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _payable_id: string
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payable_payment_history: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _payable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payable_portfolio: {
-        Args: {
-          _filters?: Json
-          _page?: number
-          _revision?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payable_xml_context: {
-        Args: {
-          _expected_revision?: string
-          _offset?: number
-          _payable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payable_xml_locator_v1: {
-        Args: { _link_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_payroll_entries: {
-        Args: { _period_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_payroll_entry_page: {
-        Args: {
-          _entry_id?: string
-          _page?: number
-          _payment?: string
-          _period_id: string
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payroll_period_page: {
-        Args: { _page?: number; _page_size?: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_payroll_period_page_v2: {
-        Args: {
-          _filters?: Json
-          _page?: number
-          _page_size?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_payroll_periods: {
-        Args: { _period_id?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_pending_transfers: {
-        Args: { _page: number; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_period_money_package: {
-        Args: {
-          _account_ids?: string[]
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_period_unloading_flow: {
-        Args: {
-          _account_ids: string[]
-          _expected_revision?: string
-          _from: string
-          _page?: number
-          _supplier_id?: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_receipt_movement_options: {
-        Args: {
-          _account_id: string
-          _date: string
-          _page: number
-          _search: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_receivable_adjustments: {
-        Args: { _query: Json; _receivable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_receivable_agreement_context: {
-        Args: { _proposal: Json; _receivable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_receivable_agreement_history: {
-        Args: {
-          _expected_revision?: string
-          _limit?: number
-          _offset?: number
-          _receivable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_receivable_history: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _receivable_id?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_receivable_installment_position: {
-        Args: { _receivable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_receivable_payment_installments: {
-        Args: {
-          _expected_revision?: string
-          _limit?: number
-          _offset?: number
-          _payment_id: string
-          _receivable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_receivable_payments_page: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _receivable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_receivable_portfolio_summary: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_receivables_page: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _page?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_receivables_page_by_origin: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _origin?: string
-          _page?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_receivables_page_v3: {
-        Args: {
-          _client_id?: string
-          _cursor?: Json
-          _from?: string
-          _origin?: string
-          _search?: string
-          _status?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_reconciliation_context: {
-        Args: {
-          _bank_entry_ids: string[]
-          _movement_ids: string[]
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_recorded_cost_operational_coverage: {
-        Args: { _from?: string; _tenant_id: string; _to?: string }
-        Returns: Json
-      }
-      get_finance_recorded_cost_summary: {
-        Args: {
-          _category?: string
-          _cost_center?: string
-          _from?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_settlement_expense_context: {
-        Args: { _page?: number; _settlement_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_settlement_expense_context_v2: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _settlement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_settlement_payment_candidates: {
-        Args: {
-          _amount_cents: number
-          _page?: number
-          _settlement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_settlement_payment_movement_history: {
-        Args: { _page?: number; _payment_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_settlement_payment_movements: {
-        Args: { _page?: number; _payment_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_statement_coverage_history: {
-        Args: {
-          _account_id: string
-          _from: string
-          _page?: number
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_statement_coverage_review: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_statement_original_locator_v1: {
-        Args: { _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_statement_period_evidence: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      get_finance_stock_acquisition_context: {
-        Args: {
-          _expected_revision?: string
-          _inbound_movement_id: string
-          _page?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_stock_acquisition_inventory: {
-        Args: { _page?: number; _search?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_stock_consumption_context: {
-        Args: {
-          _expected_revision?: string
-          _movement_id: string
-          _page?: number
-          _part_id: string
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_transfer_period_position: {
-        Args: {
-          _account_id: string
-          _cutoff: string
-          _page: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_finance_unbilled_freight_summary: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_finance_unloading_cost_correction_context: {
-        Args: { _amount_cents: string; _charge_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_unloading_origin_correction_context: {
-        Args: { _charge_id: string; _proposal: Json; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_unloading_projection_repair_context: {
-        Args: { _charge_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_finance_upload_artifact: {
-        Args: { _artifact_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_fiscal_document_summary_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          inbound_count: number
-          outbound_count: number
-          pending_count: number
-          total_count: number
-          total_pallets: number
-          total_value: number
-          total_weight: number
-        }[]
-      }
-      get_fiscal_documents_page_v1: {
-        Args: {
-          _cursor_created_at?: string
-          _cursor_id?: string
-          _document_type?: string
-          _expected_revision?: number
-          _load_filter?: string
-          _page_limit?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: {
-          has_more: boolean
-          items: Json
-          next_cursor_created_at: string
-          next_cursor_id: string
-          revision: string
-          total_count: number
-        }[]
-      }
-      get_geofence_dashboard_v1: {
-        Args: {
-          _filters?: Json
-          _page?: number
-          _page_size?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_ingestion_report_index_v1: {
-        Args: {
-          _batch?: string
-          _from?: string
-          _page?: number
-          _page_size?: number
-          _snapshot_at?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      get_inventory_summary_v1: { Args: { _tenant_id: string }; Returns: Json }
-      get_legacy_cost_center_report_v1: {
-        Args: {
-          _cost_center?: string
-          _from?: string
-          _page?: number
-          _page_size?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_load_document_change_context: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_load_freight_context_v1: {
-        Args: { _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_load_operational_documents: {
-        Args: { _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_load_replanning_context: {
-        Args: {
-          _source_load_id: string
-          _target_load_id: string
-          _tenant_id: string
-        }
-        Returns: Json
+      get_next_load_number_v1: {
+        Args: { p_tenant_id: string }
+        Returns: string
       }
       get_open_trip_alerts: {
         Args: { _tenant_id: string }
@@ -28912,106 +16083,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_operation_document_context: {
-        Args: { _document_id: string; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
       get_operational_financial_summary_v1: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_operations_delivery_fiscal_conflict_v1: {
-        Args: { _request_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_operations_load_counts_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          active_count: number
-          delayed_count: number
-          in_transit_count: number
-        }[]
-      }
-      get_operator_pod_history_collections_v1: {
-        Args: {
-          _document_id: string
-          _page?: number
-          _page_size?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      get_operator_pod_history_v1: {
-        Args: { _document_id: string; _tenant_id: string }
         Returns: Json
       }
       get_public_shipment_status: {
         Args: { _fiscal_document_id: string }
         Returns: string
-      }
-      get_receivable_financial_context: {
-        Args: { _receivable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_redelivery_context: {
-        Args: { _document_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      get_routing_client_locations_v1: {
-        Args: { _client_ids: string[]; _tenant_id: string }
-        Returns: Json
-      }
-      get_ssx_admin_token_cache_v1: {
-        Args: { _integration_account_id: string }
-        Returns: Json
-      }
-      get_ssx_rule_violation_window_v1: {
-        Args: {
-          _integration_account_id: string
-          _overlap?: number
-          _window_size?: number
-        }
-        Returns: {
-          end_position_id: string
-          expected_last_position_id: string
-          should_poll: boolean
-          start_position_id: string
-        }[]
-      }
-      get_tenant_integration_capabilities_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          fiscal_effective: boolean
-          fiscal_enabled: boolean
-          fiscal_kill_switch: boolean
-          fiscal_status: string
-          ssx_effective: boolean
-          ssx_enabled: boolean
-          ssx_kill_switch: boolean
-          ssx_status: string
-        }[]
-      }
-      get_tracking_observability_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      get_trip_cargo_collection_page_v1: {
-        Args: {
-          _collection: string
-          _page?: number
-          _page_size?: number
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      get_trip_cargo_control_v1: {
-        Args: { _tenant_id: string; _trip_id: string }
-        Returns: Json
-      }
-      get_trip_cargo_control_v2: {
-        Args: { _tenant_id: string; _trip_id: string }
-        Returns: Json
       }
       get_user_client_access: {
         Args: { _tenant_id: string }
@@ -29052,37 +16130,6 @@ export type Database = {
         }[]
       }
       get_user_tenant_ids: { Args: never; Returns: string[] }
-      get_vehicle_state_inputs_v1: {
-        Args: { _tenant_id: string; _vehicle_id: string }
-        Returns: Json
-      }
-      get_workspace_ssx_accounts_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          base_url: string
-          created_at: string
-          id: string
-          last_error: string
-          last_login_at: string
-          migration_state: string
-          provider: string
-          settings: Json
-          status: string
-          tenant_id: string
-          token_expires_at: string
-          updated_at: string
-          username: string
-          workspace_id: string
-        }[]
-      }
-      get_workspace_vehicle_position_v1: {
-        Args: { _tenant_id: string; _vehicle_id: string }
-        Returns: {
-          captured_at: string
-          lat: number
-          lng: number
-        }[]
-      }
       has_tenant_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -29107,54 +16154,6 @@ export type Database = {
         }
         Returns: Json
       }
-      import_driver_monitoring_workbook_v1: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      import_merchandise_shortage_batch_v1: {
-        Args: {
-          _cases: Json
-          _file_hash: string
-          _file_name: string
-          _request_id: string
-          _row_count: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      import_occurrence_report_batch_v1: {
-        Args: { _batch: Json; _occurrences?: Json }
-        Returns: Json
-      }
-      increment_hfe_sync: { Args: { p_id: string }; Returns: undefined }
-      inspect_driver_workspace_credentials_v1: {
-        Args: { _actor_id: string; _tenant_id: string; _user_id: string }
-        Returns: Json
-      }
-      inspect_expense_receipt_upload: {
-        Args: {
-          _actor_id: string
-          _receipt: Json
-          _request_id: string
-          _source_id: string
-          _source_type: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      inspect_finance_statement_source: {
-        Args: { _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      intake_finance_statement: { Args: { _payload: Json }; Returns: Json }
-      intake_finance_statement_artifact: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      integration_account_matches_tenant_workspace_v1: {
-        Args: { _integration_account_id: string; _tenant_id: string }
-        Returns: boolean
-      }
       is_point_in_geofence: {
         Args: { _geofence_id: string; _lat: number; _lng: number }
         Returns: boolean
@@ -29166,10 +16165,6 @@ export type Database = {
         Returns: boolean
       }
       is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
-      link_finance_settlement_payment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
       link_fiscal_documents_to_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
@@ -29178,27 +16173,11 @@ export type Database = {
         Args: { p_item_ids: string[]; p_load_id: string; p_tenant_id: string }
         Returns: Json
       }
-      link_nfse_to_delivery_stop_v1: {
-        Args: { _nfse_id: string; _stop_id: string; _tenant_id: string }
-        Returns: Json
-      }
       list_available_loads_for_settlement: {
         Args: {
           _driver_id?: string
           _include_settlement_id?: string
           _limit?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_available_loads_for_settlement_v2: {
-        Args: {
-          _driver_id?: string
-          _expected_revision?: string
-          _include_settlement_id?: string
-          _page?: number
-          _page_size?: number
           _search?: string
           _tenant_id: string
         }
@@ -29261,65 +16240,8 @@ export type Database = {
           weight_kg: number
         }[]
       }
-      list_client_invoice_financial_page: {
-        Args: {
-          _filters: Json
-          _page?: number
-          _revision?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_client_invoice_financials: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      list_client_mdfe_documents_v1: {
-        Args: {
-          _client_id?: string
-          _end_date?: string
-          _limit?: number
-          _offset?: number
-          _search?: string
-          _start_date?: string
-          _tenant_id: string
-        }
-        Returns: {
-          access_key: string
-          client_id: string
-          document_type: string
-          has_pod: boolean
-          id: string
-          invoice_number: string
-          issue_date: string
-          load_id: string
-          recipient: string
-          recipient_city: string
-          recipient_state: string
-          remitter: string
-          status: string
-          value: number
-          weight_kg: number
-        }[]
-      }
       list_client_occurrence_messages: {
         Args: { _occurrence_id: string; _tenant_id: string }
-        Returns: {
-          author_name: string
-          author_role: string
-          created_at: string
-          id: string
-          message: string
-        }[]
-      }
-      list_client_occurrence_messages_v2: {
-        Args: {
-          _before_created_at?: string
-          _before_id?: string
-          _limit?: number
-          _occurrence_id: string
-          _tenant_id: string
-        }
         Returns: {
           author_name: string
           author_role: string
@@ -29351,19 +16273,6 @@ export type Database = {
           resolved_at: string
           severity: string
         }[]
-      }
-      list_client_occurrences_page_v1: {
-        Args: {
-          _client_id?: string
-          _cursor?: Json
-          _expected_revision?: string
-          _page_size?: number
-          _resolved?: boolean
-          _severity?: string
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: Json
       }
       list_client_occurrences_v2: {
         Args: {
@@ -29411,20 +16320,6 @@ export type Database = {
           status: string
         }[]
       }
-      list_client_pickups_page_v1: {
-        Args: {
-          _client_id?: string
-          _cursor?: Json
-          _end_date?: string
-          _expected_revision?: string
-          _page_size?: number
-          _snapshot_at?: string
-          _start_date?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       list_client_pickups_v2: {
         Args: {
           _client_id?: string
@@ -29471,20 +16366,6 @@ export type Database = {
           validated_at: string
         }[]
       }
-      list_client_pods_page_v1: {
-        Args: {
-          _client_id?: string
-          _cursor?: Json
-          _end_date?: string
-          _expected_revision?: string
-          _page_size?: number
-          _snapshot_at?: string
-          _start_date?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       list_client_pods_v2: {
         Args: {
           _client_id?: string
@@ -29519,40 +16400,6 @@ export type Database = {
         }
         Returns: Json
       }
-      list_delivery_receipt_email_batches_v1: {
-        Args: {
-          _limit?: number
-          _offset?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_delivery_receipt_filter_options_v1: {
-        Args: {
-          _cursor_label?: string
-          _cursor_value?: string
-          _kind: string
-          _limit?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_delivery_receipt_quality_policies_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      list_delivery_receipts_v1: {
-        Args: {
-          _filters?: Json
-          _limit?: number
-          _offset?: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       list_dispatch_trips_v1: {
         Args: {
           p_cursor?: string
@@ -29563,59 +16410,8 @@ export type Database = {
         }
         Returns: Json
       }
-      list_driver_chat_messages: {
-        Args: { _before?: Json; _driver_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_driver_expense_sources: {
-        Args: { _offset?: number; _tenant_id: string }
-        Returns: Json
-      }
-      list_driver_expenses: {
-        Args: { _offset?: number; _tenant_id: string }
-        Returns: Json
-      }
-      list_driver_expenses_for_review: {
-        Args: { _offset?: number; _status?: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_driver_expenses_for_review_v2: {
-        Args: {
-          _cursor_expense_at?: string
-          _cursor_id?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_driver_loads_page_v1: {
-        Args: {
-          _cursor?: Json
-          _limit?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_driver_operational_events_page_v1: {
-        Args: {
-          _cursor?: Json
-          _limit?: number
-          _tenant_id: string
-          _trip_id?: string
-        }
-        Returns: Json
-      }
       list_driver_settlement_filter_options: {
-        Args: {
-          _expected_revision?: string
-          _kind: string
-          _page?: number
-          _page_size?: number
-          _search?: string
-          _tenant_id: string
-        }
+        Args: { _tenant_id: string }
         Returns: Json
       }
       list_driver_settlements: {
@@ -29630,25 +16426,6 @@ export type Database = {
           _page?: number
           _page_size?: number
           _search?: string
-          _status?: string
-          _tenant_id: string
-          _vehicle_id?: string
-        }
-        Returns: Json
-      }
-      list_driver_settlements_v2: {
-        Args: {
-          _cursor?: Json
-          _date_from?: string
-          _date_to?: string
-          _driver_id?: string
-          _only_expense_pending?: boolean
-          _only_km_pending?: boolean
-          _only_needs_recalculation?: boolean
-          _only_no_freight?: boolean
-          _page_size?: number
-          _search?: string
-          _snapshot_at?: string
           _status?: string
           _tenant_id: string
           _vehicle_id?: string
@@ -29674,128 +16451,6 @@ export type Database = {
         }
         Returns: Json
       }
-      list_event_chat_messages: {
-        Args: { _before?: Json; _event_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_account_artifacts_v1: {
-        Args: {
-          _account_id: string
-          _offset?: number
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_finance_audit_events: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_expense_page_v2: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_expenses: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_fiscal_queue: {
-        Args: { _page?: number; _status?: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_fiscal_queue_v2: {
-        Args: {
-          _cursor_observation_id?: string
-          _cursor_observed_order?: number
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_finance_fiscal_work_queue: {
-        Args: {
-          _current_only?: boolean
-          _cursor_observation_id?: string
-          _cursor_observed_order?: number
-          _status: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_finance_identity_candidates: {
-        Args: { _page?: number; _row_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_legacy_reconciliation_rows: {
-        Args: {
-          _bank_account_id: string
-          _cursor?: Json
-          _direction?: string
-          _kind: string
-          _period_end: string
-          _period_start: string
-          _search?: string
-          _status?: string
-          _tenant_id: string
-          _view?: string
-        }
-        Returns: Json
-      }
-      list_finance_movements: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_reconciliation_history: {
-        Args: { _import_id: string; _page?: number; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_reconciliation_options: {
-        Args: {
-          _import_id: string
-          _kind: string
-          _page?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_finance_recorded_costs: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_statement_history_v1: {
-        Args: {
-          _import_id: string
-          _page?: number
-          _page_size?: number
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_finance_statement_lines: {
-        Args: { _filters?: Json; _import_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_statements: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_statements_v2: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      list_finance_unbilled_freight_origins: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _page?: number
-          _state?: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
       list_fiscal_documents_v1: {
         Args: {
           p_cursor?: string
@@ -29803,42 +16458,6 @@ export type Database = {
           p_search?: string
           p_tenant_id: string
           p_type?: string[]
-        }
-        Returns: Json
-      }
-      list_inventory_balances_page_v1: {
-        Args: {
-          _aging?: boolean
-          _client_id?: string
-          _location_id?: string
-          _page?: number
-          _page_limit?: number
-          _search?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_inventory_movements_page_v1: {
-        Args: {
-          _client_id?: string
-          _from?: string
-          _location_id?: string
-          _movement_type?: string
-          _page?: number
-          _page_limit?: number
-          _search?: string
-          _tenant_id: string
-          _timezone?: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      list_load_control_page_v2: {
-        Args: {
-          _cursor?: Json
-          _filters?: Json
-          _limit?: number
-          _tenant_id: string
         }
         Returns: Json
       }
@@ -29854,19 +16473,6 @@ export type Database = {
           total_count: number
         }[]
       }
-      list_loads_page_v1: {
-        Args: {
-          _filters?: Json
-          _limit?: number
-          _offset?: number
-          _tenant_id: string
-        }
-        Returns: {
-          items: Json
-          status_counts: Json
-          total_count: number
-        }[]
-      }
       list_loads_v1: {
         Args: {
           p_cursor?: string
@@ -29874,15 +16480,6 @@ export type Database = {
           p_search?: string
           p_status?: string[]
           p_tenant_id: string
-        }
-        Returns: Json
-      }
-      list_operational_events_page_v1: {
-        Args: {
-          _cursor?: Json
-          _filters?: Json
-          _limit?: number
-          _tenant_id: string
         }
         Returns: Json
       }
@@ -29895,128 +16492,6 @@ export type Database = {
         }
         Returns: Json
       }
-      list_operator_clients_page_v1: {
-        Args: {
-          _cursor?: Json
-          _direction?: string
-          _kind?: string
-          _limit?: number
-          _search?: string
-          _snapshot_at?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_operator_reference_page_v1: {
-        Args: {
-          _cursor?: Json
-          _include_inactive?: boolean
-          _limit?: number
-          _resource: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_operator_routes_page_v1: {
-        Args: {
-          _corridor?: string
-          _page?: number
-          _page_limit?: number
-          _search?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_ssx_mapping_conflicts_v1: {
-        Args: {
-          _limit?: number
-          _offset?: number
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_ssx_mapping_conflicts_v2: {
-        Args: {
-          _cursor?: Json
-          _limit?: number
-          _snapshot_at?: string
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_trip_cargo_controls_v1: {
-        Args: { _status?: string; _tenant_id: string }
-        Returns: Json
-      }
-      list_trip_cargo_controls_v2: {
-        Args: {
-          _expected_revision?: string
-          _page?: number
-          _page_size?: number
-          _status?: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      list_vehicle_position_history_v1: {
-        Args: {
-          _after_captured_at?: string
-          _after_id?: string
-          _end_at: string
-          _page_size?: number
-          _start_at: string
-          _tenant_id: string
-          _vehicle_id: string
-        }
-        Returns: {
-          captured_at: string
-          heading: number
-          id: string
-          lat: number
-          lng: number
-          received_at: string
-          speed: number
-          tenant_id: string
-          vehicle_id: string
-        }[]
-      }
-      list_workspace_fleet_snapshot_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          active: boolean
-          body_type: string
-          captured_at: string
-          created_at: string
-          current_driver_id: string
-          heading: number
-          id: string
-          last_movement_at: string
-          lat: number
-          lng: number
-          max_pallets: number
-          max_volume_m3: number
-          max_weight_kg: number
-          movement_state: string
-          nickname: string
-          plate: string
-          received_at: string
-          renavam: string
-          source_tenant_id: string
-          source_vehicle_id: string
-          speed: number
-          state_updated_at: string
-          stopped_duration_seconds: number
-          stopped_since: string
-          tags: Json
-          tenant_id: string
-          type: string
-          uf: string
-        }[]
-      }
-      list_workspace_tenants_v1: { Args: { _tenant_id: string }; Returns: Json }
       log_operational_event_v2: {
         Args: {
           p_dispatch_stop_id?: string
@@ -30039,26 +16514,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      log_pod_access_v2: {
-        Args: {
-          _actor_user_id: string
-          _fiscal_document_id: string
-          _pod_id: string
-          _source?: string
-          _success: boolean
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
-      mark_closing_report_sent: {
-        Args: {
-          _channel?: string
-          _report_id: string
-          _sent_to?: string
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
       mark_doccob_downloaded: {
         Args: { _export_id: string; _tenant_id: string }
         Returns: undefined
@@ -30076,53 +16531,30 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
-      mark_occurrence_return_sheet_printed_v1: {
-        Args: { _return_sheet_id: string; _tenant_id: string }
-        Returns: undefined
-      }
-      merge_existing_tenant_workspace_v1: {
-        Args: { _source_tenant_id: string; _target_tenant_id: string }
-        Returns: Json
-      }
-      merge_physical_journeys_v1: {
-        Args: { _tenant_id: string; _trip_ids: string[] }
-        Returns: string
-      }
-      merge_tenant_pipeline_health_v1: {
-        Args: { _increment_success?: boolean; _patch: Json; _tenant_id: string }
-        Returns: Json
-      }
-      monitor_simples_nacional_icms_violations: {
-        Args: { _tenant_id: string }
-        Returns: {
-          created_at: string
-          cte_number: string
-          emitter_name: string
-          fiscal_document_id: string
-          icms_aliquota: number
-          icms_base: number
-          icms_valor: number
-        }[]
-      }
+      monitor_simples_nacional_icms_violations:
+        | {
+            Args: never
+            Returns: {
+              created_at: string
+              cte_number: string
+              emitter_name: string
+              fiscal_document_id: string
+              icms_aliquota: number
+              icms_base: number
+              icms_valor: number
+            }[]
+          }
+        | {
+            Args: { _tenant_id: string }
+            Returns: {
+              cst: string
+              cte_number: string
+              document_id: string
+              emitter_name: string
+              icms_value: number
+            }[]
+          }
       move_load_items_between_loads: {
-        Args: {
-          _item_ids: string[]
-          _source_load_id: string
-          _target_load_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      move_load_items_between_loads_capacity_guard_20260917: {
-        Args: {
-          _item_ids: string[]
-          _source_load_id: string
-          _target_load_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      move_load_items_between_loads_unguarded_20260917: {
         Args: {
           _item_ids: string[]
           _source_load_id: string
@@ -30149,16 +16581,6 @@ export type Database = {
         }
         Returns: Json
       }
-      mutate_client_portal_access_v1: {
-        Args: {
-          _access_id: string
-          _action: string
-          _active?: boolean
-          _expected_updated_at: string
-        }
-        Returns: Json
-      }
-      mutate_fleet_geofence_v1: { Args: { _payload: Json }; Returns: Json }
       next_client_invoice_number: {
         Args: {
           _installment?: number
@@ -30195,22 +16617,8 @@ export type Database = {
       normalize_tax_id: { Args: { value: string }; Returns: string }
       normalize_vehicle_plate: { Args: { p: string }; Returns: string }
       op_route_norm: { Args: { txt: string }; Returns: string }
-      pay_finance_payable_from_account: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
-      plan_delivery_receipt_email_batches_v1: {
-        Args: {
-          _cover_config: Json
-          _receipt_ids: string[]
-          _supplier_key: string
-          _supplier_name: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       plan_dispatch_start_trip_v1: {
         Args: {
           p_driver_id: string
@@ -30260,55 +16668,6 @@ export type Database = {
         }
         Returns: string
       }
-      portal_authorize_download_v1: {
-        Args: {
-          _format?: string
-          _parent_id?: string
-          _resource_id: string
-          _resource_type: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      portal_get_financial_title_file: {
-        Args: { _tenant_id: string; _title_id: string }
-        Returns: Json
-      }
-      portal_get_fiscal_file: {
-        Args: {
-          _document_id: string
-          _document_kind: string
-          _fiscal_document_id: string
-          _format: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      portal_list_financial_titles: {
-        Args: {
-          _client_id?: string
-          _limit?: number
-          _offset?: number
-          _status?: string[]
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      portal_list_financial_titles_v2: {
-        Args: {
-          _client_id?: string
-          _limit?: number
-          _offset?: number
-          _revision?: string
-          _status?: string[]
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      portal_list_fiscal_bundle: {
-        Args: { _fiscal_document_id: string; _tenant_id: string }
-        Returns: Json
-      }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
@@ -30329,273 +16688,8 @@ export type Database = {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
       }
-      prepare_auth_invite: {
-        Args: {
-          _email: string
-          _invited_by: string
-          _nonce: string
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
-      prepare_auth_invite_v2: {
-        Args: {
-          _access_type?: string
-          _client_id?: string
-          _email: string
-          _invited_by: string
-          _nonce: string
-          _permissions?: Json
-          _role: Database["public"]["Enums"]["app_role"]
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
-      prepare_cte_issue: {
-        Args: {
-          _emitter_id: string
-          _environment: string
-          _snapshot: Json
-          _source_ids: string[]
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      prepare_delivery_receipt_pdf_v1: {
-        Args: {
-          _file_name: string
-          _receipt_id: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      prepare_driver_access_v1: {
-        Args: {
-          _actor_id: string
-          _driver_id: string
-          _email: string
-          _nonce: string
-          _tenant_id: string
-        }
-        Returns: string
-      }
-      prepare_driver_workspace_credentials_v1: {
-        Args: {
-          _action: string
-          _actor_id: string
-          _driver_id?: string
-          _email: string
-          _nonce: string
-          _request_id: string
-          _tenant_id: string
-          _user_id: string
-        }
-        Returns: Json
-      }
-      prepare_finance_expense_receipt_intent: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      prepare_finance_payable_xml: {
-        Args: { _actor_id: string; _artifact_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      prepare_finance_upload_artifact: {
-        Args: {
-          _actor_id: string
-          _artifact_id: string
-          _sha256: string
-          _size_bytes: number
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      prepare_mdfe_issue: {
-        Args: {
-          _cte_ids: string[]
-          _emitter_id: string
-          _environment: string
-          _load_id: string
-          _snapshot: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      prepare_nfse_issue_batch_v1: {
-        Args: {
-          _actor: string
-          _emitter: string
-          _environment: string
-          _mode: string
-          _request_id: string
-          _snapshot: Json
-          _tenant: string
-        }
-        Returns: Json
-      }
-      prepare_trip_route_v1: {
-        Args: {
-          _attempt_id: string
-          _request_id: string
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      preview_dispatch_trip_cancellation: {
-        Args: { _tenant_id: string; _trip_id: string }
-        Returns: Json
-      }
-      preview_dispatch_trip_correction: {
-        Args: { _tenant_id: string; _trip_id: string }
-        Returns: Json
-      }
-      preview_finance_account_period_close: {
-        Args: {
-          _account_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      preview_finance_cash_forecast: {
-        Args: {
-          _cutoff: string
-          _expected_revision?: string
-          _period_end: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_cash_forecast_agenda: {
-        Args: {
-          _cutoff: string
-          _economic_key: string
-          _period_end: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_cash_period_close: {
-        Args: {
-          _account_id: string
-          _count_id: string
-          _from: string
-          _tenant_id: string
-          _to: string
-        }
-        Returns: Json
-      }
-      preview_finance_cost_disposition_return: {
-        Args: {
-          _amount_cents: string
-          _disposition_id: string
-          _incoming_movement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_customer_credit_application: {
-        Args: {
-          _amount_cents: string
-          _application_id?: string
-          _credit_id: string
-          _receivable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_customer_credit_refund: {
-        Args: {
-          _amount_cents: string
-          _credit_id: string
-          _outgoing_movement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_driver_advance_return: {
-        Args: {
-          _advance_movement_id: string
-          _amount_cents: string
-          _incoming_movement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_employee_advance_action: {
-        Args: { _action: string; _advance_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_employee_advance_payment: {
-        Args: {
-          _advance_id: string
-          _amount_cents: string
-          _movement_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_expense_cancellation: {
-        Args: { _expense_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_manual_expense_cancellation: {
-        Args: { _payable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_movement_correction: {
-        Args: { _movement_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_open_complement_extinction: {
-        Args: { _charge_id: string; _proposal: Json; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_payable_approval: {
-        Args: { _payable_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_receivable_adjustment: {
-        Args: {
-          _adjustment_id?: string
-          _amount_cents: string
-          _effective_on: string
-          _kind: string
-          _receivable_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_stock_consumption: {
-        Args: {
-          _lines: Json
-          _movement_id: string
-          _part_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      preview_finance_unloading_cancellation: {
-        Args: { _charge_id: string; _effective_on: string; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_unloading_cost_regularization: {
-        Args: { _charge_id: string; _proposal: Json; _tenant_id: string }
-        Returns: Json
-      }
-      preview_finance_unloading_open_complement: {
-        Args: { _amount_cents: string; _charge_id: string; _tenant_id: string }
-        Returns: Json
-      }
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
-        Returns: Json
-      }
-      process_finance_fiscal_observation: {
-        Args: { _observation_id: string; _tenant_id: string }
         Returns: Json
       }
       process_geofence_alerts: {
@@ -30608,14 +16702,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      process_geofence_position_batch_v1: {
-        Args: { _points: Json; _tenant_id: string; _vehicle_id: string }
-        Returns: Json
-      }
-      process_geofence_position_batch_v2: {
-        Args: { _points: Json; _tenant_id: string; _vehicle_id: string }
-        Returns: Json
-      }
       process_overspeed_alerts: {
         Args: {
           _captured_at: string
@@ -30625,250 +16711,17 @@ export type Database = {
         }
         Returns: undefined
       }
-      productivity_report_summary_v1: {
-        Args: {
-          _driver_id?: string
-          _from?: string
-          _tenant_id: string
-          _to?: string
-          _vehicle_id?: string
-        }
-        Returns: Json
-      }
-      publish_driver_app_observability_v1: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      purge_application_error_events_v1: { Args: never; Returns: number }
-      purge_secure_upload_rate_events_v1: { Args: never; Returns: number }
-      queue_delivery_receipt_email_v1: {
-        Args: {
-          _body_text: string
-          _receipt_ids: string[]
-          _recipients: string[]
-          _request_id: string
-          _subject: string
-          _supplier_name: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      queue_delivery_receipt_email_v2: {
-        Args: {
-          _body_text: string
-          _cover_config: Json
-          _receipt_ids: string[]
-          _recipients: string[]
-          _request_id: string
-          _subject: string
-          _supplier_key: string
-          _supplier_name: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      read_ort_candidates_v1: {
-        Args: { _filters?: Json; _tenant_id: string }
-        Returns: Json
-      }
-      read_product_history_v1: {
-        Args: {
-          _from?: string
-          _product: string
-          _tenant_id: string
-          _to?: string
-        }
-        Returns: Json
-      }
-      read_vehicle_position_processing_page_v1: {
-        Args: {
-          _after_captured_at?: string
-          _after_point_key?: string
-          _page_size?: number
-          _tenant_id: string
-          _vehicle_id: string
-          _window_from: string
-          _window_to: string
-        }
-        Returns: {
-          position_captured_at: string
-          position_payload: Json
-          position_point_key: string
-        }[]
-      }
-      reassign_finance_statement_account_v1:
-        | {
-            Args: {
-              _account_id: string
-              _import_id: string
-              _reason: string
-              _tenant_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              _account_id: string
-              _import_id: string
-              _reason: string
-              _request_id: string
-              _tenant_id: string
-            }
-            Returns: Json
-          }
       recalculate_load_totals: {
         Args: { p_load_id: string; p_tenant_id: string }
         Returns: undefined
-      }
-      recalculate_manual_expense_settlement: {
-        Args: { _settlement_id: string; _tenant_id: string }
-        Returns: string
       }
       recalculate_payroll_entry: {
         Args: { _entry_id: string }
         Returns: undefined
       }
-      receive_physical_delivery_receipt_v1: {
-        Args: {
-          _expected_updated_at?: string
-          _receipt_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       recompute_payroll_entry_totals: {
         Args: { _entry_id: string }
         Returns: undefined
-      }
-      reconcile_driver_settlement_cargo_quarantine_v1: {
-        Args: { _reason: string; _settlement_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      reconcile_finance_bank_group: { Args: { _payload: Json }; Returns: Json }
-      reconcile_historical_trip_cargo_v1: {
-        Args: {
-          _evidence_snapshot: Json
-          _reason: string
-          _request_id: string
-          _tenant_id: string
-          _trip_id: string
-        }
-        Returns: Json
-      }
-      record_address_entity_candidates_v1: {
-        Args: {
-          _address_hash: string
-          _address_snapshot: string
-          _candidates: Json
-          _entity_id: string
-          _entity_type: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      record_delivery_receipt_physical_status_v1: {
-        Args: {
-          _expected_updated_at?: string
-          _reason?: string
-          _receipt_id: string
-          _request_id: string
-          _status: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      record_finance_account_opening: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_cash_forecast: { Args: { _payload: Json }; Returns: Json }
-      record_finance_cash_forecast_agenda: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_cash_opening: { Args: { _payload: Json }; Returns: Json }
-      record_finance_cash_period_count: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_cost_disposition_return: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_customer_credit_application: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_customer_credit_refund: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_driver_advance_return: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_employee_advance: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_employee_advance_payment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_expense_batch: { Args: { _payload: Json }; Returns: Json }
-      record_finance_internal_transfer: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_manual_expense: { Args: { _payload: Json }; Returns: Json }
-      record_finance_movement: { Args: { _payload: Json }; Returns: Json }
-      record_finance_payable_xml: { Args: { _payload: Json }; Returns: Json }
-      record_finance_period_evidence_review: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_receivable_adjustment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_receivable_agreement: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_settlement_payment: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_statement_artifact_verification: {
-        Args: { _authorization_id: string; _payload: Json }
-        Returns: Json
-      }
-      record_finance_statement_coverage_approval: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_statement_verification: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_finance_transfer_stage: { Args: { _payload: Json }; Returns: Json }
-      record_finance_unloading: { Args: { _payload: Json }; Returns: Json }
-      record_mdfe_closure_response: {
-        Args: {
-          _http_status: number
-          _load_manifest_id: string
-          _response: Json
-          _tenant: string
-        }
-        Returns: Json
-      }
-      record_operation_document_correction: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      record_operation_document_outcome: {
-        Args: { _payload: Json }
-        Returns: Json
       }
       record_operational_event_with_status: {
         Args: {
@@ -30882,42 +16735,6 @@ export type Database = {
           _visible_to_client?: boolean
         }
         Returns: string
-      }
-      record_ssx_account_cooldown_v1: {
-        Args: {
-          _cooldown_until: string
-          _error: string
-          _integration_account_id: string
-          _observed_at: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      record_ssx_poll_error_v1: {
-        Args: {
-          _backoff_until: string
-          _error: string
-          _integration_account_id: string
-          _observed_at: string
-          _poll_memo?: Json
-          _provider_unit_id: string
-          _tenant_id: string
-          _tracker_link_id: string
-          _vehicle_id: string
-        }
-        Returns: Json
-      }
-      record_ssx_position_quarantine_batch_v1: {
-        Args: {
-          _integration_account_id: string
-          _records: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      record_tracking_schedule_result_v1: {
-        Args: { _error?: string; _status: string; _tenant_id: string }
-        Returns: undefined
       }
       refresh_closing_report_overdue: {
         Args: { _tenant_id: string }
@@ -31013,10 +16830,6 @@ export type Database = {
         }
         Returns: string
       }
-      regularize_finance_unloading_cost: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
       reject_financial_match: {
         Args: { _match_id: string; _reason: string }
         Returns: undefined
@@ -31029,90 +16842,20 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
-      remove_fiscal_documents_from_load_v2: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
       reopen_closing_report: {
         Args: { _closing_report_id: string; _reason: string }
         Returns: undefined
       }
-      reopen_finance_account_period: { Args: { _payload: Json }; Returns: Json }
       reopen_reconciliation_session: {
         Args: { _reason: string; _session_id: string }
         Returns: undefined
-      }
-      repair_finance_unloading_projection: {
-        Args: { _payload: Json }
-        Returns: Json
       }
       repair_load_composition: {
         Args: { _dry_run?: boolean; _load_ids: string[]; _tenant_id: string }
         Returns: Json
       }
-      replace_delivery_receipt_v1: {
-        Args: {
-          _expected_updated_at: string
-          _path: string
-          _reason: string
-          _receipt_id: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      replace_portal_access_after_invite_v1: {
-        Args: {
-          _expected_updated_at: string
-          _new_user_id: string
-          _old_access_id: string
-        }
-        Returns: Json
-      }
-      replace_reimport_batch_v1: { Args: { _payload: Json }; Returns: Json }
-      replace_ssx_tracking_reference_catalog_v1: {
-        Args: {
-          _integration_account_id: string
-          _items: Json
-          _resource_type: string
-        }
-        Returns: number
-      }
-      replace_ssx_tracking_reference_catalog_v2: {
-        Args: {
-          _integration_account_id: string
-          _items: Json
-          _resource_type: string
-        }
-        Returns: number
-      }
-      replace_ssx_tracking_snapshot_v1: {
-        Args: {
-          _integration_account_id: string
-          _items: Json
-          _received_at?: string
-          _resource_type: string
-          _scope_key: string
-        }
-        Returns: number
-      }
-      replan_load_items: { Args: { _payload: Json }; Returns: Json }
-      replan_load_items_v2: { Args: { _payload: Json }; Returns: Json }
       reply_client_occurrence: {
         Args: { _message: string; _occurrence_id: string; _tenant_id: string }
-        Returns: string
-      }
-      reply_client_occurrence_v2: {
-        Args: {
-          _message: string
-          _occurrence_id: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: string
-      }
-      report_ssx_mapping_conflict_v1: {
-        Args: { _payload: Json }
         Returns: string
       }
       request_client_pickup: {
@@ -31124,124 +16867,6 @@ export type Database = {
           _tenant_id: string
         }
         Returns: string
-      }
-      request_document_redelivery: { Args: { _payload: Json }; Returns: Json }
-      reserve_finance_payable_xml: { Args: { _payload: Json }; Returns: Json }
-      reserve_finance_upload_artifact: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reset_engine_trip_window_v1: {
-        Args: {
-          _tenant_id: string
-          _vehicle_id: string
-          _window_from: string
-          _window_to: string
-        }
-        Returns: Json
-      }
-      resolve_address_queue_item_v1: { Args: { _payload: Json }; Returns: Json }
-      resolve_address_queue_item_v2: { Args: { _payload: Json }; Returns: Json }
-      resolve_delivery_receipt_quality_policy_v1: {
-        Args: { _stop_id: string }
-        Returns: Json
-      }
-      resolve_driver_delivery_fiscal_conflict_v1: {
-        Args: {
-          _action: string
-          _reason: string
-          _request_id: string
-          _resolution_request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      resolve_ssx_mapping_conflict_v1: {
-        Args: { _conflict_id: string; _reason: string; _vehicle_id: string }
-        Returns: Json
-      }
-      resolve_ssx_mapping_conflict_v2: {
-        Args: {
-          _conflict_id: string
-          _reason: string
-          _request_id: string
-          _vehicle_id: string
-        }
-        Returns: Json
-      }
-      retire_delivery_receipt_quality_policy_v1: {
-        Args: {
-          _client_id: string
-          _expected_active_policy_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      retry_delivery_receipt_channel_job_v1: {
-        Args: { _job_id: string; _tenant_id: string }
-        Returns: Json
-      }
-      reverse_finance_account_opening: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_bank_reconciliation: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_cash_period_count: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_customer_credit_refund_v1: {
-        Args: {
-          _reason: string
-          _refund_id: string
-          _request_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      reverse_finance_identity_review: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_legacy_expense_cost_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_legacy_payable_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_legacy_receivable_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_maintenance_direct_part_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_maintenance_labor_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_payable_link: { Args: { _payload: Json }; Returns: Json }
-      reverse_finance_settlement_link: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_statement_coverage_approval: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_stock_acquisition_association: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      reverse_finance_stock_consumption_attribution: {
-        Args: { _payload: Json }
-        Returns: Json
       }
       reverse_financial_match: {
         Args: { _match_id: string; _reason: string }
@@ -31263,51 +16888,6 @@ export type Database = {
         Args: { _tenant_id: string }
         Returns: Json
       }
-      review_delivery_receipt_v1: {
-        Args: {
-          _decision: string
-          _expected_updated_at?: string
-          _reason?: string
-          _receipt_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      review_driver_expense: { Args: { _payload: Json }; Returns: Json }
-      review_finance_legacy_cut: { Args: { _payload: Json }; Returns: Json }
-      review_finance_statement_identity: {
-        Args: { _payload: Json }
-        Returns: Json
-      }
-      review_ort_extraction_v1: {
-        Args: {
-          _audit_id: string
-          _decision: string
-          _expected_updated_at: string
-          _reviewed_payload: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      review_trip_cargo_divergence_v1: {
-        Args: {
-          _divergence_id: string
-          _reason: string
-          _status: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      review_trip_cargo_divergence_v2: {
-        Args: {
-          _divergence_id: string
-          _reason: string
-          _request_id: string
-          _status: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       run_bank_reconciliation: {
         Args: {
           _bank_account_id: string
@@ -31317,61 +16897,6 @@ export type Database = {
         }
         Returns: Json
       }
-      save_delivery_receipt_email_template_v1: {
-        Args: {
-          _body: string
-          _expected_updated_at?: string
-          _is_active: boolean
-          _recipients: string[]
-          _subject: string
-          _supplier_name: string
-          _template_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      save_delivery_receipt_email_template_v2: {
-        Args: {
-          _body: string
-          _cover_config: Json
-          _expected_updated_at?: string
-          _is_active: boolean
-          _recipients: string[]
-          _subject: string
-          _supplier_key: string
-          _supplier_name: string
-          _template_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      save_delivery_receipt_quality_policy_v1: {
-        Args: {
-          _client_id: string
-          _expected_active_policy_id?: string
-          _tenant_id: string
-          _thresholds: Json
-        }
-        Returns: Json
-      }
-      save_delivery_receipt_supplier_channel_v1: {
-        Args: {
-          _adapter_key: string
-          _auto_enqueue_requested: boolean
-          _channel_id: string
-          _expected_updated_at?: string
-          _requested_capabilities: Json
-          _safe_configuration: Json
-          _supplier_key: string
-          _supplier_name: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      save_finance_approval_policy: { Args: { _payload: Json }; Returns: Json }
-      save_finance_manual_title: { Args: { _payload: Json }; Returns: Json }
-      save_load_item_preparation: { Args: { _payload: Json }; Returns: Json }
-      save_route_template_v1: { Args: { _payload: Json }; Returns: Json }
       search_client_portal_shipments: {
         Args: {
           _city?: string
@@ -31405,40 +16930,12 @@ export type Database = {
         }
         Returns: Json
       }
-      search_delivery_receipt_ocr_v1: {
-        Args: { _limit?: number; _query: string; _tenant_id: string }
-        Returns: Json
-      }
-      send_driver_chat_message: { Args: { _payload: Json }; Returns: Json }
-      send_event_chat_message: { Args: { _payload: Json }; Returns: Json }
-      set_active_tenant_context_v1: {
-        Args: { _tenant_id: string }
-        Returns: Json
-      }
-      set_default_tenant_emitter: {
-        Args: { _emitter_id: string; _tenant_id: string }
-        Returns: string
-      }
-      set_ssx_admin_token_cache_v1: {
-        Args: {
-          _expires_at: string
-          _integration_account_id: string
-          _token_ciphertext: string
-        }
-        Returns: undefined
-      }
-      set_workspace_tenant_default_emitter_v1: {
-        Args: {
-          _emitter_id: string
-          _target_tenant_id: string
-          _tenant_id: string
-        }
-        Returns: string
-      }
       settle_zero_driver_settlement: {
         Args: { _reason: string; _settlement_id: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_fiscal_document: {
         Args: { doc_id: string; user_id: string }
         Returns: undefined
@@ -31446,28 +16943,6 @@ export type Database = {
       stop_terminal_statuses: { Args: never; Returns: string[] }
       sync_financial_obligations: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
-        Returns: Json
-      }
-      terminalize_fiscal_poll_v1: {
-        Args: {
-          p_attempt_count: number
-          p_context?: Json
-          p_document_id: string
-          p_document_kind: string
-          p_document_number: string
-          p_first_seen_at: string
-          p_reason_code: string
-          p_tenant_id: string
-        }
-        Returns: Json
-      }
-      transition_load_status_v1: {
-        Args: {
-          p_load_id: string
-          p_reason?: string
-          p_tenant_id: string
-          p_to_status: string
-        }
         Returns: Json
       }
       transition_stop_status_v1: {
@@ -31494,104 +16969,13 @@ export type Database = {
         }
         Returns: string
       }
+      unaccent: { Args: { "": string }; Returns: string }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
-      update_closing_report_trip_fields: {
-        Args: {
-          _expected: Json
-          _item_id: string
-          _patch: Json
-          _report_id: string
-          _tenant_id: string
-        }
-        Returns: Json
-      }
       update_driver_settlement_km_review: {
-        Args: {
-          _audited_end_location?: string
-          _audited_km: number
-          _audited_start_location?: string
-          _km_end?: number
-          _km_start?: number
-          _km_status: string
-          _notes: string
-          _settlement_id: string
-        }
-        Returns: {
-          approved_at: string | null
-          approved_by: string | null
-          approved_expenses_total: number | null
-          approved_with_exception: boolean
-          audited_end_location: string | null
-          audited_km: number | null
-          audited_start_location: string | null
-          closed_at: string | null
-          closed_by: string | null
-          created_at: string
-          created_by: string | null
-          dispatch_trip_id: string | null
-          documents_count: number | null
-          driver_credits_total: number
-          driver_debits_total: number
-          driver_id: string | null
-          driver_payable_amount: number
-          driver_reimbursement_total: number
-          estimated_km: number | null
-          exception_reason: string | null
-          expenses_total: number | null
-          final_amount: number | null
-          id: string
-          invoice_balance: number | null
-          is_manual: boolean
-          km_end: number | null
-          km_review_notes: string | null
-          km_review_status: string | null
-          km_start: number | null
-          last_recalculated_at: string | null
-          loads_count: number | null
-          manual_adjustments_total: number | null
-          manual_reference_date: string | null
-          needs_recalculation: boolean
-          operational_balance: number | null
-          paid_at: string | null
-          paid_by: string | null
-          payment_balance: number
-          pending_expenses_total: number | null
-          recalculation_reason: string | null
-          rejected_expenses_total: number | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          route_destination: string | null
-          route_name: string | null
-          route_origin: string | null
-          route_result: number
-          snapshot_json: Json
-          source_updated_at: string | null
-          status: string
-          stops_count: number | null
-          tenant_id: string
-          total_freight_revenue: number
-          total_freight_value: number | null
-          total_goods_value: number
-          total_invoice_value: number | null
-          total_paid_amount: number
-          total_weight_kg: number | null
-          trip_completed_at: string | null
-          trip_started_at: string | null
-          updated_at: string
-          vehicle_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "driver_settlements"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      update_driver_settlement_km_review_unchecked_v1: {
         Args: {
           _audited_end_location?: string
           _audited_km: number
@@ -31751,84 +17135,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_driver_settlement_status_unchecked_v1: {
-        Args: {
-          _allow_exceptions?: boolean
-          _new_status: string
-          _reason?: string
-          _settlement_id: string
-        }
-        Returns: {
-          approved_at: string | null
-          approved_by: string | null
-          approved_expenses_total: number | null
-          approved_with_exception: boolean
-          audited_end_location: string | null
-          audited_km: number | null
-          audited_start_location: string | null
-          closed_at: string | null
-          closed_by: string | null
-          created_at: string
-          created_by: string | null
-          dispatch_trip_id: string | null
-          documents_count: number | null
-          driver_credits_total: number
-          driver_debits_total: number
-          driver_id: string | null
-          driver_payable_amount: number
-          driver_reimbursement_total: number
-          estimated_km: number | null
-          exception_reason: string | null
-          expenses_total: number | null
-          final_amount: number | null
-          id: string
-          invoice_balance: number | null
-          is_manual: boolean
-          km_end: number | null
-          km_review_notes: string | null
-          km_review_status: string | null
-          km_start: number | null
-          last_recalculated_at: string | null
-          loads_count: number | null
-          manual_adjustments_total: number | null
-          manual_reference_date: string | null
-          needs_recalculation: boolean
-          operational_balance: number | null
-          paid_at: string | null
-          paid_by: string | null
-          payment_balance: number
-          pending_expenses_total: number | null
-          recalculation_reason: string | null
-          rejected_expenses_total: number | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          route_destination: string | null
-          route_name: string | null
-          route_origin: string | null
-          route_result: number
-          snapshot_json: Json
-          source_updated_at: string | null
-          status: string
-          stops_count: number | null
-          tenant_id: string
-          total_freight_revenue: number
-          total_freight_value: number | null
-          total_goods_value: number
-          total_invoice_value: number | null
-          total_paid_amount: number
-          total_weight_kg: number | null
-          trip_completed_at: string | null
-          trip_started_at: string | null
-          updated_at: string
-          vehicle_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "driver_settlements"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       update_employee_v1: {
         Args: {
           p_employee_id: string
@@ -31838,18 +17144,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_fiscal_document_with_freight_v1: {
-        Args: {
-          _breakdown: Json
-          _document_id: string
-          _document_patch: Json
-          _expected_updated_at: string
-          _freight_patch: Json
-          _tenant_id: string
-        }
-        Returns: Json
-      }
-      update_load_document_metadata: { Args: { _payload: Json }; Returns: Json }
       update_load_v1: {
         Args: {
           p_changes: Json
@@ -31867,27 +17161,6 @@ export type Database = {
         Args: { _payload?: Json; _protocol_id: string; _status: string }
         Returns: undefined
       }
-      update_pickup_order_v1: { Args: { _payload: Json }; Returns: Json }
-      update_tenant_membership_v1: {
-        Args: {
-          _active?: boolean
-          _expected_updated_at: string
-          _membership_id: string
-          _role?: string
-        }
-        Returns: Json
-      }
-      update_tracking_schedule_v1: { Args: { _payload: Json }; Returns: Json }
-      update_workspace_tenant_v1: {
-        Args: {
-          _company: Json
-          _name: string
-          _target_tenant_id: string
-          _tenant_id: string
-          _timezone?: string
-        }
-        Returns: string
-      }
       upsert_geofence: {
         Args: {
           _category: string
@@ -31899,9 +17172,6 @@ export type Database = {
         }
         Returns: string
       }
-      upsert_geofence_v2: { Args: { _payload: Json }; Returns: string }
-      upsert_geofence_v3: { Args: { _payload: Json }; Returns: string }
-      upsert_geofence_v4: { Args: { _payload: Json }; Returns: Json }
       upsert_load_item_v1:
         | {
             Args: {
@@ -31945,60 +17215,7 @@ export type Database = {
         }
         Returns: string
       }
-      upsert_load_item_v3: {
-        Args: {
-          p_fiscal_document_id?: string
-          p_item_description?: string
-          p_item_id?: string
-          p_load_id?: string
-          p_notes?: string
-          p_order_id?: string
-          p_pallet_count?: number
-          p_quantity?: number
-          p_status?: string
-          p_tenant_id: string
-          p_volume_m3?: number
-          p_weight_kg?: number
-        }
-        Returns: string
-      }
-      upsert_ssx_rule_violations_v1: {
-        Args: {
-          _integration_account_id: string
-          _items: Json
-          _observed_at?: string
-        }
-        Returns: number
-      }
-      upsert_workspace_ssx_account_v1: {
-        Args: {
-          _base_url: string
-          _hashauth: string
-          _hashcode: string
-          _integration_account_id: string
-          _password_encrypted: string
-          _settings: Json
-          _tenant_id: string
-          _username: string
-        }
-        Returns: string
-      }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
-      verify_agvlog_cron_secret: {
-        Args: { p_secret: string }
-        Returns: boolean
-      }
-      verify_delivery_receipt_supplier_channel_v1: {
-        Args: {
-          _channel_id: string
-          _tenant_id: string
-          _verification_reference: string
-          _verified_by: string
-          _verified_capabilities: Json
-        }
-        Returns: Json
-      }
-      void_finance_manual_movement: { Args: { _payload: Json }; Returns: Json }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
@@ -32043,12 +17260,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -32072,11 +17289,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -32097,11 +17314,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -32122,11 +17339,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -32139,11 +17356,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
