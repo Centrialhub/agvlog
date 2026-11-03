@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, Loader2, ScanLine, Upload } from 'lucide-react';
 import { INGESTION_MAX_FILES } from '@/lib/ingestion/uploadLimits';
+import ContractorCteImport from './ContractorCteImport';
 
 interface UploadStepProps {
   onFiles: (files: FileList) => void;
@@ -51,9 +52,10 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing, readPro
     <Card>
       <CardContent className="py-12">
         <Tabs defaultValue="files" className="space-y-4">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mx-auto">
+          <TabsList className="grid h-auto w-full max-w-2xl grid-cols-1 sm:grid-cols-3 mx-auto">
             <TabsTrigger value="files" disabled={busy}>XML / planilhas</TabsTrigger>
             <TabsTrigger value="ort" disabled={busy}>Scan NF-e / ORT</TabsTrigger>
+            <TabsTrigger value="contractor-cte" disabled={busy}>CT-e da contratante</TabsTrigger>
           </TabsList>
 
           <TabsContent value="files">
@@ -105,6 +107,7 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing, readPro
               )}
             </div>
           </TabsContent>
+          <TabsContent value="contractor-cte"><ContractorCteImport /></TabsContent>
         </Tabs>
       </CardContent>
     </Card>

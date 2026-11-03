@@ -1,4 +1,26 @@
-# Preparação — importação do CT-e da contratante
+# Release — importação do CT-e da contratante
+
+## Escopo final autorizado e candidato de publicação
+
+O usuário decidiu explicitamente em 03/11/2026: **liberar a importação e deixar a emissão de subcontratação pendente**. O restante deste registro preserva o histórico da preparação. O candidato final adiciona importação XML/PDF/DACTE, revisão manual de PDF, lista por empresa/chave e download do original. Não altera builders, reserva, numeração, transmissão fiscal, frete ou financeiro.
+
+Persistência candidata: migration incremental `20261103174106_import_contractor_cte_sources.sql`, tabela `contractor_cte_sources`, RPC `register_contractor_cte_source_v1(uuid,jsonb,text,integer,text)` e bucket privado `contractor-cte-originals`. RLS exige empresa ativa e membership operacional owner/admin/operator. Sem leitura de anon/motorista, alteração/exclusão pelo navegador ou substituição de originais. Cadastro só confirma após verificar objeto, tamanho e MIME no Storage. Repetição idêntica retorna o mesmo ID; conflito de conteúdo/metadados é recusado. XML e PDF da mesma chave podem coexistir como dois originais.
+
+Os arquivos são recebidos como originais privados e não executados. A validação de extensão/assinatura e o hash no cliente não constituem antivírus, validação de assinatura XML nem consulta à SEFAZ. Download confere bytes/hash com o registro recebido. Arquivo enviado sem confirmação de cadastro pode permanecer órfão privado; não se exclui automaticamente após erro ambíguo, para não apagar um cadastro confirmado no servidor.
+
+O CI restaura primeiro seu baseline/forwards congelados e aplica **somente a nova migration** no PostgreSQL descartável em `127.0.0.1:55322`. Os manifests e lotes congelados permanecem intocados. E2E novo usa arquivos sintéticos, compara o download, recarrega a página, chama a RPC simultaneamente e verifica bloqueio de outra empresa e motorista. Nenhuma emissão fiscal faz parte desses testes.
+
+Validação local até a preparação do PR: TypeScript, lint dos arquivos novos e 30 testes focados passaram; seis cenários E2E foram descobertos em desktop/tablet/mobile. CI completo, execução nativa integrada e publicação seguem pendentes até suas evidências no PR. O build/lint global em execução terá o resultado registrado no PR.
+
+Dependência deliberadamente fora deste release: em `ThomazNT/Fiscal-hub`, SHA `e344ba3e4886c113e3b242c65dba0ce9d459e9f3`, `normalizeCteBusinessPayload` fixa `tpServ_26='0'` e o catálogo comum não inclui `docAnt`. O painel dessa conta redireciona ao inventário com apenas AGV LOG ao tentar o projeto `rvgcsmuyvesusbxsqevr`. Não foram alterados repo/deploy/credenciais do Hub. A interface informa que a emissão/vínculo automático de subcontratação continua pendente.
+
+Retorno: promover o frontend anterior `638f863284b3aee4098a69209ee9970901f80a82`, mantendo tabela e originais privados preservados. O release é aditivo e não muda os formatos consumidos pelo frontend anterior. Não remover dados, bucket ou histórico para retornar a interface. Se for necessário conter novas gravações, revisar uma revogação específica da RPC e uma política restritiva de INSERT apenas no bucket novo.
+
+Não executar `db push` nem replay histórico no alvo público. Após CI completo verde, reconferir ledger e dependências, aplicar apenas o SQL incremental revisado em transação, registrar versão/SQL no ledger, conferir grants/RLS e então promover o frontend. Nenhuma Edge Function será publicada neste release.
+
+Orientação operacional após disponibilidade verificada: abra **Planejamento e cargas → Importação de documentos → CT-e da contratante**, selecione XML ou PDF/DACTE de até 10 MB e confira os dados. No PDF, preencha os campos e marque a conferência. Clique **Importar CT-e de origem** e aguarde a confirmação. Use a busca por chave e **Baixar original** para consultar. A emissão/vínculo na subcontratação será liberada separadamente.
+
+## Histórico da preparação inicial (anterior à implementação da persistência)
 
 ## Identidade e estado
 

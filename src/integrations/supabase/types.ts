@@ -14,6 +14,25 @@ export type Database = {
   }
   public: {
     Tables: {
+      contractor_cte_sources: {
+        Row: {
+          id: string
+          tenant_id: string
+          access_key: string
+          environment: string
+          source_format: string
+          document: Json
+          original_path: string
+          original_sha256: string
+          original_size: number
+          original_name: string
+          created_by: string
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       address_geocoding_cache: {
         Row: {
           address_hash: string
@@ -26023,6 +26042,10 @@ export type Database = {
       }
     }
     Functions: {
+      register_contractor_cte_source_v1: {
+        Args: { _tenant_id: string; _document: Json; _sha256: string; _size: number; _name: string }
+        Returns: string
+      }
       _apply_delivery_admin_patch: {
         Args: {
           _changes: Json
