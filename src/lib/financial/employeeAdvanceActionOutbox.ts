@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {employeeAdvanceActionExpectedSchema,employeeAdvanceActionCommandSchema,employeeAdvanceActionResultSchema,parseEmployeeAdvanceActionResult} from './employeeAdvanceActionContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=employeeAdvanceActionCommandSchema.omit({version:true,tenant_id:true,request_id:true}).extend({expected:employeeAdvanceActionExpectedSchema}).refine(v=>v.expected.status_after===(v.action==='approve'?'approved':'cancelled'));
 export type EmployeeAdvanceActionInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof employeeAdvanceActionCommandSchema>;

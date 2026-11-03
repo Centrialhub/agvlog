@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),signed=z.string().regex(/^-?\d{1,14}$/);
+const uuid=z.string().guid(),signed=z.string().regex(/^-?\d{1,14}$/);
 export const movementVoidCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,movement_id:uuid,revision:z.string().regex(/^[0-9a-f]{32}$/),reason:z.string().trim().min(10).max(2000)}).strict();
 export type MovementVoidCommand=z.infer<typeof movementVoidCommandSchema>;
 export const movementVoidResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,movement_id:uuid,original_request_id:uuid,correction_id:uuid,kind:z.literal('void'),confirmed:z.literal(true),bank_money_transacted:z.literal(false),recorded_balance_changed:z.literal(true),actor_id:uuid,actor_name:z.string().min(1),reason:z.string().min(10),created_at:z.string().datetime({offset:true}),effects:z.object({computation:z.literal('prospective_invalidation'),bank_money_transacted:z.literal(false),recorded_balance_changed:z.literal(true),account_id:uuid,occurred_on:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),inflow_delta_cents:signed,outflow_delta_cents:signed,balance_delta_cents:signed})}).superRefine((v,c)=>{

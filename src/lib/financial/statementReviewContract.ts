@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 export const statementReviewCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,row_id:uuid,
   bank_entry_id:uuid.nullable(),decision:z.enum(['same_transaction','distinct_transaction']),reason:z.string().trim().min(10).max(2000),source_verification_id:uuid,previous_review_id:uuid.nullable().optional(),
 }).refine(value=>(value.decision==='same_transaction')===(value.bank_entry_id!==null),'Selecione a transação correspondente.');

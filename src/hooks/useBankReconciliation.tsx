@@ -76,7 +76,7 @@ export type ReconciliationStatus = 'unmatched' | 'suggested' | 'matched' | 'igno
 export type LegacyTransactionView = 'all' | 'unmatched';
 export type LegacyObligationView = 'all' | 'unmatched' | 'drivers';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const cents = z.string().regex(/^\d+$/);
 const suggestedMatchSchema = z.object({

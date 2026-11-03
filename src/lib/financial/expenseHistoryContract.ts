@@ -3,7 +3,7 @@ import {expenseCostOriginSchema} from './unloadingCostCorrectionContract';
 import {unloadingEffectiveOriginSchema} from './unloadingOriginCorrectionContract';
 import {z} from 'zod';
 import {expenseCancellationEventSchema} from './expenseCancellationContract';
-const uuid=z.string().uuid(),money=z.number().int().nonnegative().max(99999999999999),total=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),money=z.number().int().nonnegative().max(99999999999999),total=z.string().regex(/^\d+$/);
 export interface ExpenseFilters {page:number;page_size:number;from:string;to:string;search:string;category:string;context:string;missing_receipt:boolean;cost_center?:string}
 export const expenseCursorSchema=z.object({occurred_on:z.string(),created_at:z.string(),id:uuid}).strict();
 export type ExpenseCursor=z.infer<typeof expenseCursorSchema>;

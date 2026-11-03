@@ -2,14 +2,14 @@ import {legacyReceivableCents} from './receivableCreditAmounts';
 import {z} from 'zod';
 import type {ClientInvoice} from '@/hooks/useClientInvoices';
 const amount=z.number().finite().refine(value=>legacyReceivableCents(value)!==null,'Valor monetário inválido: centavos exatos exigidos.');
-const rowSchema=z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),client_id:z.string().uuid(),invoice_number:z.string(),
+const rowSchema=z.object({id:z.string().guid(),tenant_id:z.string().guid(),client_id:z.string().guid(),invoice_number:z.string(),
  sequence_number:z.number().nullable(),installment_number:z.number(),issue_date:z.string(),due_date:z.string().nullable(),
  gross_amount:amount,discount_amount:amount,interest_amount:amount,total_amount:amount,status:z.string(),
- notes:z.string().nullable(),pdf_url:z.string().nullable(),sent_at:z.string().nullable(),receivable_id:z.string().uuid().nullable(),
+ notes:z.string().nullable(),pdf_url:z.string().nullable(),sent_at:z.string().nullable(),receivable_id:z.string().guid().nullable(),
  cancelled_at:z.string().nullable(),cancellation_reason:z.string().nullable(),created_at:z.string(),
  clients:z.object({company_name:z.string().nullable(),tax_id:z.string().nullable()}).nullable(),
  received_amount:amount.nullable(),open_amount:amount.nullable(),requires_reconciliation:z.boolean()}).passthrough();
-const listSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),truncated:z.boolean(),rows:z.array(rowSchema).max(500)}).strict();
+const listSchema=z.object({version:z.literal(1),tenant_id:z.string().guid(),actor_id:z.string().guid(),truncated:z.boolean(),rows:z.array(rowSchema).max(500)}).strict();
 export function parseInvoiceList(value:unknown,tenant:string,actor:string):{rows:ClientInvoice[];truncated:boolean}{
  const result=listSchema.safeParse(value);
  if(!result.success||result.data.tenant_id!==tenant||result.data.actor_id!==actor||result.data.rows.some(row=>row.tenant_id!==tenant))throw new Error('Consulta de faturas incompatível com a sessão. Atualize a lista.');
@@ -24,7 +24,7 @@ export function parseInvoiceList(value:unknown,tenant:string,actor:string):{rows
 export type InvoiceListTotals={open:string|null;overdue:string|null;sent:string|null;paid:string|null};
 export type InvoicePageFilters={search:string;status:string;client:string};
 const cents=z.string().regex(/^\d+$/).nullable();
-const pageSchema=z.object({version:z.literal(2),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),page:z.number().int().positive(),page_size:z.literal(30),total:z.number().int().nonnegative(),invalid_count:z.number().int().nonnegative(),filters:z.object({search:z.string(),status:z.string(),client:z.string()}),revision:z.string().regex(/^[a-f0-9]{32}$/),truncated:z.literal(false),totals:z.object({open:cents,overdue:cents,sent:cents,paid:cents}),rows:z.array(rowSchema).max(30)});
+const pageSchema=z.object({version:z.literal(2),tenant_id:z.string().guid(),actor_id:z.string().guid(),page:z.number().int().positive(),page_size:z.literal(30),total:z.number().int().nonnegative(),invalid_count:z.number().int().nonnegative(),filters:z.object({search:z.string(),status:z.string(),client:z.string()}),revision:z.string().regex(/^[a-f0-9]{32}$/),truncated:z.literal(false),totals:z.object({open:cents,overdue:cents,sent:cents,paid:cents}),rows:z.array(rowSchema).max(30)});
 export function parseInvoicePage(value:unknown,tenant:string,actor:string,filters:InvoicePageFilters,page:number){
  const result=pageSchema.parse(value);
  if(result.page!==page||Object.keys(filters).some(key=>filters[key as keyof InvoicePageFilters]!==result.filters[key as keyof InvoicePageFilters]))throw new Error('Página de faturas fora do filtro.');

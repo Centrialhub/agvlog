@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 export const financeAuditActions:Record<string,string>={recorded:'Registro financeiro',mapped_rows_received:'Importação de extrato',source_checked:'Conferência do original solicitada',identity_reviewed_manually:'Identificação revisada manualmente',identity_review_reversed:'Decisão manual revertida'};
 financeAuditActions.payable_movement_applied='Baixa vinculada a uma saída registrada';
 financeAuditActions.payable_link_reversed='Vínculo de baixa desfeito manualmente';

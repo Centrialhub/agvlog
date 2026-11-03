@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),count=z.number().int().nonnegative(),money=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),count=z.number().int().nonnegative(),money=z.string().regex(/^\d+$/);
 const coverage=z.object({covered_count:count,pending_count:count});
 export const recordedCostOperationalCoverageSchema=z.object({
  version:z.literal(1),tenant_id:uuid,from:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),to:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),

@@ -8,7 +8,7 @@ import {
   type PayableBulkResult,
 } from './payableBulkSettlementContract';
 
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const requestSchema=z.object({command:payableBulkCommandSchema,context:payableBulkContextSchema}).strict().superRefine((value,ctx)=>{
   const {command,context}=value;
   if(command.tenant_id!==context.tenant_id||command.movement_id!==context.movement.id||command.bank_account_id!==context.movement.bank_account_id||command.paid_on!==context.movement.occurred_on||command.expected_revision!==context.expected_revision)ctx.addIssue({code:'custom',message:'Pedido de baixa incompatível com a prévia.'});

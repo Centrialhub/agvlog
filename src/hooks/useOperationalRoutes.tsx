@@ -50,8 +50,8 @@ const routeDestinationSchema = z.union([
   }).passthrough(),
 ]);
 const operationalRouteSchema = z.object({
-  id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
+  id: z.string().guid(),
+  tenant_id: z.string().guid(),
   created_at: z.string().datetime({ offset: true }),
   name: z.string().trim().min(1),
   destinations: z.array(routeDestinationSchema),
@@ -62,8 +62,8 @@ const operationalRouteSchema = z.object({
 }).passthrough();
 
 const recoverableRouteIdentitySchema = z.object({
-  id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
+  id: z.string().guid(),
+  tenant_id: z.string().guid(),
 }).passthrough();
 
 function recoverRouteDestinations(value: unknown): RouteDestination[] {

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
-const cents=z.string().regex(/^-?\d+$/),uuid=z.string().uuid();
+const cents=z.string().regex(/^-?\d+$/),uuid=z.string().guid();
 export const periodEvidenceSchema=z.object({version:z.literal(1),tenant_id:uuid,account_id:uuid,from:z.string(),to:z.string(),revision:z.string(),
  native_source_count:z.number().int().nonnegative(),qualified_source_count:z.number().int().nonnegative(),missing_declared_days:z.number().int().nonnegative(),timezone_count:z.number().int().nonnegative(),
  declaration_status:z.enum(['gaps','timezone_conflict','declared_full_days']),opening_balance_cents:cents.nullable(),closing_balance_cents:cents.nullable(),bank_net_cents:cents,difference_cents:cents.nullable(),

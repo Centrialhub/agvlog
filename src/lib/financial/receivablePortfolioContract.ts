@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
 const creditFields={discount_cents:cents.optional(),loss_cents:cents.optional(),adjustment_cents:cents.optional(),cash_received_cents:cents.optional(),credit_applied_cents:cents.optional(),settled_cents:cents.optional()};
 export const receivablePortfolioSchema=z.object({version:z.literal(1),tenant_id:uuid,from:date.nullable(),to:date.nullable(),client_id:uuid.nullable(),as_of:date,total_titles:count,canceled_titles:count,invalid_titles:count,totals_valid:z.boolean(),...creditFields,nominal_cents:cents,received_allocated_cents:cents,open_cents:cents,overdue_cents:cents,status_rows:z.array(z.object({status:z.string(),count,...creditFields,nominal_cents:cents,received_allocated_cents:cents,open_cents:cents}))}).superRefine((data,ctx)=>{
  const creditRows=[data,...data.status_rows];

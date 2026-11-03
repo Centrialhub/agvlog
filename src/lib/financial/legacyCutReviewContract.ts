@@ -1,6 +1,6 @@
 import {paidMovementVoidLabels} from './paidMovementVoidLabels';
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/).nullable();
 const scope={version:z.literal(1),tenant_id:uuid,account_id:uuid,from:date,to:date};
 const blocker=z.object({code:z.string(),source_table:z.string(),source_id:uuid});
 const footprint=z.object({payment_id:uuid,link_id:uuid.nullable(),movement_id:uuid,account_id:uuid.nullable(),occurred_on:date.nullable(),amount_cents:cents});

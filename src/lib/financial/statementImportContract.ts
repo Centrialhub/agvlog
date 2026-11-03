@@ -1,6 +1,6 @@
 import {uploadArtifactSchema} from './uploadArtifactContract';
 import {z} from 'zod';
-const uuid=z.string().uuid(),index=z.number().int().min(0).max(99);
+const uuid=z.string().guid(),index=z.number().int().min(0).max(99);
 export const statementMappingSchema=z.object({header_row:z.number().int().min(0).max(19),sheet_index:z.number().int().nonnegative().optional(),
   delimiter:z.enum([';',',','\t']).optional(),number_format:z.enum(['br','decimal']),date_format:z.enum(['dmy','ymd','excel']),
   date_column:index,description_column:index,amount_column:index.optional(),credit_column:index.optional(),debit_column:index.optional(),bank_id_column:index.optional(),
@@ -15,7 +15,7 @@ export const statementImportCommandSchema=z.object({version:z.literal(1),tenant_
   .refine(command=>command.rows.length>0||command.parser_version==='native-ofx-v1');
 export type StatementImportCommand=z.infer<typeof statementImportCommandSchema>;
 export const statementIntakeResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,import_id:uuid,
-  counts:z.record(z.enum(['new','duplicate','ambiguous','reference_conflict','repeated_reference']),z.number().int().nonnegative()),source_verification:z.literal('pending'),confirmed:z.literal(true)});
+  counts:z.partialRecord(z.enum(['new','duplicate','ambiguous','reference_conflict','repeated_reference']),z.number().int().nonnegative()),source_verification:z.literal('pending'),confirmed:z.literal(true)});
 export const statementVerificationResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,import_id:uuid,verification_id:uuid,
   source_verification:z.enum(['rows_match','rows_mismatch','unreadable']),account_coverage_verification:z.literal('pending'),confirmed:z.literal(true)});
 export const pendingStatementSchema=z.object({version:z.literal(1),tenant:uuid,actor:uuid,file_name:z.string(),file_size:z.number().int().positive().max(10485760),

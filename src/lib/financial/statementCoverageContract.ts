@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {periodEvidenceSchema} from './periodEvidenceClient';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const declarations=z.object({originals_obtained_from_bank:z.literal(true),complete_period_confirmed:z.literal(true)});
 export const coverageBlockingLabels={period_not_finished:'O período ainda não terminou.',bank_account_required:'Este controle exige conta bancária, não caixa físico.',coverage_gaps:'Há dias sem cobertura integral declarada nos arquivos.',timezone_conflict:'Os fusos dos arquivos são incompatíveis.',missing_anchors:'Faltam saldos nos limites do período.',conflicting_anchors:'Os arquivos apresentam saldos conflitantes.',balance_mismatch:'Os saldos não fecham com a movimentação identificada.',timezone_not_sao_paulo:'As evidências não usam o fuso de São Paulo.',source_account_unverified:'A identificação de conta de algum arquivo precisa de revisão.',source_integrity_issue:'A integridade de algum original precisa de revisão.',unsupported_source_format:'Há arquivo em formato não elegível para esta aprovação.',unverified_source:'Há original cujas linhas ainda não foram conferidas.',unresolved_identity:'Há linhas com identidade de transação pendente.'} as const;
 const compactEvidence=periodEvidenceSchema.extend({source_evidence_count:z.number().int().nonnegative(),anchors_has_more:z.boolean()});

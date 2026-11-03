@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),cents=z.number().int().positive().max(99999999999999);
+const uuid=z.string().guid(),cents=z.number().int().positive().max(99999999999999);
 const common={version:z.literal(1),tenant_id:uuid,request_id:uuid,occurred_on:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),bank_reference:z.string().max(300).optional(),reason:z.string().trim().min(5).max(2000),occurred:z.literal(true)};
 export const transferStageCommandSchema=z.discriminatedUnion('stage',[
  z.object({...common,stage:z.literal('depart'),source_account_id:uuid,destination_account_id:uuid,amount_cents:cents}).strict(),

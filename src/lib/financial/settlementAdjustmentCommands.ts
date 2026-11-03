@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.number().int().min(-99999999999999).max(99999999999999);
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.number().int().min(-99999999999999).max(99999999999999);
 const common={version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,settlement_id:id,reason:z.string().trim().min(5).max(2000),expected_revision:revision};
 export const settlementAdjustmentCommandSchema=z.discriminatedUnion('action',[
  z.object({...common,action:z.literal('add'),item_id:z.null(),nature:z.enum(['credit','debit']),amount_cents:cents.positive(),description:z.string().trim().min(1).max(500)}).strict(),

@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {unloadingProjectionRepairContextSchema} from './unloadingProjectionRepairContract';
-const scope=z.object({tenantId:z.string().uuid(),actorId:z.string().uuid(),chargeId:z.string().uuid()});
+const scope=z.object({tenantId:z.string().guid(),actorId:z.string().guid(),chargeId:z.string().guid()});
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
 export async function readUnloadingProjectionRepairContext(request:z.infer<typeof scope>){
  const input=scope.parse(request);

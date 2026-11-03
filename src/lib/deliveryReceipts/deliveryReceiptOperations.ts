@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
 import {deliveryReceiptCoverConfigSchema,type DeliveryReceiptCoverConfig} from './deliveryReceiptSupplier';
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const nullableText=z.string().nullable();
 const documentSchema=z.object({
   id,kind:z.enum(['nfe','nfse','cte','other_fiscal','operational_reference']),number:nullableText,

@@ -4,7 +4,7 @@ import {uploadSecureFile} from '@/lib/secureUpload';
 import {queueAndSendDeliveryReceiptEmail,type DeliveryReceiptEmailDraft,type DeliveryReceiptRow} from './deliveryReceiptOperations';
 import {deliveryReceiptCoverConfigSchema} from './deliveryReceiptSupplier';
 
-const id=z.string().uuid(),timestamp=z.string().datetime({offset:true});
+const id=z.string().guid(),timestamp=z.string().datetime({offset:true});
 export const deliveryReceiptEmailTemplateSchema=z.object({id,tenant_id:id,supplier_key:z.string().nullable(),supplier_name:z.string(),recipients:z.array(z.string().email()).max(10),
   subject_template:z.string(),body_template:z.string(),cover_config:deliveryReceiptCoverConfigSchema,template_version:z.number().int().positive(),is_active:z.boolean(),created_by:id,updated_by:id,created_at:timestamp,updated_at:timestamp}).strict();
 export type DeliveryReceiptEmailTemplate=z.infer<typeof deliveryReceiptEmailTemplateSchema>;

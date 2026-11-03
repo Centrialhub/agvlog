@@ -4,10 +4,10 @@ export type ManualTitleKind = "payable" | "receivable";
 const commandSchema = z
   .object({
     version: z.literal(1),
-    tenant_id: z.string().uuid(),
-    request_id: z.string().uuid(),
+    tenant_id: z.string().guid(),
+    request_id: z.string().guid(),
     kind: z.enum(["payable", "receivable"]),
-    id: z.string().uuid().nullable(),
+    id: z.string().guid().nullable(),
     expected_updated_at: z.string().nullable(),
     fields: z.record(z.string(), z.unknown()),
     duplicate_reason: z.string().max(2000),
@@ -107,12 +107,12 @@ export async function saveManualTitle(
     const result = z
       .object({
         version: z.literal(1),
-        tenant_id: z.string().uuid(),
-        request_id: z.string().uuid(),
+        tenant_id: z.string().guid(),
+        request_id: z.string().guid(),
         confirmed: z.literal(true),
         kind: z.enum(["payable", "receivable"]),
         record: z
-          .object({ id: z.string().uuid(), tenant_id: z.string().uuid() })
+          .object({ id: z.string().guid(), tenant_id: z.string().guid() })
           .passthrough(),
       })
       .parse(data);

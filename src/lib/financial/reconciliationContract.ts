@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),positive=z.string().regex(/^[1-9]\d{0,13}$/),amount=z.number().int().positive().max(99999999999999);
+const uuid=z.string().guid(),positive=z.string().regex(/^[1-9]\d{0,13}$/),amount=z.number().int().positive().max(99999999999999);
 export const reconciliationOptionSchema=z.object({id:uuid,bank_account_id:uuid,day:z.string(),direction:z.enum(['in','out']),amount_cents:positive,
  description:z.string(),counterparty:z.string().nullable(),reference:z.string().nullable(),source_verified:z.boolean()});
 export type ReconciliationOption=z.infer<typeof reconciliationOptionSchema>;

@@ -20,12 +20,12 @@ export interface CargoTripIdentity {
 
 const nullableText = z.string().nullable();
 const identitySchema = z.object({
-  id: z.string().uuid(), tenant_id: z.string().uuid(), driver_id: z.string().uuid(),
-  vehicle_id: z.string().uuid().nullable(),
+  id: z.string().guid(), tenant_id: z.string().guid(), driver_id: z.string().guid(),
+  vehicle_id: z.string().guid().nullable(),
   vehicles: z.object({ plate: nullableText }).nullable(),
   dispatch_trip_loads: z.array(z.object({
-    load_id: z.string().uuid(),
-    loads: z.object({ id: z.string().uuid(), load_number: nullableText,
+    load_id: z.string().guid(),
+    loads: z.object({ id: z.string().guid(), load_number: nullableText,
       origin: nullableText, destination: nullableText, status: z.string() }).nullable(),
   })).nullable(),
 });

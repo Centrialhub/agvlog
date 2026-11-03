@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {statementIntakeResultSchema} from './statementImportContract';
-const uuid=z.string().uuid(),money=z.number().int().min(-99999999999999).max(99999999999999);
+const uuid=z.string().guid(),money=z.number().int().min(-99999999999999).max(99999999999999);
 export const statementSourceLabels={pending:'Original ainda não conferido',rows_match:'Linhas conferidas com o original',rows_mismatch:'Linhas divergem do original',unreadable:'Original exige revisão'} as const;
 export const statementIdentityLabels={new:'Linha nova',duplicate:'Duplicidade por referência',ambiguous:'Coincidência a revisar',reference_conflict:'Referência com dados conflitantes',repeated_reference:'Referência repetida no arquivo'} as const;
 export interface StatementListFilters {page:number;page_size:number;search:string;from:string;to:string;account_id:string;source_status:string}

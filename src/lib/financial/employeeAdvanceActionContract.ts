@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {employeeAdvancePaymentPreviewSchema} from './employeeAdvancePaymentContract';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),action=z.enum(['approve','cancel']),status=z.enum(['approved','cancelled']);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),action=z.enum(['approve','cancel']),status=z.enum(['approved','cancelled']);
 export const employeeAdvanceActionCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,advance_id:uuid,action,expected_revision:revision,reason:z.string().trim().min(10).max(2000)}).strict();
 export type EmployeeAdvanceActionCommand=z.infer<typeof employeeAdvanceActionCommandSchema>;
 export const employeeAdvanceActionExpectedSchema=z.object({cash_changed:z.literal(false),status_after:status}).strict();

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
 const positiveCents=z.string().regex(/^[1-9]\d{0,13}$/),nonnegativeCents=z.string().regex(/^(0|[1-9]\d{0,13})$/);
 export const unloadingCostDispositionProposalSchema=z.object({source_kind:z.enum(['expense_allocation','payable_link']),source_id:uuid,applied_cents:nonnegativeCents,disposition_type:z.enum(['driver_custody','payment_recovery']),responsible_id:uuid}).strict();
 export const unloadingCostRegularizationProposalSchema=z.object({amount_cents:positiveCents,dispositions:z.array(unloadingCostDispositionProposalSchema).max(500)}).strict().superRefine((v,c)=>{const keys=v.dispositions.map(s=>`${s.source_kind}:${s.source_id}`);if(new Set(keys).size!==keys.length)c.addIssue({code:'custom',message:'A mesma fonte não pode aparecer duas vezes na proposta.'});});

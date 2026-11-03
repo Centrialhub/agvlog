@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),count=z.number().int().nonnegative();
+const uuid=z.string().guid(),count=z.number().int().nonnegative();
 const evidenceLine=z.object({id:uuid,description:z.string(),counterparty:z.string().nullable(),date:z.string(),amount_cents:z.string().regex(/^-?[1-9]\d{0,13}$/)});
 export const reconciliationHistorySchema=z.object({version:z.literal(1),tenant_id:uuid,import_id:uuid,page:z.number().int().positive(),page_size:z.literal(20),total:count,active_count:count,
  rows:z.array(z.object({id:uuid,tenant_id:uuid,bank_account_id:uuid,direction:z.enum(['in','out']),amount_cents:z.string().regex(/^[1-9]\d{0,13}$/),method:z.enum(['manual','automatic_reference']),

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),count=z.number().int().nonnegative();
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),count=z.number().int().nonnegative();
 export const tripMaterializedCorrectionCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,trip_id:uuid,expected_revision:revision,reason:z.string().trim().min(10).max(2000),preserve_history_confirmed:z.literal(true),fiscal_financial_unchanged_confirmed:z.literal(true)}).strict();
 export type TripMaterializedCorrectionCommand=z.infer<typeof tripMaterializedCorrectionCommandSchema>;
 export const tripMaterializedCorrectionResultSchema=z.object({version:z.literal(1),tenant_id:uuid,actor_id:uuid,trip_id:uuid,request_id:uuid,prior_status:z.string(),status:z.literal('cancelled'),confirmed:z.literal(true),pending_stops_cancelled:count,load_links_preserved:z.literal(true),operational_history_preserved:z.literal(true),fiscal_changed:z.literal(false),financial_changed:z.literal(false)}).strict();

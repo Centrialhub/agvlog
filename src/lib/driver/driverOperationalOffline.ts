@@ -12,7 +12,7 @@ import type { TripCargoSnapshot } from '@/lib/driver/tripCargoCustody';
 import type { DriverOperationalEventItem } from '@/lib/driver/driverOperationalEventHistory';
 import type { DriverDeliveryFiscalSnapshot } from '@/lib/driver/driverDeliveryFiscalSnapshot';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const operationalKinds = ['arrival', 'departure', 'journey', 'checklist', 'occurrence'] as const;
 export type DriverOperationalOfflineKind = typeof operationalKinds[number];
 

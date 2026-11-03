@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 
-const id=z.string().uuid(),timestamp=z.string().datetime({offset:true});
+const id=z.string().guid(),timestamp=z.string().datetime({offset:true});
 const documentKind=z.enum(['nfe','nfse','cte','other_fiscal','operational_reference']);
 export const supplierPortalCapabilitiesSchema=z.object({
   receipt_upload:z.boolean(),document_metadata:z.boolean(),supports_idempotency:z.boolean(),multi_receipt_batch:z.boolean(),

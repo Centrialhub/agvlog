@@ -8,7 +8,7 @@ import { parseMoneyCents } from "@/lib/financial/receivableCommands";
 const limit = z.number().int().nonnegative().nullable();
 const policySchema = z.object({
   version: z.literal(1),
-  tenant_id: z.string().uuid(),
+  tenant_id: z.string().guid(),
   revision: z.string(),
   can_configure: z.boolean(),
   policy: z.object({
@@ -20,8 +20,8 @@ const policySchema = z.object({
 });
 const commandSchema = z.object({
   version: z.literal(1),
-  tenant_id: z.string().uuid(),
-  request_id: z.string().uuid(),
+  tenant_id: z.string().guid(),
+  request_id: z.string().guid(),
   revision: z.string(),
   enabled: z.boolean(),
   operator_limit_cents: z.string().nullable(),

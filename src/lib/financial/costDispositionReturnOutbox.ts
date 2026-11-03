@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {costDispositionReturnEffectsSchema,costDispositionReturnCommandSchema,costDispositionReturnResultSchema,parseCostDispositionReturnResult} from './costDispositionReturnContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const expectedSchema=z.object({expense_id:uuid,charge_id:uuid,payable_id:uuid.nullable(),regularization_id:uuid,effects:costDispositionReturnEffectsSchema}).strict();
 const inputSchema=z.object({dispositionId:uuid,movementId:uuid,amountCents:z.string().regex(/^[1-9]\d{0,13}$/),expected:expectedSchema,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(v=>v.trim().length>=10&&v.trim().length<=2000)}).strict().refine(v=>v.amountCents===v.expected.effects.amount_cents);
 export type CostDispositionReturnInput=z.infer<typeof inputSchema>;

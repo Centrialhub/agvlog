@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const revision = z.string().regex(/^[0-9a-f]{64}$/);
 
 const contextSchema = z.object({

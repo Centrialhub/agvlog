@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),signed=z.string().regex(/^-?\d+$/),row=z.record(z.string(), z.unknown());
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),signed=z.string().regex(/^-?\d+$/),row=z.record(z.string(), z.unknown());
 const amount=z.union([z.number().int().positive().max(99999999999999),z.string().regex(/^[1-9][0-9]{0,13}$/)]);
 const original=z.object({id:uuid,tenant_id:uuid,bank_account_id:uuid,direction:z.enum(['in','out']),nature:z.string(),amount_cents:amount,occurred_on:z.string(),description:z.string(),beneficiary_name:z.string(),created_by:uuid,created_at:z.string()}).passthrough();
 const event=z.object({id:uuid,tenant_id:uuid,movement_id:uuid,actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string()}).passthrough();

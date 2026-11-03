@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const count=z.number().int().nonnegative(),uuid=z.string().uuid();
+const count=z.number().int().nonnegative(),uuid=z.string().guid();
 export const fiscalQueueStatuses={pending:'Aguardando processamento',review:'Revisão necessária',applied:'Processado',superseded:'Substituído por estado mais recente'};
 export type FiscalQueueStatus=''|keyof typeof fiscalQueueStatuses;
 const fiscalQueueCursorSchema=z.object({observed_order:z.string().regex(/^\d+$/),observation_id:uuid}).strict();

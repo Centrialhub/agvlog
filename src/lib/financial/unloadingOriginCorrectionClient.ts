@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {unloadingOriginProposalSchema,unloadingOriginCorrectionContextSchema,unloadingOriginCorrectionCommandSchema,type UnloadingOriginCorrectionCommand} from './unloadingOriginCorrectionContract';
 export class UnloadingOriginCorrectionUnavailableError extends Error{constructor(){super('A correção de cobrança ainda não está disponível neste ambiente. Nenhuma alteração foi enviada.');}}
-const scope=z.object({tenantId:z.string().uuid(),actorId:z.string().uuid(),chargeId:z.string().uuid(),proposal:unloadingOriginProposalSchema});
+const scope=z.object({tenantId:z.string().guid(),actorId:z.string().guid(),chargeId:z.string().guid(),proposal:unloadingOriginProposalSchema});
 type Response={data:unknown;error:unknown};
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<Response>;
 export async function readUnloadingOriginCorrectionContext(request:z.infer<typeof scope>){

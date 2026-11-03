@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {expenseCostDispositionSchema} from './expenseCostFundingContract';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/);
 export const costDispositionReturnEffectsSchema=z.object({amount_cents:positive,open_before_cents:cents.nullable(),open_after_cents:signed.nullable(),cash_changed:z.literal(false),original_reservation_changed:z.literal(false),incoming_capacity_consumed_cents:positive}).strict();
 export const costDispositionReturnCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,disposition_id:uuid,incoming_movement_id:uuid,amount_cents:positive,revision,reason:z.string().refine(v=>v.trim().length>=10&&v.trim().length<=2000)}).strict();
 const identity={version:z.literal(1),tenant_id:uuid,actor_id:uuid,expense_id:uuid,charge_id:uuid,payable_id:uuid.nullable(),regularization_id:uuid,disposition_id:uuid};

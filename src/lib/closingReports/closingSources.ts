@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const id=z.string().uuid();const nullableId=id.nullable();const text=z.string().nullable();
+const id=z.string().guid();const nullableId=id.nullable();const text=z.string().nullable();
 const amount=z.number().finite().min(-999999999999).max(999999999999);
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{
  const parsed=new Date(value+'T00:00:00Z');return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;

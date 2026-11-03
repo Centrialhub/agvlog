@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
 export const freightStates=['available','reserved','uncertain','authorized','review','cancelled'] as const;
 const state=z.enum(freightStates);
 export type FreightState=z.infer<typeof state>;

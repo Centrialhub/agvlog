@@ -1,6 +1,6 @@
 import {paidMovementVoidLabels} from './paidMovementVoidLabels';
 import {z} from 'zod';
-const uuid=z.string().uuid(),count=z.number().int().nonnegative();
+const uuid=z.string().guid(),count=z.number().int().nonnegative();
 export const legacyIntegrityRowSchema=z.object({source_table:z.string(),source_id:uuid,date_status:z.enum(['valid','missing','nonfinite']),occurred_on:z.string().nullable(),raw_date:z.string().nullable(),account_id:uuid.nullable(),account_status:z.enum(['identified','unresolved','not_in_tenant']),amount_cents:z.string().regex(/^\d+$/).nullable(),raw_amount:z.string().nullable(),direction:z.enum(['in','out','unknown']),issues:z.array(z.string()),context:z.record(z.string(), z.unknown())}).superRefine((row,ctx)=>{
  if((row.date_status==='valid')!==!!row.occurred_on)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Data e classificação incompatíveis.'});
  if(row.account_status==='identified'&&!row.account_id)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Conta identificada sem referência.'});

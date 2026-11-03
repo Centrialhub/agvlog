@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {unloadingCostCorrectionExpectedSchema,unloadingCostCorrectionCommandSchema,unloadingCostCorrectionResultSchema,parseUnloadingCostCorrectionResult} from './unloadingCostCorrectionContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=z.object({chargeId:uuid,expenseId:uuid,payableId:uuid,amountCents:z.string().regex(/^[1-9]\d{0,13}$/),expected:unloadingCostCorrectionExpectedSchema,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(value=>value.trim().length>=10&&value.trim().length<=2000,'Informe motivo entre 10 e 2.000 caracteres.')}).strict().refine(v=>v.amountCents===v.expected.cost_after_cents&&v.amountCents===v.expected.obligation_after_cents,'Valores da proposta incompatíveis.');
 export type UnloadingCostCorrectionInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof unloadingCostCorrectionCommandSchema>;

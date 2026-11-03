@@ -2,7 +2,7 @@ import {supabase} from '@/integrations/supabase/client';
 import {z} from 'zod';
 import {AccountOpeningRejectedError} from './accountOpeningClient';
 import {cashOpeningCommandSchema,cashOpeningResultSchema,totalCashCounts,type CashOpeningCommand} from './cashOpeningContract';
-const accountSchema=z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),name:z.string(),account_type:z.enum(['cash','checking','savings','company_card','pix','other']),active:z.boolean()});
+const accountSchema=z.object({id:z.string().guid(),tenant_id:z.string().guid(),name:z.string(),account_type:z.enum(['cash','checking','savings','company_card','pix','other']),active:z.boolean()});
 export async function readOpeningAccount(tenant:string,account:string){const {data,error}=await supabase.from('bank_accounts').select('id,tenant_id,name,account_type,active').eq('tenant_id',tenant).eq('id',account).single();if(error)throw new Error(error.message);const result=accountSchema.parse(data);if(result.tenant_id!==tenant||result.id!==account)throw new Error('Conta fora do contexto.');return result;}
 export async function recordCashOpening(command:CashOpeningCommand){
  cashOpeningCommandSchema.parse(command);

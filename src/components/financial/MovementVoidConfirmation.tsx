@@ -6,8 +6,8 @@ import {movementVoidCommandSchema,movementVoidErrorLabel,type MovementVoidComman
 import {MovementVoidRejectedError,submitMovementVoid} from '@/lib/financial/movementVoidCommandClient';
 import type {MovementCorrectionPreview} from '@/lib/financial/movementCorrectionPreviewContract';
 import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
-const effectsSchema=z.object({account_id:z.string().uuid(),occurred_on:z.string(),inflow_delta_cents:z.string().regex(/^-?\d+$/),outflow_delta_cents:z.string().regex(/^-?\d+$/),balance_delta_cents:z.string().regex(/^-?\d+$/)});
-const savedSchema=z.object({actor:z.string().uuid(),original_request_id:z.string().uuid(),command:movementVoidCommandSchema,effects:effectsSchema}).strict();
+const effectsSchema=z.object({account_id:z.string().guid(),occurred_on:z.string(),inflow_delta_cents:z.string().regex(/^-?\d+$/),outflow_delta_cents:z.string().regex(/^-?\d+$/),balance_delta_cents:z.string().regex(/^-?\d+$/)});
+const savedSchema=z.object({actor:z.string().guid(),original_request_id:z.string().guid(),command:movementVoidCommandSchema,effects:effectsSchema}).strict();
 type Saved=z.infer<typeof savedSchema>;
 export function MovementVoidConfirmation({tenant,actor,movementId,preview}:{tenant:string;actor:string;movementId:string;preview:MovementCorrectionPreview|undefined}){
  const key=`finance-movement-void:${tenant}:${actor}:${movementId}`,cache=useQueryClient(),busyRef=useRef(false);

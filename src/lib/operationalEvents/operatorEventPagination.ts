@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const timestamp = z.string().datetime({ offset: true });
 const cursorSchema = z.object({
   scope: z.string().regex(/^[0-9a-f]{64}$/),

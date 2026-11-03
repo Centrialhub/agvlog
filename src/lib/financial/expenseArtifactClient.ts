@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {uploadArtifactSchema} from './uploadArtifactContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 export const expenseArtifactCommandSchema=z.object({version:z.literal(2),tenant_id:uuid,request_id:uuid,expense_id:uuid,artifact_id:uuid,reason:z.string().trim().min(5).max(2000)}).strict();
 export type ExpenseArtifactCommand=z.infer<typeof expenseArtifactCommandSchema>;
 const resultSchema=z.object({version:z.literal(2),tenant_id:uuid,request_id:uuid,expense_id:uuid,artifact_id:uuid,link_id:uuid,confirmed:z.literal(true)});

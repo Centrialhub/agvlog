@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {expenseCostOriginSchema} from './unloadingCostCorrectionContract';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/);
 export const unloadingOpenComplementEffectsSchema=z.object({cost_before_cents:positive.nullable(),cost_after_cents:positive,complement_before_cents:positive.nullable(),complement_after_cents:positive.nullable(),cash_changed:z.literal(false),capacity_released_cents:z.literal('0'),approval_reset:z.boolean()}).strict();
 export const unloadingOpenComplementExpectedSchema=unloadingOpenComplementEffectsSchema.extend({cost_before_cents:positive,complement_before_cents:positive,complement_after_cents:positive});
 const identity={version:z.literal(1),tenant_id:uuid,actor_id:uuid,charge_id:uuid,expense_id:uuid,payable_id:uuid};

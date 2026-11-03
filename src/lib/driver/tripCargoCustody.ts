@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { acknowledgeDurableOperatorCommand, prepareDurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 export const tripCargoStatuses = [
   'pending_acceptance', 'accepted', 'loading', 'ready_to_depart', 'departed', 'returned', 'closed',
 ] as const;

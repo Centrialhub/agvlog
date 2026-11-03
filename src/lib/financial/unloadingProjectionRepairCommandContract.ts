@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const id=z.string().uuid();
+const id=z.string().guid();
 export const unloadingProjectionRepairCommandSchema=z.object({
  version:z.literal(1),tenant_id:id,request_id:id,charge_id:id,
  revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(v=>v.trim().length>=10&&v.trim().length<=2000,'Informe o motivo da reparação, entre 10 e 2000 caracteres.'),

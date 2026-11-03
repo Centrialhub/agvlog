@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),positive=z.string().regex(/^[1-9][0-9]{0,13}$/);
+const uuid=z.string().guid(),positive=z.string().regex(/^[1-9][0-9]{0,13}$/);
 export const employeeAdvanceRegistrationCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,employee_id:uuid,amount_cents:positive,advance_date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),reason:z.string().refine(v=>v.trim().length>=10&&v.trim().length<=2000),payment_method:z.enum(['pix','bank_transfer','cash','check','other']).nullable(),payment_reference:z.string().nullable(),create_payable:z.boolean()}).strict();
 export type EmployeeAdvanceRegistrationCommand=z.infer<typeof employeeAdvanceRegistrationCommandSchema>;
 export const employeeAdvanceRegistrationResultSchema=z.object({version:z.literal(1),confirmed:z.literal(true),tenant_id:uuid,actor_id:uuid,request_id:uuid,advance_id:uuid,employee_id:uuid,payable_id:uuid.nullable(),status:z.enum(['pending','approved']),amount_cents:positive,cash_created:z.literal(false)}).strict();

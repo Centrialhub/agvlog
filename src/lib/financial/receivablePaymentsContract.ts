@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {receivablePaymentSchema} from './receivableCommands';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
 export const receivablePaymentsRequestSchema=z.object({tenantId:uuid,actorId:uuid,receivableId:uuid,page:z.number().int().min(1).max(2147483647),expectedRevision:revision.nullable()}).refine(v=>v.page===1||v.expectedRevision!==null,'Atualize os recebimentos antes de trocar de página.');
 export type ReceivablePaymentsRequest=z.infer<typeof receivablePaymentsRequestSchema>;
 export const receivablePaymentsPageSchema=z.object({

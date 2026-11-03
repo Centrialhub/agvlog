@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const revision=z.string().regex(/^[a-f0-9]{64}$/);
 const timestamp=z.string().datetime({offset:true}).nullable();
 

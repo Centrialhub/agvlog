@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { requestWithDeadline } from '@/lib/requestWithDeadline';
-const id=z.string().uuid();
+const id=z.string().guid();
 const receipt=z.object({ok:z.literal(true),request_id:id,trip_id:id,route_id:id,calculated_at:z.string().datetime({offset:true}),
   distance_meters:z.number().finite().nonnegative(),duration_seconds:z.number().finite().nonnegative(),waypoint_count:z.number().int().min(2)});
 const errorBody=z.object({error:z.string().optional(),code:z.string().optional()});

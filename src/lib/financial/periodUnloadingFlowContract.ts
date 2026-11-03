@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;},'Data inválida.'),cents=z.string().regex(/^\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;},'Data inválida.'),cents=z.string().regex(/^\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
 export const periodUnloadingFlowRequestSchema=z.object({tenantId:uuid,from:day,to:day,accountIds:z.array(uuid),supplierId:uuid.nullable(),page:z.number().int().min(1).max(2147483647),expectedRevision:revision.nullable()})
  .refine(v=>v.from<=v.to&&new Set(v.accountIds).size===v.accountIds.length&&(v.page===1||v.expectedRevision!==null),'Confira período, contas e revisão da página.');
 const total=z.object({count:z.number().int().nonnegative().safe(),valid:z.boolean(),amount_cents:cents.nullable()}).superRefine((v,c)=>{if(v.valid!==(v.amount_cents!==null))c.addIssue({code:'custom',message:'Valor incompatível com a validade.'});});

@@ -2,7 +2,7 @@ import {receivableCreditNumberFields,creditCompositionValid} from './receivableC
 import {movementUseError} from './movementUseErrors';
 import {z} from 'zod';
 import {receivableAgreementAllocationSchema} from './receivableAgreementContract';
-const id=z.string().uuid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
+const id=z.string().guid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
 export const financialAction=z.enum(['receive','reverse','reconcile']);
 export type FinancialAction=z.infer<typeof financialAction>;
 export const financialActionLabels:Record<FinancialAction,string>={receive:'Registrar recebimento',reverse:'Estornar recebimento',reconcile:'Conciliar projeções'};

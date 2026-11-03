@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Json } from '@/integrations/supabase/types';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const timestamp = z.string().datetime({ offset: true });
 const nullableUuid = uuid.nullable();
 

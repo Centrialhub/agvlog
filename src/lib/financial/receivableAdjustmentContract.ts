@@ -1,7 +1,7 @@
 export {receivableAdjustmentCommandSchema} from './receivableAdjustmentCommandContract';
 import {z} from 'zod';
 import {receivableAdjustmentKindSchema,type ReceivableAdjustmentCommand} from './receivableAdjustmentCommandContract';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d{0,13})$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),kind=receivableAdjustmentKindSchema,action=z.enum(['apply','reverse']);
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d{0,13})$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),kind=receivableAdjustmentKindSchema,action=z.enum(['apply','reverse']);
 export const receivableAdjustmentCompositionSchema=z.object({amount_cents:cents.nullable(),cash_received_cents:cents.nullable(),credit_applied_cents:cents.nullable(),discount_cents:cents.nullable(),loss_cents:cents.nullable(),adjustment_cents:cents.nullable(),settled_cents:cents.nullable(),open_cents:cents.nullable()}).strict();
 export type ReceivableAdjustmentComposition=z.infer<typeof receivableAdjustmentCompositionSchema>;
 const numeric=(v:unknown):v is string=>typeof v==='string'&&/^-?\d+$/.test(v);

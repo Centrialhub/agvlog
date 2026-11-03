@@ -5,9 +5,9 @@ import {useAuth} from '@/hooks/useAuth';
 import {useTenant} from '@/hooks/useTenant';
 import {supabase} from '@/integrations/supabase/client';
 import {rowSchema} from '@/lib/financial/expenseReviewCommands';
-const page=z.object({version:z.literal(1),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),offset:z.number().int().nonnegative(),total:z.number().int().nonnegative()});
+const page=z.object({version:z.literal(1),tenant_id:z.string().guid(),actor_id:z.string().guid(),offset:z.number().int().nonnegative(),total:z.number().int().nonnegative()});
 const historySchema=page.extend({rows:z.array(rowSchema).max(50)}).strict();
-const sourcesSchema=page.extend({rows:z.array(z.object({id:z.string().uuid(),driver_id:z.string().uuid(),status:z.enum(['planned','in_transit','completed']),
+const sourcesSchema=page.extend({rows:z.array(z.object({id:z.string().guid(),driver_id:z.string().guid(),status:z.enum(['planned','in_transit','completed']),
  notes:z.string().nullable(),created_at:z.string(),actual_start_at:z.string().nullable(),actual_end_at:z.string().nullable()})).max(50)}).strict();
 function useScope(){const {user}=useAuth(),{currentTenant}=useTenant();return {tenant:currentTenant?.id,actor:user?.id};}
 export function useDriverExpenseHistory(offset:number){

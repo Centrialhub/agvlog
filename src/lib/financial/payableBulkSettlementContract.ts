@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const cents=z.string().regex(/^\d+$/);
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const revision=z.string().regex(/^[a-f0-9]{32}$/);

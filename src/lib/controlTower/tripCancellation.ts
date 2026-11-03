@@ -2,7 +2,7 @@ import {z} from 'zod';
 
 import {supabase} from '@/integrations/supabase/client';
 
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 
 export const tripCancellationCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,trip_id:uuid,expected_revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().trim().min(10).max(2000)}).strict();
 

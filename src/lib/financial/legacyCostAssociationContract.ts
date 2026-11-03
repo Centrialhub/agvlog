@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/);
 const base={version:z.literal(1),tenant_id:uuid,request_id:uuid};
 export const legacyCostAssociateCommandSchema=z.object({...base,expense_id:uuid,cost_id:uuid,revision:z.string().regex(/^[a-f0-9]{32}$/),reason,same_expense_confirmed:z.literal(true)}).strict();
 export const legacyCostReverseCommandSchema=z.object({...base,link_id:uuid,reason}).strict();

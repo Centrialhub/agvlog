@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {customerCreditCommandSchema,customerCreditResultSchema,parseCustomerCreditResult} from './customerCreditContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=z.strictObject(customerCreditCommandSchema.shape).omit({version:true,tenant_id:true,request_id:true}).refine(v=>(v.action==='apply')===(v.application_id===null));
 export type CustomerCreditInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof customerCreditCommandSchema>;

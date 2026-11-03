@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const nullableText = (max: number) => z.string().trim().max(max).nullable();
 const changesSchema = z.object({
   load_number: z.string().trim().min(1).max(120).optional(),

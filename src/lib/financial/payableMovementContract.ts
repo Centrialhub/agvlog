@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),cents=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),cents=z.string().regex(/^\d+$/);
 export const payableMovementCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,payable_id:uuid,movement_id:uuid,
  amount_cents:z.number().int().positive().max(99999999999999),method:z.enum(['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other']),reason:z.string().trim().min(5).max(2000)}).strict();
 export type PayableMovementCommand=z.infer<typeof payableMovementCommandSchema>;

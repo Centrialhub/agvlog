@@ -4,7 +4,7 @@ import { parseFinanceAmount } from './ledgerContract';
 export const expenseCategories = { fuel: 'Combustível', food: 'Alimentação', unloading: 'Descarga', toll: 'Pedágio',
   lodging: 'Hospedagem', maintenance: 'Manutenção', office: 'Sede / escritório', cleaning: 'Limpeza', payroll: 'Folha',
   tax: 'Tributos', rent: 'Aluguel', utility: 'Água / energia / telefone', service: 'Serviços', other: 'Outros' } as const;
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 export const financeOptionSchema = z.object({ id: uuid, label: z.string(), driver_id: uuid.nullable().optional(),
   amount_cents: z.number().int().positive().max(99999999999999).optional(),
   remaining_cents: z.number().int().nonnegative().max(99999999999999).optional(),

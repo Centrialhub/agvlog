@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {cashForecastAgendaCommandSchema,cashForecastAgendaResultSchema,parseCashForecastAgendaResult} from './cashForecastAgendaContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=z.strictObject(cashForecastAgendaCommandSchema.shape).omit({version:true,tenant_id:true,request_id:true});
 export type CashForecastAgendaInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof cashForecastAgendaCommandSchema>;

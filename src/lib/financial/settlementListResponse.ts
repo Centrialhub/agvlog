@@ -5,7 +5,7 @@ const amount = z.number().finite().nullable();
 const count = z.number().int().nonnegative();
 const timestamp = z.string().datetime({ offset: true });
 const itemSchema = z.object({
-  id: z.string().uuid(), tenant_id: z.string().uuid(),
+  id: z.string().guid(), tenant_id: z.string().guid(),
   status: z.enum(['pending_review', 'in_review', 'approved', 'paid', 'closed', 'reopened']),
   driver_name: z.string().nullable().optional(), vehicle_plate: z.string().nullable().optional(),
   route_name: z.string().nullable(), route_origin: z.string().nullable(), route_destination: z.string().nullable(),
@@ -19,11 +19,11 @@ const itemSchema = z.object({
   needs_recalculation: z.boolean(), approved_with_exception: z.boolean(),
 }).passthrough();
 const responseSchema = z.object({
-  version: z.literal(2), tenant_id: z.string().uuid(), snapshot_at: timestamp, revision: z.string().regex(/^[0-9a-f]{32}$/),
+  version: z.literal(2), tenant_id: z.string().guid(), snapshot_at: timestamp, revision: z.string().regex(/^[0-9a-f]{32}$/),
   items: z.array(itemSchema).max(100), total_count: count, page_size: count.min(1).max(100),
   next_cursor: z.object({
     scope: z.string().regex(/^[0-9a-f]{32}$/), revision: z.string().regex(/^[0-9a-f]{32}$/), trip_completed_at: timestamp.nullable(),
-    created_at: timestamp, id: z.string().uuid(),
+    created_at: timestamp, id: z.string().guid(),
   }).strict().nullable(),
   summary: z.object({
     total_count: count, pending_count: count, in_review_count: count, approved_count: count,
@@ -40,5 +40,5 @@ export function parseSettlementList(value: unknown, tenant: string) {
   return { ...parsed, items: parsed.items as DriverSettlementListItem[] };
 }
 export type DriverSettlementCursor = z.infer<typeof responseSchema>['next_cursor'];
-const filtersSchema = z.object({version:z.literal(1),tenant_id:z.string().uuid(),kind:z.enum(['drivers','vehicles']),search:z.string().max(200),page:z.number().int().positive(),page_size:z.literal(50),total:count,revision:z.string().regex(/^[a-f0-9]{32}$/),rows:z.array(z.object({id:z.string().uuid(),label:z.string()})).max(50)});
+const filtersSchema = z.object({version:z.literal(1),tenant_id:z.string().guid(),kind:z.enum(['drivers','vehicles']),search:z.string().max(200),page:z.number().int().positive(),page_size:z.literal(50),total:count,revision:z.string().regex(/^[a-f0-9]{32}$/),rows:z.array(z.object({id:z.string().guid(),label:z.string()})).max(50)});
 export const parseSettlementFilterOptions = (value: unknown,tenant:string,kind:'drivers'|'vehicles') => {const parsed=filtersSchema.parse(value);if(parsed.tenant_id!==tenant||parsed.kind!==kind)throw new Error('Opções fora da empresa ou tipo solicitado.');return parsed;};

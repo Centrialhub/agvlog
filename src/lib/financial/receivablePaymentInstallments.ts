@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-const id = z.string().uuid(),
+const id = z.string().guid(),
   revision = z.string().regex(/^[a-f0-9]{32}$/),
   day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const schema = z

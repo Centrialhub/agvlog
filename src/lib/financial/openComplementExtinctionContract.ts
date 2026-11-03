@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {unloadingOpenComplementPreviewSchema} from './unloadingOpenComplementContract';
 import {costFundingSourceSchema} from './expenseCostFundingContract';
-const uuid=z.string().uuid(),positive=z.string().regex(/^[1-9]\d{0,13}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),signed=z.string().regex(/^-?\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),positive=z.string().regex(/^[1-9]\d{0,13}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),signed=z.string().regex(/^-?\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
 export const openComplementExtinctionProposalSchema=z.object({amount_cents:positive,dispositions:z.array(z.object({source_kind:z.literal('expense_allocation'),source_id:uuid,applied_cents:cents,responsible_id:uuid,disposition_type:z.literal('driver_custody')}).strict()).max(500)}).strict().refine(v=>new Set(v.dispositions.map(d=>d.source_id)).size===v.dispositions.length,'Fonte repetida.');
 export const openComplementExtinctionEffectsSchema=z.object({cost_before_cents:positive.nullable(),cost_after_cents:positive,complement_before_cents:positive.nullable(),complement_after_cents:z.literal('0'),historical_payable_nominal_cents:positive.nullable(),residual_cents:signed,capacity_released_cents:z.literal('0'),cash_changed:z.literal(false),approval_reset:z.boolean()}).strict();
 export const openComplementExtinctionExpectedSchema=openComplementExtinctionEffectsSchema.extend({cost_before_cents:positive,complement_before_cents:positive,historical_payable_nominal_cents:positive,residual_cents:cents});

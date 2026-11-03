@@ -2,7 +2,7 @@ import {receivableCreditNumberFields,creditCompositionValid} from './receivableC
 import {z} from 'zod';
 import type {CreateClientInvoicePayload} from '@/hooks/useClientInvoices';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
-const id=z.string().uuid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
+const id=z.string().guid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
 export const invoiceAction=z.enum(['generate','generate_closing','mark_sent','cancel','reactivate']);
 export type InvoiceAction=z.infer<typeof invoiceAction>;
 export const invoiceActionLabels:Record<InvoiceAction,string>={generate:'Gerar fatura',generate_closing:'Faturar fechamento',mark_sent:'Registrar envio',cancel:'Cancelar fatura',reactivate:'Reativar fatura'};

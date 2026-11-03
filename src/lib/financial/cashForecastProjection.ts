@@ -10,7 +10,7 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 const captureDay = (value: string) => Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) : '';
 const origin = z.object({
   economic_key: z.string().min(1).max(250),
-  source_table: z.string().min(1).max(100), source_id: z.string().uuid(),
+  source_table: z.string().min(1).max(100), source_id: z.string().guid(),
   source_revision: z.string().min(1).max(128),
   direction: z.enum(['in', 'out']), scenario: z.enum(['confirmed', 'unbilled']),
   nominal_cents: cents, fulfilled_cents: cents, reserved_credit_cents: cents, ...forecastAdjustmentFields,
@@ -27,22 +27,22 @@ const origin = z.object({
 
 /** Input must be collected and authorized by the server; this calculator is not evidence validation. */
 const forecastBasisObject = z.object({
-  version: z.literal(1), tenant_id: z.string().uuid(),
-  account_ids: z.array(z.string().uuid()).min(1),
+  version: z.literal(1), tenant_id: z.string().guid(),
+  account_ids: z.array(z.string().guid()).min(1),
   captured_at: z.string().datetime({ offset: true }), cutoff: day, period_end: day,
   base: z.object({ amount_cents: signed.nullable(), as_of: day,
-    source_id: z.string().uuid(), source_revision: z.string().min(1).max(128),
+    source_id: z.string().guid(), source_revision: z.string().min(1).max(128),
     confirmation: z.enum(['bank_confirmed', 'cash_count', 'provisional', 'unverified']),
   }).strict(),
   origins: z.array(origin),
   recorded_after_cutoff: z.array(z.object({
-    movement_id: z.string().uuid(), account_id: z.string().uuid(), source_revision: z.string().min(1),
+    movement_id: z.string().guid(), account_id: z.string().guid(), source_revision: z.string().min(1),
     occurred_on: day, direction: z.enum(['in', 'out']), amount_cents: cents.refine(value => BigInt(value) > 0n),
     confirmation: z.enum(['bank_confirmed', 'recorded']),
   }).strict()),
   // Unattributed credit cannot be subtracted from a particular title by guesswork.
   unassigned_credit_cents: cents,
-  source_issues: z.array(z.object({ code: z.string().min(1), source_ids: z.array(z.string().uuid()), scope: z.enum(['confirmed', 'expanded', 'all']).optional() }).strict()),
+  source_issues: z.array(z.object({ code: z.string().min(1), source_ids: z.array(z.string().guid()), scope: z.enum(['confirmed', 'expanded', 'all']).optional() }).strict()),
 }).strict();
 const validateBasis = (basis: z.infer<typeof forecastBasisObject> | z.infer<typeof companyBasisObject>, ctx: z.RefinementCtx) => {
   if (basis.cutoff >= basis.period_end || basis.base.as_of !== basis.cutoff)
@@ -62,8 +62,8 @@ const validateBasis = (basis: z.infer<typeof forecastBasisObject> | z.infer<type
     ctx.addIssue({ code: 'custom', message: 'Saldo-base indeterminado exige diagnóstico.' });
 };
 const component = z.object({
-  account_id:z.string().uuid(), account_kind:z.enum(['bank','cash','unsupported']),
-  source_table:z.string().min(1).nullable(),source_id:z.string().uuid().nullable(),
+  account_id:z.string().guid(), account_kind:z.enum(['bank','cash','unsupported']),
+  source_table:z.string().min(1).nullable(),source_id:z.string().guid().nullable(),
   source_revision:z.string().min(1),amount_cents:signed.nullable(),
   confirmation:z.enum(['bank_confirmed','cash_count','provisional','unverified']),
 }).strict();

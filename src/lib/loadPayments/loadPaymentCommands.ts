@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parseMoneyCents } from '@/lib/financial/receivableCommands';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const cents = z.number().int().positive().max(99999999999999);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 

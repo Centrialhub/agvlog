@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {receivableAgreementCommandSchema,receivableAgreementResultSchema,receivableAgreementStorageKey,type ReceivableAgreementCommand,type ReceivableAgreementResult} from './receivableAgreementContract';
-const id=z.string().uuid();
+const id=z.string().guid();
 const inputSchema=z.strictObject(receivableAgreementCommandSchema.shape).omit({version:true,tenant_id:true,request_id:true});
 export type ReceivableAgreementInput=z.infer<typeof inputSchema>;
 const pendingSchema=z.object({version:z.literal(1),tenantId:id,actorId:id,payload:receivableAgreementCommandSchema}).strict();

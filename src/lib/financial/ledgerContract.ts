@@ -5,27 +5,27 @@ export const movementNatures = {
   driver_advance: 'Envio ao motorista', payment: 'Pagamento', receipt: 'Recebimento',
   transfer: 'Transferência', refund: 'Devolução', customer_advance: 'Adiantamento de cliente', other: 'Outra movimentação',
 } as const;
-export const movementCorrectionSchema=z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),movement_id:z.string().uuid(),original_request_id:z.string().uuid(),request_id:z.string().uuid(),kind:z.enum(['void','duplicate','replacement']),duplicate_of_movement_id:z.string().uuid().nullable(),replacement_movement_id:z.string().uuid().nullable(),actor_id:z.string().uuid(),actor_name:z.string(),reason:z.string(),revision:z.string().regex(/^[a-f0-9]{32}$/),created_at:z.string()}).superRefine((v,c)=>{if((v.kind==='void'&&(v.duplicate_of_movement_id!==null||v.replacement_movement_id!==null))||(v.kind==='duplicate'&&(!v.duplicate_of_movement_id||v.replacement_movement_id!==null))||(v.kind==='replacement'&&(!v.replacement_movement_id||v.duplicate_of_movement_id!==null))||v.movement_id===v.duplicate_of_movement_id||v.movement_id===v.replacement_movement_id)c.addIssue({code:'custom',message:'Referências da correção inconsistentes.'});});
+export const movementCorrectionSchema=z.object({id:z.string().guid(),tenant_id:z.string().guid(),movement_id:z.string().guid(),original_request_id:z.string().guid(),request_id:z.string().guid(),kind:z.enum(['void','duplicate','replacement']),duplicate_of_movement_id:z.string().guid().nullable(),replacement_movement_id:z.string().guid().nullable(),actor_id:z.string().guid(),actor_name:z.string(),reason:z.string(),revision:z.string().regex(/^[a-f0-9]{32}$/),created_at:z.string()}).superRefine((v,c)=>{if((v.kind==='void'&&(v.duplicate_of_movement_id!==null||v.replacement_movement_id!==null))||(v.kind==='duplicate'&&(!v.duplicate_of_movement_id||v.replacement_movement_id!==null))||(v.kind==='replacement'&&(!v.replacement_movement_id||v.duplicate_of_movement_id!==null))||v.movement_id===v.duplicate_of_movement_id||v.movement_id===v.replacement_movement_id)c.addIssue({code:'custom',message:'Referências da correção inconsistentes.'});});
 export const movementSchema = z.object({
   voided:z.boolean(),correction:movementCorrectionSchema.nullable(),
-  id: z.string().uuid(), tenant_id: z.string().uuid(), bank_account_id: z.string().uuid(), account_name: z.string(),
+  id: z.string().guid(), tenant_id: z.string().guid(), bank_account_id: z.string().guid(), account_name: z.string(),
   direction: z.enum(['in', 'out']), nature: z.enum(['driver_advance', 'payment', 'receipt', 'transfer', 'refund', 'customer_advance', 'other']),
   amount_cents: z.number().int().positive().max(99999999999999), occurred_on: z.string(),
   description: z.string(), beneficiary_name: z.string(), beneficiary_document: z.string().nullable(),
-  driver_id: z.string().uuid().nullable(), bank_reference: z.string().nullable(), receipt_path: z.string().nullable(),
-  cost_center_id: z.string().uuid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
-  created_by: z.string().uuid(), created_at: z.string(),
+  driver_id: z.string().guid().nullable(), bank_reference: z.string().nullable(), receipt_path: z.string().nullable(),
+  cost_center_id: z.string().guid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
+  created_by: z.string().guid(), created_at: z.string(),
 }).superRefine((v,c)=>{if(v.voided!==(v.correction!==null)||(v.correction&&(v.correction.movement_id!==v.id||v.correction.tenant_id!==v.tenant_id)))c.addIssue({code:'custom',message:'Situação da movimentação inconsistente.'});});
 export const movementListSchema = z.object({
-  version: z.literal(1), tenant_id: z.string().uuid(), page: z.number().int().positive(),
+  version: z.literal(1), tenant_id: z.string().guid(), page: z.number().int().positive(),
   page_size: z.number().int().positive().max(100), total: z.number().int().nonnegative(),
   active_count:z.number().int().nonnegative(),voided_count:z.number().int().nonnegative(),historical_inflow_cents:z.string().regex(/^\d+$/),historical_outflow_cents:z.string().regex(/^\d+$/),voided_inflow_cents:z.string().regex(/^\d+$/),voided_outflow_cents:z.string().regex(/^\d+$/),
   inflow_cents: z.string().regex(/^\d+$/), outflow_cents: z.string().regex(/^\d+$/), rows: z.array(movementSchema),
 }).superRefine((v,c)=>{if(v.total!==v.active_count+v.voided_count||BigInt(v.historical_inflow_cents)!==BigInt(v.inflow_cents)+BigInt(v.voided_inflow_cents)||BigInt(v.historical_outflow_cents)!==BigInt(v.outflow_cents)+BigInt(v.voided_outflow_cents)||v.rows.some(row=>row.tenant_id!==v.tenant_id))c.addIssue({code:'custom',message:'Totais ativos e históricos inconsistentes.'});});
 export const movementResultSchema = z.object({
-  version: z.literal(1), tenant_id: z.string().uuid(), request_id: z.string().uuid(),
-  movement_id: z.string().uuid(), confirmed: z.literal(true),
-  cost_center_id: z.string().uuid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
+  version: z.literal(1), tenant_id: z.string().guid(), request_id: z.string().guid(),
+  movement_id: z.string().guid(), confirmed: z.literal(true),
+  cost_center_id: z.string().guid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
 });
 export type Movement = z.infer<typeof movementSchema>;
 export interface MovementFilters { page: number; page_size: number; search: string; from: string; to: string; direction: string; account_id: string; driver_id?: string }

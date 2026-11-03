@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {AccountPeriodEvidence} from './accountPeriodEvidenceContract';
 
-const object=z.record(z.string(), z.unknown()),uuid=z.string().uuid();
+const object=z.record(z.string(), z.unknown()),uuid=z.string().guid();
 const source=object.and(z.object({id:uuid}));
 const decision=z.object({id:uuid,actor_id:uuid,actor_name:z.string().min(1),reason:z.string().min(1),created_at:z.string().min(1)});
 export type AccountPeriodDocument={kind:'movement_receipt'|'voided_movement_receipt'|'bank_statement';source_id:string;path:string;evidence:unknown};

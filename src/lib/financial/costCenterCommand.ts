@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const costCenterSchema=z.object({
   id,
   tenant_id:id,

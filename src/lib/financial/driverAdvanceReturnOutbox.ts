@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {driverAdvanceReturnCommandSchema,driverAdvanceReturnResultSchema,parseDriverAdvanceReturnResult} from './driverAdvanceReturnContract';
-const uuid=z.string().uuid(),cents=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),cents=z.string().regex(/^\d+$/);
 const inputSchema=driverAdvanceReturnCommandSchema.omit({version:true,tenant_id:true,request_id:true}).extend({expected_open_cents:cents});
 export type DriverAdvanceReturnInput=z.infer<typeof inputSchema>;
 const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,expectedOpenCents:cents,payload:driverAdvanceReturnCommandSchema}).strict();

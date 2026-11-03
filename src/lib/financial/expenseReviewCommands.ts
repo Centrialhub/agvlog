@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
 export const expenseReviewCommandSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,expense_id:id,
  action:z.enum(['approve','reject']),reason:z.string().trim().min(5).max(2000),expected_revision:revision}).strict();
 export type ExpenseReviewCommand=z.infer<typeof expenseReviewCommandSchema>;

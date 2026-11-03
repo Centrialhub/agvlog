@@ -30,7 +30,16 @@ Os tipos não substituem autorização: RLS, CAS e os triggers permanecem intact
 Os casts existentes de RPC foram movidos para antes de `bind(supabase)` para evitar
 instanciação excessiva do tipo genérico do SDK. O receiver continua vinculado;
 os dois testes desse contrato agora executam as expressões transpiladas com um cliente sintético
-(9 casos passaram), em vez de exigir uma única grafia de TypeScript.
+(16 casos passaram), em vez de exigir uma única grafia de TypeScript. O detector global
+agora reconhece casts antes do binding por AST e continua rejeitando calls destacadas e receiver incorreto.
+
+O run `41661698848`, no candidato `ae89a66848b9837af541f1710c96b2c6e84e3241`,
+aprovou `validate` (auditoria, tipos, lint, cobertura e build). Os shards identificaram
+as diferenças de Zod 4 em UUIDs PostgreSQL sem versão RFC e records com enum esparsos.
+Foram preservadas as regras anteriores usando `guid()` e `partialRecord`, respectivamente,
+sem mudar os geradores de UUID ou reduzir assertions financeiras. Os testes focados de
+comparação, paginação SQL, conciliação, intake e recuperação passaram (73 casos).
+Uma comparação dos ASTs do JavaScript emitido confirmou 93 arquivos sem alteração de runtime após os ajustes de casts.
 
 ## Gates e evidências
 

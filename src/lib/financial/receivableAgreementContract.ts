@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-const id=z.string().uuid(),cents=z.string().regex(/^\d+$/),positiveCents=z.string().regex(/^[1-9]\d{0,13}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const id=z.string().guid(),cents=z.string().regex(/^\d+$/),positiveCents=z.string().regex(/^[1-9]\d{0,13}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const receivableAgreementInstallmentSchema=z.object({id,amount_cents:positiveCents,due_on:day}).strict();
 export const receivableAgreementAllocationSchema=z.object({installment_id:id,amount_cents:positiveCents}).strict();
 export const receivableAgreementProposalSchema=z.object({action:z.enum(['create','revise','revoke']),installments:z.array(receivableAgreementInstallmentSchema).max(100)}).strict().superRefine((v,ctx)=>{

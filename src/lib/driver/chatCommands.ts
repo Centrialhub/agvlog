@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const id=z.string().uuid(),date=z.string().datetime({offset:true});
+const id=z.string().guid(),date=z.string().datetime({offset:true});
 export const chatCommandSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,driver_id:id.nullable(),event_id:id.optional(),request_id:id,expected_revision:z.string().regex(/^[a-f0-9]{32}$/),
  message:z.string().min(1).max(4000).refine(text=>text===text.trim(),'Revise o texto da mensagem.')}).strict().refine(p=>!!p.event_id||!!p.driver_id,'Conversa não identificada.');
 export type ChatCommand=z.infer<typeof chatCommandSchema>;

@@ -26,13 +26,13 @@ const outcomes: Record<string, string> = {
   cliente_recusou: 'refused', cliente_estava_fora: 'failed',
 };
 const noteTypes = new Set(['avaria','solicitar_desconto','atualizar_boleto','coleta_realizada','outros']);
-const resultSchema = z.object({event_id:z.string().uuid(), operational_event_id:z.string().uuid(), replayed:z.boolean()}).passthrough();
+const resultSchema = z.object({event_id:z.string().guid(), operational_event_id:z.string().guid(), replayed:z.boolean()}).passthrough();
 const fiscalConflictSchema=z.object({confirmed:z.literal(false),conflict:z.literal(true),
-  error_code:z.literal('delivery_fiscal_snapshot_changed'),request_id:z.string().uuid()}).passthrough();
-const fiscalConflictResolutionSchema=z.object({version:z.literal(1),request_id:z.string().uuid(),
+  error_code:z.literal('delivery_fiscal_snapshot_changed'),request_id:z.string().guid()}).passthrough();
+const fiscalConflictResolutionSchema=z.object({version:z.literal(1),request_id:z.string().guid(),
   status:z.enum(['pending','resolved']),resolution_action:z.enum(['discard']).nullable(),replacement_required:z.boolean()});
 const queuedResultSchema = z.object({
-  queued:z.literal(true), request_id:z.string().uuid(), stop_id:z.string().min(1), event_key:z.string().min(1),
+  queued:z.literal(true), request_id:z.string().guid(), stop_id:z.string().min(1), event_key:z.string().min(1),
   needs_attention:z.boolean(), attention_code:z.string().nullable(),
 });
 export type DeliverySubmissionResult = (z.infer<typeof resultSchema> & {queued:false}) | z.infer<typeof queuedResultSchema>;

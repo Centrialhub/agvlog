@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ActiveTripLive, TripAlert } from './types';
-const id = z.string().uuid(), number = z.number().finite().nullable(), text = z.string().nullable();
+const id = z.string().guid(), number = z.number().finite().nullable(), text = z.string().nullable();
 const severity = z.enum(['info','success','warning','danger','critical']);
 const stop = z.object({id,sequence:z.number().int(),client_name:text,status:z.string(),
   planned_arrival_at:text.optional(),actual_arrival_at:text.optional(),actual_departure_at:text.optional(),

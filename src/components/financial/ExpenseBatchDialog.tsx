@@ -12,7 +12,7 @@ import { FinanceOptionPicker } from './FinanceOptionPicker';
 import { ExpenseBatchLine } from './ExpenseBatchLine';
 import { repeatExpenseLineDetails, expenseErrorField } from '@/lib/financial/expenseBatchEntryUx';
 
-const savedSchema = z.object({draft:expenseBatchDraftSchema,request:z.string().uuid().nullable(),batchRequest:z.string().uuid().optional()});
+const savedSchema = z.object({draft:expenseBatchDraftSchema,request:z.string().guid().nullable(),batchRequest:z.string().guid().optional()});
 function restore(key:string):{saved:z.infer<typeof savedSchema>;error:boolean} {
   const empty:z.infer<typeof savedSchema>={request:null,batchRequest:crypto.randomUUID(),draft:{context:'trip',trip:null,description:'Gastos conferidos no retorno',reason:'Conferência dos gastos e comprovantes',lines:[newExpenseLine('trip')]}};
   try {

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const base={version:z.literal(1),tenant_id:uuid,request_id:uuid,reason:z.string().trim().min(10).max(2000)};
 export const accountPaymentSchema=z.object({...base,payable_id:uuid,bank_account_id:uuid,amount_cents:z.number().int().positive().max(99999999999999),paid_on:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),method:z.enum(['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other']),bank_reference:z.string().trim().max(200)}).strict();
 export const archivePayablesSchema=z.object({...base,items:z.array(z.object({payable_id:uuid,revision:z.string().regex(/^[a-f0-9]{32}$/)}).strict()).min(1).max(100)}).strict();

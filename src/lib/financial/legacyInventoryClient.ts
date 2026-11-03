@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
-const uuid=z.string().uuid(),count=z.number().int().nonnegative();
+const uuid=z.string().guid(),count=z.number().int().nonnegative();
 const row=z.object({source_table:z.string(),source_id:uuid,occurred_on:z.string(),amount_cents:z.string().regex(/^\d+$/).nullable(),direction:z.enum(['in','out','unknown']),account_id:uuid.nullable(),bank_transaction_id:uuid.nullable(),reason:z.string(),context:z.object({amount_status:z.string(),account_status:z.string(),origin_ids:z.record(z.string(), uuid.nullable()).nullable()})});
 const section=z.object({page:z.number().int().positive(),page_size:z.literal(30),total:count,counts_by_source:z.record(z.string(), count),rows:z.array(row)});
 export const legacyInventorySchema=section.extend({version:z.literal(1),tenant_id:uuid,account_id:uuid,from:z.string(),to:z.string(),unknown_account:section.extend({scope:z.literal('tenant'),not_additive_across_accounts:z.literal(true)}),legacy_integration_status:z.literal('not_reviewed'),can_close:z.literal(false)});
