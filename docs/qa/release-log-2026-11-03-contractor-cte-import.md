@@ -24,6 +24,8 @@ Orientação operacional após disponibilidade verificada: abra **Planejamento e
 
 O primeiro run `41688230044` recusou o arquivo novo no inventário fechado antes dos gates de aplicação. Foi adicionado `contractor-cte-release-manifest.json`, separado dos três manifests preservados e vinculado ao hash do suplemento anterior e aos bytes da única migration nova. A verificação admite essa adição apenas após validar a identidade/hash; as migrações desconhecidas continuam recusadas. O plano de restauração permanece com 46 forwards; a migration de CT-e roda em etapa posterior e isolada. Os 50 testes focados de integridade dos manifests passaram; pipeline completo: 233 passaram, um skip preexistente, zero falhas.
 
+A revisão posterior alinhou também a forma JSON no servidor (chaves fechadas, tipos e endereço), com 33 testes focados aprovados. O SQL candidato continua não aplicado ao banco público; hash final desta revisão: `59a2a1cf643ef5d8f643ead9abedc90cc3a92900af32f36ad07365ffba8ea82d`. A revisão anterior `06d6f164` aprovou `validate` no run `41688817858`; um novo run deve aprovar o head final antes da entrega.
+
 Preflight de produção pelo painel em 03/11/2026: ledger com 942 versões, maior `20261021144313`; versão nova, schema de cadastro, RPC e bucket ainda ausentes. O ledger aceita `version`, `statements[]` e `name`, permitindo registrar atomicamente o único SQL aplicado. Nenhuma aplicação pública ocorreu nesse preflight.
 
 ## Identidade e estado

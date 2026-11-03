@@ -93,6 +93,9 @@ describe('contractor CT-e registration in PostgreSQL (catalog helpers fixture; n
     { ...contractorFixture, number: '124' },
     { ...contractorFixture, authorization_declared: true },
     { ...contractorFixture, environment: 'unknown' },
+    { ...contractorFixture, unsupported_field: 'not part of the reviewed contract' },
+    { ...contractorFixture, number: 123 },
+    { ...contractorFixture, issuer_address: { ...contractorFixture.issuer_address, zip: 39400000 } },
   ])('rejects inconsistent fiscal metadata', async document => {
     await db.exec('set role authenticated'); await expect(register(document)).rejects.toMatchObject({ code: '22023' });
   });

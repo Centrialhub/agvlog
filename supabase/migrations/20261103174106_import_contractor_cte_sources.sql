@@ -92,6 +92,22 @@ begin
     or (fmt='pdf' and (_document->'authorization_declared'<>'false'::jsonb or _document->'authorization_protocol' is distinct from 'null'::jsonb)) then
     raise exception 'contractor_cte_invalid_document' using errcode='22023';
   end if;
+  if not (_document ?& array['access_key','number','series','issue_date','environment','issuer_name','issuer_cnpj',
+      'issuer_ie','issuer_state','issuer_address','origin_city_code','destination_city_code','referenced_nfe_keys',
+      'authorization_protocol','authorization_declared','source_format'])
+    or (_document-array['access_key','number','series','issue_date','environment','issuer_name','issuer_cnpj',
+      'issuer_ie','issuer_state','issuer_address','origin_city_code','destination_city_code','referenced_nfe_keys',
+      'authorization_protocol','authorization_declared','source_format'])<>'{}'::jsonb
+    or exists(select 1 from jsonb_each(_document) field where field.key not in
+      ('issuer_address','referenced_nfe_keys','authorization_protocol','authorization_declared') and jsonb_typeof(field.value)<>'string')
+    or jsonb_typeof(_document->'authorization_protocol') not in ('string','null')
+    or not ((_document->'issuer_address') ?& array['street','number','neighborhood','city','city_code','state','zip'])
+    or ((_document->'issuer_address')-array['street','number','neighborhood','city','city_code','state','zip'])<>'{}'::jsonb
+    or exists(select 1 from jsonb_each(_document->'issuer_address') field where jsonb_typeof(field.value)<>'string')
+    or length(btrim(_document->>'issuer_name')) not between 1 and 255
+    or length(btrim(_document->>'issuer_ie')) not between 1 and 20 then
+    raise exception 'contractor_cte_invalid_document_shape' using errcode='22023';
+  end if;
   if (_document->>'number')::bigint<>substr(key,26,9)::bigint
     or (_document->>'series')::integer<>substr(key,23,3)::integer then
     raise exception 'contractor_cte_identity_mismatch' using errcode='22023';
