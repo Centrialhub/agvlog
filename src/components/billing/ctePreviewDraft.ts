@@ -1,8 +1,11 @@
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import type { CteTakerRole, CteDocType } from '@/lib/fiscal/cteBuilder';
 import { stateFromNfeAccessKey } from '@/lib/fiscal/cteAddressAutocomplete';
+import type { CteSubcontractingSelection } from '@/lib/fiscal/cteSubcontracting';
 
 export interface EditableCte {
+  serviceType?: '0' | '1';
+  subcontracting?: CteSubcontractingSelection | null;
   key: string;
   emitterId: string;
   remitterName: string;
