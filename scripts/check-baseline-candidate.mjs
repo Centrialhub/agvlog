@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { verifyBaselineFollowups } from "./baseline-followup-manifest.mjs";
 import { verifyBaselineSupplements } from "./baseline-supplement-manifest.mjs";
+import { verifyContractorCteRelease } from './contractor-cte-release-manifest.mjs';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MANIFEST_PATH = "docs/qa/baseline-candidate-manifest.json";
@@ -89,10 +90,11 @@ export async function inspectBaselineCandidate(root = REPOSITORY_ROOT) {
     forwards,
   };
   const supplements = await verifyBaselineSupplements({ root, forwardFiles, entries: directoryEntries });
+  const releaseAddition = await verifyContractorCteRelease({ root, forwardFiles, entries: directoryEntries });
   const supplementFiles = new Set(supplements?.forwards.map(({ filename }) => filename) ?? []);
   const followups = await verifyBaselineFollowups({ root, candidate,
-    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename)), entries: directoryEntries });
-  return { candidate, followups, supplements };
+    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename), entries: directoryEntries });
+  return { candidate, followups, supplements, releaseAddition };
 }
 
 export async function buildBaselineCandidateManifest(root = REPOSITORY_ROOT) {

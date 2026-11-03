@@ -22,6 +22,10 @@ Orientação operacional após disponibilidade verificada: abra **Planejamento e
 
 ## Histórico da preparação inicial (anterior à implementação da persistência)
 
+O primeiro run `41688230044` recusou o arquivo novo no inventário fechado antes dos gates de aplicação. Foi adicionado `contractor-cte-release-manifest.json`, separado dos três manifests preservados e vinculado ao hash do suplemento anterior e aos bytes da única migration nova. A verificação admite essa adição apenas após validar a identidade/hash; as migrações desconhecidas continuam recusadas. O plano de restauração permanece com 46 forwards; a migration de CT-e roda em etapa posterior e isolada. Os 50 testes focados de integridade dos manifests passaram; pipeline completo: 233 passaram, um skip preexistente, zero falhas.
+
+Preflight de produção pelo painel em 03/11/2026: ledger com 942 versões, maior `20261021144313`; versão nova, schema de cadastro, RPC e bucket ainda ausentes. O ledger aceita `version`, `statements[]` e `name`, permitindo registrar atomicamente o único SQL aplicado. Nenhuma aplicação pública ocorreu nesse preflight.
+
 ## Identidade e estado
 
 - Branch: `feat/import-contractor-cte-20261103`.
