@@ -38,3 +38,13 @@ Nenhum comportamento público ou dado persistido mudou. O componente não foi in
 ## Comunicação operacional
 
 Ainda não anunciar disponibilidade. Após homologação e publicação, fornecer os passos reais de importação e seleção do CT-e de origem, incluindo a conferência manual para PDF/DACTE.
+
+## Acesso alternativo confirmado em 03/11/2026
+
+O usuário autorizou o uso da aba autenticada do painel Supabase. O projeto visível é **PROJETO AGV LOG**, ref `qcvnsdrbcchaxvawcngk`, organização exibida **AGV LOG**. Consultas somente de catálogo foram executadas com sucesso no editor SQL do painel. Isso supera o bloqueio de leitura pelo conector; não comprova autorização técnica de DDL ou publicação nem conclui a funcionalidade.
+
+Foram conferidas as colunas de `cte_batches`, `cte_documents` e `fiscal_documents`; nenhuma tabela específica de CT-e da contratante apareceu no inventário fiscal/importação. Também foram conferidas as definições efetivas de `private.request_tenant_id`, `private.is_request_tenant_member`, `public.is_tenant_operator_or_admin` e as políticas de `storage.objects`.
+
+O contexto efetivo exige concordância entre o header e a claim assinada `active_tenant_id`; usuários autenticados sem a claim são rejeitados. A permissão operacional vigente exige membership ativa com papel owner/admin/operator. Armazenamento financeiro e quarentena possuem fronteiras específicas; não reutilizar buckets existentes para CT-e da contratante sem tratar seus contratos.
+
+Nenhuma tabela, política, migration, arquivo operacional ou documento fiscal foi criado/alterado no ambiente público durante essa inspeção. Persistência, vínculo fiscal e gates de entrega continuam pendentes.
