@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {payableApprovalExpectedSchema,payableApprovalCommandSchema,payableApprovalResultSchema,parsePayableApprovalResult} from './payableApprovalContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=z.object({payableId:uuid,amountCents:z.string().regex(/^[1-9]\d{0,13}$/),expected:payableApprovalExpectedSchema,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(value=>value.trim().length>=10&&value.trim().length<=2000,'Informe motivo entre 10 e 2.000 caracteres.')}).strict().refine(v=>v.amountCents===v.expected.amount_cents,'Valores da proposta incompatíveis.');
 export type PayableApprovalInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof payableApprovalCommandSchema>;

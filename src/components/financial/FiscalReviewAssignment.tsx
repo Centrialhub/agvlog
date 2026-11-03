@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 const schema = z.object({
   version: z.literal(1),
-  tenant_id: z.string().uuid(),
-  request_id: z.string().uuid(),
-  observation_id: z.string().uuid(),
+  tenant_id: z.string().guid(),
+  request_id: z.string().guid(),
+  observation_id: z.string().guid(),
   revision: z.string().regex(/^[a-f0-9]{32}$/),
   due_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().min(5).max(2000),
@@ -75,13 +75,13 @@ export function FiscalReviewAssignment({
           throw new Error("Pedido fora do documento.");
         localStorage.setItem(key, JSON.stringify(command));
         setPending(command);
-        const rpc = supabase.rpc.bind(supabase) as unknown as (
+        const rpc = (supabase.rpc as unknown as (
           name: string,
           args: Record<string, unknown>,
         ) => PromiseLike<{
           data: unknown;
           error: { code?: string; message: string } | null;
-        }>;
+        }>).bind(supabase);
         const { data, error: failure } = await rpc(
           "assign_finance_fiscal_review",
           { _payload: command },

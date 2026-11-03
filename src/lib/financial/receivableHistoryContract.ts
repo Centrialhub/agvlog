@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const timestamp=z.string().datetime({offset:true});
 const positiveInteger=z.string().regex(/^[1-9]\d*$/);
 const cents=z.string().regex(/^(0|[1-9]\d*)$/);

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LOAD_STATUSES } from '@/lib/status/loadStatus';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const timestamp = z.string().datetime({ offset: true });
 const status = z.enum(LOAD_STATUSES);
 

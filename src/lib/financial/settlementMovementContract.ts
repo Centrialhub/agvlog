@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),cents=z.number().int().positive().max(99999999999999);
+const uuid=z.string().guid(),cents=z.number().int().positive().max(99999999999999);
 export const settlementMovementCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,payment_id:uuid,movement_id:uuid,reason:z.string().trim().min(10).max(2000)}).strict();
 export type SettlementMovementCommand=z.infer<typeof settlementMovementCommandSchema>;
 export const settlementMovementResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,payment_id:uuid,settlement_id:uuid,movement_id:uuid,link_id:uuid,amount_cents:cents,cash_created:z.literal(false),confirmed:z.literal(true)});

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {cashOpeningCommandSchema,cashOpeningEvidenceSchema,totalCashCounts} from './cashOpeningContract';
-const uuid=z.string().uuid(),cents=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const uuid=z.string().guid(),cents=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const accountOpeningCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,account_id:uuid,from:date,to:date,revision:z.string().min(1),reason:z.string().trim().min(10).max(2000)}).strict();
 export const accountOpeningReversalSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,opening_id:uuid,reason:z.string().trim().min(10).max(2000)}).strict();
 export type AccountOpeningCommand=z.infer<typeof accountOpeningCommandSchema>;

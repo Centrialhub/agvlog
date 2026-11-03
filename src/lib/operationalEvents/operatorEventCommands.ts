@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const revision=z.string().regex(/^[a-f0-9]{64}$/);
 const timestamp=z.string().datetime({offset:true}).nullable();
 
@@ -129,7 +129,7 @@ type OperatorRpcArgs={
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
 export async function callOperatorEventRpc<Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name],signal?:AbortSignal){
- const rpc=supabase.rpc.bind(supabase) as unknown as <RpcName extends keyof OperatorRpcArgs>(name:RpcName,args:OperatorRpcArgs[RpcName])=>RpcBuilder;
+ const rpc=(supabase.rpc as unknown as <RpcName extends keyof OperatorRpcArgs>(name:RpcName,args:OperatorRpcArgs[RpcName])=>RpcBuilder).bind(supabase);
  const request=rpc(name,args);return await (signal?request.abortSignal(signal):request);
 }
 

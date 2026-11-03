@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const revision=z.string().regex(/^[a-f0-9]{32}$/);
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 const positiveCents=z.string().regex(/^[1-9]\d{0,13}$/);

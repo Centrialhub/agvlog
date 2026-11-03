@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^[1-9][0-9]{0,13}$/);
+const uuid=z.string().guid(),hash=z.string().regex(/^[a-f0-9]{64}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^[1-9][0-9]{0,13}$/);
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 export const payableXmlSummarySchema=z.object({kind:z.literal('nfe'),emitter_name:z.string().min(1).max(1000),emitter_document:z.string().regex(/^(\d{11}|\d{14})$/),document_number:z.string().regex(/^\d{1,9}$/),series:z.string().regex(/^\d{1,3}$/),access_key:z.string().regex(/^\d{44}$/),issue_date:date,amount_cents:cents,signature_verified:z.literal(false),antivirus_verified:z.literal(false)}).strict();
 export const payableXmlArtifactSchema=z.object({version:z.literal(1),tenant_id:uuid,actor_id:uuid,request_id:uuid,artifact_id:uuid,sha256:hash,size_bytes:z.number().int().min(1).max(2_000_000),state:z.enum(['reserved','original_quarantined']),summary:payableXmlSummarySchema.nullable(),signature_verified:z.literal(false),antivirus_verified:z.literal(false)}).strict().refine(v=>(v.state==='original_quarantined')===(v.summary!==null));

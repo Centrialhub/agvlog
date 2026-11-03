@@ -80,7 +80,7 @@ export async function readAutomaticReconciliationStatus(tenant:string,statement:
   if(result.tenant_id!==tenant||result.import_id!==statement)throw new Error('Conciliação fora do contexto.');return result;
 }
 async function rpc(name: string, args: Record<string, unknown>) {
-  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as FinanceRpc)(name, args);
+  const { data, error } = await (supabase as unknown as {rpc:FinanceRpc}).rpc(name, args);
   if (error) {
     // A PostgreSQL rejection rolled back the transaction; network/unknown
     // failures remain recoverable with the frozen request identity.
@@ -90,7 +90,7 @@ async function rpc(name: string, args: Record<string, unknown>) {
   return data;
 }
 export async function readFinanceAccess(tenant: string) {
-  const {data:value,error}=await(supabase.rpc.bind(supabase) as unknown as FinanceRpc)('get_finance_access',{_tenant_id:tenant});
+  const {data:value,error}=await(supabase as unknown as {rpc:FinanceRpc}).rpc('get_finance_access',{_tenant_id:tenant});
   if(error){
     if(error.code==='PGRST202'||error.code==='42883')throw new FinanceUnavailableError();
     throw new Error(error.message);
@@ -165,7 +165,7 @@ export async function readFinanceAudit(tenant:string,filters:FinanceAuditFilters
   if(result.tenant_id!==tenant||result.page!==filters.page||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Auditoria fora do contexto.');return result;
 }
 export async function readFinanceMovements(tenant: string, filters: MovementFilters) {
-  if(filters.driver_id!==undefined)z.string().uuid().parse(filters.driver_id);
+  if(filters.driver_id!==undefined)z.string().guid().parse(filters.driver_id);
   const page = movementListSchema.parse(await rpc('list_finance_movements', { _tenant_id: tenant, _filters: filters }));
   if (page.tenant_id !== tenant || page.page !== filters.page || page.page_size !== filters.page_size || page.rows.some(row => row.tenant_id !== tenant || (filters.driver_id!==undefined && row.driver_id!==filters.driver_id))) {
     throw new Error('Finance response scope mismatch');
@@ -245,6 +245,6 @@ export async function readPayrollPeriodPage(tenant:string,page:number,pageSize=3
 const statementOriginalLocatorSchema=z.object({bucket:z.string().min(1),path:z.string().min(1)}).strict();
 export async function getFinanceStatementOriginalLocator(tenant:string,importId:string){return statementOriginalLocatorSchema.parse(await rpc('get_finance_statement_original_locator_v1',{_tenant_id:tenant,_import_id:importId}));}
 export async function reassignFinanceStatementAccount(tenant:string,importId:string,accountId:string,reason:string,requestId:string){
- const result=z.object({confirmed:z.literal(true),import_id:z.string().uuid(),bank_account_id:z.string().uuid(),request_id:z.string().uuid()}).parse(await rpc('reassign_finance_statement_account_v1',{_tenant_id:tenant,_import_id:importId,_account_id:accountId,_reason:reason.trim(),_request_id:requestId}));
+ const result=z.object({confirmed:z.literal(true),import_id:z.string().guid(),bank_account_id:z.string().guid(),request_id:z.string().guid()}).parse(await rpc('reassign_finance_statement_account_v1',{_tenant_id:tenant,_import_id:importId,_account_id:accountId,_reason:reason.trim(),_request_id:requestId}));
  if(result.import_id!==importId||result.bank_account_id!==accountId||result.request_id!==requestId)throw new Error('Resposta de correção fora do pedido.');return result;
 }

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {expenseArtifactCommandSchema,sendExpenseArtifact,ExpenseArtifactRejectedError,type ExpenseArtifactCommand} from './expenseArtifactClient';
-const storedSchema=z.object({actor:z.string().uuid(),uncertain:z.boolean(),command:expenseArtifactCommandSchema}).strict();
+const storedSchema=z.object({actor:z.string().guid(),uncertain:z.boolean(),command:expenseArtifactCommandSchema}).strict();
 export const expenseArtifactKey=(tenant:string,actor:string,expense:string)=>`finance-expense-artifact:${tenant}:${actor}:${expense}`;
 export function loadExpenseArtifactPending(tenant:string,actor:string,expense:string){
  const raw=localStorage.getItem(expenseArtifactKey(tenant,actor,expense));if(!raw)return null;

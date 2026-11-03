@@ -207,7 +207,7 @@ export function useIncidentActions(incidentId?: string) {
 export function useSetEmployeeIncidentActionStatus(){
   const qc=useQueryClient();
   return useMutation({mutationFn:async(input:{id:string;incidentId:string;status:'completed'|'cancelled'})=>{
-    const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>)('set_employee_incident_action_status_v1',{_action_id:input.id,_status:input.status});
+    const {data,error}=await ((supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>).bind(supabase))('set_employee_incident_action_status_v1',{_action_id:input.id,_status:input.status});
     if(error)throw error;return data;
   },onSuccess:()=>qc.invalidateQueries({queryKey:['employee_incident_actions'],exact:false})});
 }

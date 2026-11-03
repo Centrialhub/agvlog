@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { Membership } from '@/lib/tenantMemberships';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const claimsSchema = z.object({
   sub: uuid, role: z.literal('authenticated'), active_tenant_id: uuid,
   active_workspace_id: uuid, session_id: uuid, exp: z.number().int().positive(),

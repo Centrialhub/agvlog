@@ -1,7 +1,7 @@
 import {receivableAdjustmentTextFields,creditCompositionValid} from './receivableCreditAmounts';
 import {z} from 'zod';
 import {receivableAgreementAllocationSchema} from './receivableAgreementContract';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d{0,13})$/),positive=z.string().regex(/^[1-9]\d{0,13}$/);
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d{0,13})$/),positive=z.string().regex(/^[1-9]\d{0,13}$/);
 const safe=(v:unknown):v is string=>typeof v==='string'&&/^(0|[1-9]\d{0,13})$/.test(v);
 const issue=(ctx:z.RefinementCtx)=>ctx.addIssue({code:'custom',message:'Valores ou identidades do crédito inconsistentes.'});
 export const customerCreditPositionSchema=z.object({version:z.literal(1),tenant_id:id,credit_id:id,payer_id:id,valid:z.boolean(),original_cents:cents,applied_cents:cents.nullable(),released_cents:cents,returned_cents:cents.nullable().optional(),available_cents:cents.nullable(),binding_revision:revision,source_revision:revision,revision}).strict();

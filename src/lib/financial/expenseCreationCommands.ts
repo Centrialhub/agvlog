@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),text=z.string().max(2000).nullable().optional();
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),text=z.string().max(2000).nullable().optional();
 export const receiptSchema=z.object({sha256:z.string().regex(/^[a-f0-9]{64}$/),mime:z.enum(['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf']),size:z.number().int().positive().max(10485760)}).strict();
 export const expenseFieldsSchema=z.object({
  category:z.enum(['fuel','food','toll','maintenance','parking','other']),amount_cents:z.number().int().positive().max(99999999999999),expense_at:z.string().datetime({offset:true}),

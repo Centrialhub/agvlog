@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ParsedSpreadsheet } from './spreadsheetLoadImport';
 import type { ParsedCte, ParsedNfe } from './xmlLoadImport';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const nullableText = (max: number) => z.string().max(max).nullable();
 const nullableDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 const natural = z.number().int().nonnegative().max(99_999_999_999_999);

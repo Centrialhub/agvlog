@@ -93,7 +93,7 @@ export function useClientInvoices(filters:InvoicePageFilters={search:'',status:'
     retry:false,
     queryFn: async ({signal}) => {
       if(!currentTenant||!user)throw new Error('Selecione a empresa.');
-      const rpc=supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>{abortSignal:(signal:AbortSignal)=>PromiseLike<{data:unknown;error:{message:string}|null}>};
+      const rpc=(supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>{abortSignal:(signal:AbortSignal)=>PromiseLike<{data:unknown;error:{message:string}|null}>}).bind(supabase);
       const {data,error}=await rpc('list_client_invoice_financial_page',{_tenant_id:currentTenant.id,_filters:filters,_page:page,_revision:revision}).abortSignal(signal);
       if(error)throw new Error(error.message);
       return parseInvoicePage(data,currentTenant.id,user.id,filters,page);

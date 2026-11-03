@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),cents=z.string().regex(/^\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),cents=z.string().regex(/^\d+$/),revision=z.string().regex(/^[a-f0-9]{32}$/);
 const nullableCents=cents.nullable();
 
 export const driverAdvanceReturnHistorySchema=z.object({

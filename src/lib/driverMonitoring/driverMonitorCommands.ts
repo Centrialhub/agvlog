@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const id = z.string().uuid();
+const id = z.string().guid();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const instant = z.string().datetime({ offset: true });
 const status = z.enum([

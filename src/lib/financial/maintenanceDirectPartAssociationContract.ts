@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid(),
+const uuid = z.string().guid(),
   reason = z.string().trim().min(10).max(2000),
   cents = z.string().regex(/^\d+$/),
   revision = z.string().regex(/^[a-f0-9]{32}$/),

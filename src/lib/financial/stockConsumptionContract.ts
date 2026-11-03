@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid(),
+const uuid = z.string().guid(),
   reason = z.string().trim().min(10).max(2000),
   revision = z.string().regex(/^[a-f0-9]{32}$/),
   quantity = z
@@ -205,7 +205,7 @@ export const stockConsumptionPreviewSchema = z
       )
       .min(1)
       .max(100),
-    snapshot: z.record(z.unknown()),
+    snapshot: z.record(z.string(), z.unknown()),
   })
   .superRefine((data, ctx) => {
     if (

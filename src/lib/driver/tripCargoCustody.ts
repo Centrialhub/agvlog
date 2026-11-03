@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { acknowledgeDurableOperatorCommand, prepareDurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 export const tripCargoStatuses = [
   'pending_acceptance', 'accepted', 'loading', 'ready_to_depart', 'departed', 'returned', 'closed',
 ] as const;
@@ -194,7 +194,7 @@ export function buildTripCargoDivergenceCommand(input: {
 }
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>;
-const rpc = ((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
+const rpc = ((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
 
 function invalidResponse() {
   return new Error('O servidor retornou um dossiê de carga inválido. Atualize antes de continuar.');

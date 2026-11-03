@@ -8,7 +8,7 @@ import type { CompanyProfile } from '@/hooks/useCompanyProfile';
 import type { Json } from '@/integrations/supabase/types';
 
 const emitterSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   cnpj: z.string(),
   razao_social: z.string(),
   nome_fantasia: z.string().nullable(),
@@ -25,7 +25,7 @@ const companySchema = z.object({
 }).passthrough();
 
 const workspaceTenantSchema = z.object({
-  id: z.string().uuid(), workspace_id: z.string().uuid(), name: z.string(), plan_key: z.string(),
+  id: z.string().guid(), workspace_id: z.string().guid(), name: z.string(), plan_key: z.string(),
   timezone: z.string(), company: companySchema, emitters: z.array(emitterSchema),
 });
 
@@ -85,7 +85,7 @@ export function useCreateWorkspaceTenant() {
         _initial_emitter: (input.initial_emitter || undefined) as Json | undefined,
       });
       if (error) throw error;
-      return z.object({ tenant_id: z.string().uuid(), default_emitter_id: z.string().uuid().nullable() }).parse(data);
+      return z.object({ tenant_id: z.string().guid(), default_emitter_id: z.string().guid().nullable() }).parse(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace_tenants'] });

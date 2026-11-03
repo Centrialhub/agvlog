@@ -44,10 +44,10 @@ export const BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS: ReceiptScanQualityThresho
 
 export const receiptScanQualityPolicySchema = z.object({
   source: z.enum(['client', 'tenant', 'baseline']),
-  policy_id: z.string().uuid().nullable(),
+  policy_id: z.string().guid().nullable(),
   version: z.number().int().positive(),
-  tenant_id: z.string().uuid(),
-  client_id: z.string().uuid().nullable(),
+  tenant_id: z.string().guid(),
+  client_id: z.string().guid().nullable(),
   thresholds: receiptScanQualityThresholdsSchema,
   resolved_at: z.string().datetime({ offset: true }),
 }).strict().superRefine((value, context) => {
@@ -59,23 +59,23 @@ export const receiptScanQualityPolicySchema = z.object({
 export type ReceiptScanQualityPolicy = z.infer<typeof receiptScanQualityPolicySchema>;
 
 const policyRowSchema = z.object({
-  id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
-  client_id: z.string().uuid().nullable(),
+  id: z.string().guid(),
+  tenant_id: z.string().guid(),
+  client_id: z.string().guid().nullable(),
   client_name: z.string().nullable(),
   scope: z.enum(['client', 'tenant']),
   version: z.number().int().positive(),
   thresholds: receiptScanQualityThresholdsSchema,
   is_active: z.boolean(),
   created_at: z.string().datetime({ offset: true }),
-  created_by: z.string().uuid(),
+  created_by: z.string().guid(),
   retired_at: z.string().datetime({ offset: true }).nullable(),
 }).strict();
 
 const policyPageSchema = z.object({
   version: z.literal(1),
-  tenant_id: z.string().uuid(),
-  actor_id: z.string().uuid(),
+  tenant_id: z.string().guid(),
+  actor_id: z.string().guid(),
   baseline: receiptScanQualityThresholdsSchema,
   rows: z.array(policyRowSchema),
 }).strict();
@@ -84,11 +84,11 @@ export type ReceiptScanQualityPolicyRow = z.infer<typeof policyRowSchema>;
 export type ReceiptScanQualityPolicyPage = z.infer<typeof policyPageSchema>;
 
 const savedPolicySchema = z.object({
-  id: z.string().uuid(), client_id: z.string().uuid().nullable(), scope: z.enum(['client', 'tenant']),
+  id: z.string().guid(), client_id: z.string().guid().nullable(), scope: z.enum(['client', 'tenant']),
   version: z.number().int().positive(), thresholds: receiptScanQualityThresholdsSchema,
   updated_at: z.string().datetime({ offset: true }), confirmed: z.literal(true),
 }).strict();
-const retiredPolicySchema = z.object({ id: z.string().uuid(), retired: z.literal(true), confirmed: z.literal(true) }).strict();
+const retiredPolicySchema = z.object({ id: z.string().guid(), retired: z.literal(true), confirmed: z.literal(true) }).strict();
 const cacheSchema = z.object({ version: z.literal(1), stored_at: z.string().datetime({ offset: true }), policy: receiptScanQualityPolicySchema }).strict();
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
@@ -104,7 +104,7 @@ type QualityPolicyRpcArgs = {
   };
 };
 interface RpcResponse { data: unknown; error: { code?: string; message?: string } | null }
-const rpc = ((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as <Name extends keyof QualityPolicyRpcArgs>(
+const rpc = ((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as <Name extends keyof QualityPolicyRpcArgs>(
   name: Name,
   args: QualityPolicyRpcArgs[Name],
 ) => PromiseLike<RpcResponse>;

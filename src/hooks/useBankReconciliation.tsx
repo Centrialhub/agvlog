@@ -76,7 +76,7 @@ export type ReconciliationStatus = 'unmatched' | 'suggested' | 'matched' | 'igno
 export type LegacyTransactionView = 'all' | 'unmatched';
 export type LegacyObligationView = 'all' | 'unmatched' | 'drivers';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const cents = z.string().regex(/^\d+$/);
 const suggestedMatchSchema = z.object({
@@ -179,7 +179,7 @@ type FinanceRpc = (
 ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
 async function legacyRpc(name: string, args: Record<string, unknown>) {
-  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as FinanceRpc)(name, args);
+  const { data, error } = await ((supabase.rpc as unknown as FinanceRpc).bind(supabase))(name, args);
   if (error) throw new Error(error.message);
   return data;
 }

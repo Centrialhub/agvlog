@@ -48,12 +48,12 @@ export interface MdfeManifest {
 }
 
 const preparedSchema = z.object({
-  id: z.string().uuid(),
-  tenant_id: z.string().uuid(),
-  load_id: z.string().uuid(),
-  emitter_id: z.string().uuid(),
+  id: z.string().guid(),
+  tenant_id: z.string().guid(),
+  load_id: z.string().guid(),
+  emitter_id: z.string().guid(),
   environment: z.enum(['sandbox', 'homologation', 'production']),
-  request_payload: z.record(z.unknown()),
+  request_payload: z.record(z.string(), z.unknown()),
   status: z.string(),
 }).passthrough();
 

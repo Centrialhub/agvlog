@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {customerCreditRefundExpectedSchema,customerCreditRefundCommandSchema,customerCreditRefundResultSchema,parseCustomerCreditRefundResult} from './customerCreditRefundContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=customerCreditRefundCommandSchema.omit({version:true,tenant_id:true,request_id:true}).extend({expected:customerCreditRefundExpectedSchema}).refine(v=>v.amount_cents===v.expected.effects.amount_cents);
 export type CustomerCreditRefundInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof customerCreditRefundCommandSchema>;

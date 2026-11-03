@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {customerCreditPositionSchema} from './customerCreditContract';
-const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),doc=z.string().regex(/^(\d{11}|\d{14})$/).nullable();
+const id=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),positive=z.string().regex(/^[1-9]\d{0,13}$/),signed=z.string().regex(/^-?\d+$/),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),doc=z.string().regex(/^(\d{11}|\d{14})$/).nullable();
 const integer=(v:unknown):v is string=>typeof v==='string'&&/^-?\d+$/.test(v);
 const invalid=(ctx:z.RefinementCtx)=>ctx.addIssue({code:'custom',message:'Identidade ou saldo da devolução inconsistente.'});
 export const customerCreditRefundEffectsSchema=z.object({amount_cents:positive,credit_before_cents:cents.nullable(),credit_after_cents:cents.nullable(),movement_available_before_cents:signed,movement_available_after_cents:cents.nullable()}).strict();

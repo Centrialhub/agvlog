@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {closingSourceFilterSchema} from './closingSources';
-const id=z.string().uuid();const text=z.string().max(2000).nullable();
+const id=z.string().guid();const text=z.string().max(2000).nullable();
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);const amount=z.number().finite().min(0).max(999999999999.99);
 export const closingHeaderSchema=z.object({client_id:id.nullable().default(null),payer_client_id:id.nullable().default(null),
  title:z.string().trim().min(1).max(250),report_type:z.enum(['weekly','ten_day','fortnightly','monthly','custom']),report_model:z.enum(['summary','detailed','combined']),

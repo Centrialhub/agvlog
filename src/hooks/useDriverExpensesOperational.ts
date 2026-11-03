@@ -26,7 +26,7 @@ const mayUseOfflineCache=(cause:unknown)=>{
  return error.code===''&&typeof error.message==='string'&&/^TypeError:.*(fetch|network|load failed)/i.test(error.message);
 };
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const sourceSchema=z.object({id,driver_id:id,status:z.enum(['planned','in_transit','completed']),notes:z.string().nullable(),created_at:z.string(),actual_start_at:z.string().nullable(),actual_end_at:z.string().nullable()}).strict();
 const sourcesSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,offset:z.number().int().nonnegative(),total:z.number().int().nonnegative(),rows:z.array(sourceSchema).max(50)}).strict();
 

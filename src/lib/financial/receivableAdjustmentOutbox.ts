@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {receivableAdjustmentExpectedSchema,receivableAdjustmentCommandSchema,receivableAdjustmentResultSchema,parseReceivableAdjustmentResult} from './receivableAdjustmentContract';
-const uuid=z.string().uuid();
-const inputSchema=receivableAdjustmentCommandSchema.innerType().omit({version:true,tenant_id:true,request_id:true}).extend({expected:receivableAdjustmentExpectedSchema}).refine(v=>/^-?\d+$/.test(v.expected.adjustment_delta_cents)&&/^\d+$/.test(v.amount_cents)&&BigInt(v.expected.adjustment_delta_cents)===(v.action==='apply'?1n:-1n)*BigInt(v.amount_cents));
+const uuid=z.string().guid();
+const inputSchema=z.strictObject(receivableAdjustmentCommandSchema.shape).omit({version:true,tenant_id:true,request_id:true}).extend({expected:receivableAdjustmentExpectedSchema}).refine(v=>/^-?\d+$/.test(v.expected.adjustment_delta_cents)&&/^\d+$/.test(v.amount_cents)&&BigInt(v.expected.adjustment_delta_cents)===(v.action==='apply'?1n:-1n)*BigInt(v.amount_cents));
 export type ReceivableAdjustmentInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof receivableAdjustmentCommandSchema>;
 type Result=z.infer<typeof receivableAdjustmentResultSchema>;

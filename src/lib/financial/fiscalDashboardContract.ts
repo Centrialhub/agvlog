@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),amount=z.string().regex(/^\d+$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count=z.number().int().nonnegative(),amount=z.string().regex(/^\d+$/).nullable();
 export type FiscalDashboardFilters={from:string|null;to:string|null;client:string|null;docType:'all'|'cte'|'nfse'};
 export const fiscalDashboardSchema=z.object({version:z.literal(1),tenant_id:uuid,from:date.nullable(),to:date.nullable(),client_id:uuid.nullable(),doc_type:z.enum(['all','cte','nfse']),basis:z.literal('fiscal_receivable_origins'),date_basis:z.literal('incorporated_at'),total_count:count,active_count:count,cancelled_count:count,review_count:count,invalid_count:count,totals_valid:z.boolean(),net_cents:amount,gross_cents:amount,withheld_cents:amount,kinds:z.array(z.object({doc_type:z.enum(['cte','nfse']),active_count:count,net_cents:amount})),months:z.array(z.object({month:z.string().regex(/^\d{4}-\d{2}$/),net_cents:amount})),pending_jobs:count,pending_jobs_scope:z.literal('tenant_all_dates')}).superRefine((data,ctx)=>{
  const values=[data.net_cents,data.gross_cents,data.withheld_cents,...data.kinds.map(row=>row.net_cents),...data.months.map(row=>row.net_cents)];

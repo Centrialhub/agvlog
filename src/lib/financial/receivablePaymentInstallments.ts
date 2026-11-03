@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-const id = z.string().uuid(),
+const id = z.string().guid(),
   revision = z.string().regex(/^[a-f0-9]{32}$/),
   day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const schema = z
@@ -51,7 +51,7 @@ export async function readReceivablePaymentInstallments(
   offset = 0,
   expectedRevision: string | null = null,
 ) {
-  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as Rpc)(
+  const { data, error } = await ((supabase.rpc as unknown as Rpc).bind(supabase))(
     "get_finance_receivable_payment_installments",
     {
       _tenant_id: tenant,

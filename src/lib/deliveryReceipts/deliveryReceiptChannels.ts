@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 
-const id=z.string().uuid(),timestamp=z.string().datetime({offset:true});
+const id=z.string().guid(),timestamp=z.string().datetime({offset:true});
 const documentKind=z.enum(['nfe','nfse','cte','other_fiscal','operational_reference']);
 export const supplierPortalCapabilitiesSchema=z.object({
   receipt_upload:z.boolean(),document_metadata:z.boolean(),supports_idempotency:z.boolean(),multi_receipt_batch:z.boolean(),
@@ -42,7 +42,7 @@ export type DeliveryReceiptChannelOperations=z.infer<typeof responseSchema>;
 
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
+const rpc=((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
 
 export async function getDeliveryReceiptSupplierChannels(tenant:string,actor:string,signal?:AbortSignal){
   const request=rpc('get_delivery_receipt_supplier_channels_v1',{_tenant_id:tenant});

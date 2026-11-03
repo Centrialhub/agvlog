@@ -14,7 +14,7 @@ import {payableMovementOptionSchema,type PayableMovementOption} from '@/lib/fina
 import {financeError,formatFinanceCents,parseFinanceAmount} from '@/lib/financial/ledgerContract';
 import {ManualExpenseMovementPicker} from './ManualExpenseMovementPicker';
 import {removeSecureFiles} from '@/lib/secureUpload';
-const savedSchema=z.object({actor:z.string().uuid(),command:manualExpenseCommandSchema,choice:payableMovementOptionSchema.nullable(),centerName:z.string().optional()});
+const savedSchema=z.object({actor:z.string().guid(),command:manualExpenseCommandSchema,choice:payableMovementOptionSchema.nullable(),centerName:z.string().optional()});
 type Saved=z.infer<typeof savedSchema>;
 export function ManualExpenseWorkspace({tenant,actor,onClose}:{tenant:string;actor:string;onClose:()=>void}){
  const key=`finance-manual-expense:${tenant}:${actor}`,qc=useQueryClient(),clients=useClients(),centers=useCostCenters();

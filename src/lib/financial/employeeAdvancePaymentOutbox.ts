@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {employeeAdvancePaymentExpectedSchema,employeeAdvancePaymentCommandSchema,employeeAdvancePaymentResultSchema,parseEmployeeAdvancePaymentResult} from './employeeAdvancePaymentContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=employeeAdvancePaymentCommandSchema.omit({version:true,tenant_id:true,request_id:true}).extend({expected:employeeAdvancePaymentExpectedSchema}).refine(v=>/^[1-9][0-9]{0,13}$/.test(v.expected.paid_cents)&&/^[1-9][0-9]{0,13}$/.test(v.amount_cents)&&BigInt(v.expected.paid_cents)>=BigInt(v.amount_cents));
 export type EmployeeAdvancePaymentInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof employeeAdvancePaymentCommandSchema>;

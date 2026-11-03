@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {unloadingProjectionRepairCommandSchema,unloadingProjectionRepairResultSchema,parseUnloadingProjectionRepairResult} from './unloadingProjectionRepairCommandContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=z.object({chargeId:uuid,receivableId:uuid,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(value=>value.trim().length>=10&&value.trim().length<=2000,'Informe motivo entre 10 e 2.000 caracteres.')}).strict();
 export type UnloadingProjectionRepairInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof unloadingProjectionRepairCommandSchema>;

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {employeeAdvanceRegistrationCommandSchema,employeeAdvanceRegistrationResultSchema,parseEmployeeAdvanceRegistrationResult} from './employeeAdvanceRegistrationContract';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 const inputSchema=employeeAdvanceRegistrationCommandSchema.omit({version:true,tenant_id:true,request_id:true});
 export type EmployeeAdvanceRegistrationInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof employeeAdvanceRegistrationCommandSchema>;

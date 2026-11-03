@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/);
 const cents=z.string().regex(/^[1-9]\d{0,13}$/),observedCents=z.string().regex(/^-?\d+$/).nullable();
 const original=z.object({supplier_id:uuid,supplier_name:z.string().nullable(),amount_cents:cents,delivery_stop_id:uuid}).strict();
 const projection=z.object({client_id:uuid.nullable(),amount_cents:observedCents}).strict();

@@ -2,7 +2,7 @@ import {z} from 'zod';
 
 import {supabase} from '@/integrations/supabase/client';
 
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 
 export const tripCancellationCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,trip_id:uuid,expected_revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().trim().min(10).max(2000)}).strict();
 
@@ -17,7 +17,7 @@ export class TripCancellationRejected extends Error{}
 
 async function call(name:string,args:Record<string,unknown>){
 
- const {data,error}=await(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
+ const {data,error}=await((supabase.rpc as unknown as Rpc).bind(supabase))(name,args);
 
  if(error){if(/^(22|23|40|42|55)/.test(error.code||''))throw new TripCancellationRejected('O servidor recusou o cancelamento. Consulte novamente a viagem e seus impedimentos.');throw Error('Não foi possível confirmar a resposta. O pedido foi preservado para retomar.');}return data;
 

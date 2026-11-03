@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),cents=z.number().int().nonnegative().max(99999999999999);
+const uuid=z.string().guid(),cents=z.number().int().nonnegative().max(99999999999999);
 const intervention=z.object({id:uuid,actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string()});
 const common={link_id:uuid,payment_id:uuid,receivable_id:uuid,reference:z.string(),created_at:z.string(),amount_cents:cents,
  credit:z.object({id:uuid,amount_cents:cents,created_at:z.string()}).nullable(),reversal_id:uuid.nullable(),

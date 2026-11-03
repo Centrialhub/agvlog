@@ -1,6 +1,6 @@
 import {receivableCreditTextFields,creditCompositionValid,legacyReceivableCents} from './receivableCreditAmounts';
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 const pageObject=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.literal(50),total:z.number().int().nonnegative(),total_unfiltered:z.number().int().nonnegative(),rows:z.array(z.object({
  ...receivableCreditTextFields,open_cents:z.string().regex(/^(0|[1-9]\d*)$/).nullable().optional(),id:uuid,tenant_id:uuid,client_id:uuid.nullable(),description:z.string().nullable(),invoice_number:z.string().nullable(),notes:z.string().nullable(),amount:z.number().finite(),received_amount:z.number().finite().nullable(),status:z.string(),due_date:date,client_invoice_id:uuid.nullable(),clients:z.object({company_name:z.string().nullable()}).nullable(),
 }).passthrough()).max(50)});

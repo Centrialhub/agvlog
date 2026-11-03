@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),signed=z.string().regex(/^-?\d+$/),unsigned=z.string().regex(/^\d+$/);
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),signed=z.string().regex(/^-?\d+$/),unsigned=z.string().regex(/^\d+$/);
 const kind=z.enum(['bank','cash','unsupported']);
 export const periodMoneyPackageFiltersSchema=z.object({tenant:uuid,from:date,to:date,accountIds:z.array(uuid)}).refine(v=>v.from<=v.to&&new Set(v.accountIds).size===v.accountIds.length,{message:'Confira o período e selecione cada conta apenas uma vez.'});
 const balances=z.object({opening_cents:signed.nullable(),in_cents:unsigned.nullable(),out_cents:unsigned.nullable(),closing_cents:signed.nullable()});

@@ -15,19 +15,19 @@ export const payrollPaymentSummarySchema=z.object({
   status:z.enum(['unpaid','partial','paid','review','cancelled']),bank_confirmation:z.literal('not_evaluated'),
 });
 export type PayrollPaymentSummary=z.infer<typeof payrollPaymentSummarySchema>;
-export const payrollPeriodsProjectionSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),page:z.number().int().positive().optional(),page_size:z.number().int().positive().optional(),total:z.number().int().nonnegative().optional(),snapshot_at:z.string().datetime({offset:true}).optional(),collection_revision:z.string().regex(/^[0-9a-f]{64}$/).optional(),rows:z.array(z.object({
-  id:z.string().uuid(),tenant_id:z.string().uuid(),status:z.string(),payment_status:payrollPaymentSummarySchema.shape.status,
+export const payrollPeriodsProjectionSchema=z.object({version:z.literal(1),tenant_id:z.string().guid(),page:z.number().int().positive().optional(),page_size:z.number().int().positive().optional(),total:z.number().int().nonnegative().optional(),snapshot_at:z.string().datetime({offset:true}).optional(),collection_revision:z.string().regex(/^[0-9a-f]{64}$/).optional(),rows:z.array(z.object({
+  id:z.string().guid(),tenant_id:z.string().guid(),status:z.string(),payment_status:payrollPaymentSummarySchema.shape.status,
   remaining_amount:amount,payment_issues_count:z.number().int().nonnegative(),bank_confirmation:z.literal('not_evaluated'),
 }).passthrough())});
-export const payrollProjectionSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),period_id:z.string().uuid(),
-  rows:z.array(z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),payroll_period_id:z.string().uuid(),
-    employee_id:z.string().uuid(),status:z.string(),gross_amount:z.number(),discount_amount:z.number(),
+export const payrollProjectionSchema=z.object({version:z.literal(1),tenant_id:z.string().guid(),period_id:z.string().guid(),
+  rows:z.array(z.object({id:z.string().guid(),tenant_id:z.string().guid(),payroll_period_id:z.string().guid(),
+    employee_id:z.string().guid(),status:z.string(),gross_amount:z.number(),discount_amount:z.number(),
     already_paid_amount:z.number(),amount_to_pay:z.number(),payment_summary:payrollPaymentSummarySchema,
     employees:z.object({name:z.string().nullable(),doc_cpf:z.string().nullable(),branch:z.string().nullable(),department:z.string().nullable()}),
   }).passthrough()),
 });
 const payrollTotalsSchema=z.object({gross:amount,discount:amount,already_paid:amount,carryover_in:amount,carryover_out:amount,title_paid:amount,remaining:amount});
-export const payrollProjectionPageSchema=z.object({version:z.literal(2),tenant_id:z.string().uuid(),period_id:z.string().uuid(),
+export const payrollProjectionPageSchema=z.object({version:z.literal(2),tenant_id:z.string().guid(),period_id:z.string().guid(),
  page:z.number().int().positive(),page_size:z.literal(50),search:z.string(),payment_filter:z.enum(['all','unpaid','partial','paid','review','cancelled']),
  total:z.number().int().nonnegative(),filtered_total:z.number().int().nonnegative(),has_more:z.boolean(),totals:payrollTotalsSchema,
  rows:payrollProjectionSchema.shape.rows.max(50),

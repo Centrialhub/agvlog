@@ -1,6 +1,6 @@
 import {receivableCreditNumberFields,creditCompositionValid,legacyReceivableCents} from '@/lib/financial/receivableCreditAmounts';
 import {z} from 'zod';
-const id=z.string().uuid();const revision=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const id=z.string().guid();const revision=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const closingActionName=z.enum(['close','cancel','reopen','mark_sent']);
 export type ClosingAction=z.infer<typeof closingActionName>;
 export const closingActionLabels:Record<ClosingAction,string>={close:'Fechar relatório',cancel:'Cancelar fechamento',reopen:'Reabrir para conferência',mark_sent:'Registrar envio'};

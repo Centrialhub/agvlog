@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {cashCountsSchema} from './cashOpeningContract';
 import {accountPeriodReopenCommandSchema} from './accountPeriodCloseContract';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/),signed=z.string().regex(/^-?\d+$/),base={version:z.literal(1),tenant_id:uuid,request_id:uuid};
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),reason=z.string().trim().min(10).max(2000),cents=z.string().regex(/^\d+$/),signed=z.string().regex(/^-?\d+$/),base={version:z.literal(1),tenant_id:uuid,request_id:uuid};
 export const cashPeriodCountCommandSchema=z.object({...base,account_id:uuid,period_end:date,counts:cashCountsSchema,custodian_name:z.string().trim().min(2).max(200),reason,counted_at_boundary:z.literal('end_of_day')}).strict();
 export const cashPeriodCountReverseCommandSchema=z.object({...base,count_id:uuid,revision,reason}).strict();
 export const cashPeriodCloseCommandSchema=z.object({...base,account_id:uuid,from:date,to:date,count_id:uuid,revision,reason}).strict().refine(value=>value.from<=value.to);

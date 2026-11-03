@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32,64}$/),reason=z.string().trim().min(10).max(2000);
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32,64}$/),reason=z.string().trim().min(10).max(2000);
 const base={version:z.literal(1),tenant_id:uuid,request_id:uuid};
 export const accountPeriodCloseCommandSchema=z.object({...base,account_id:uuid,from:date,to:date,revision,reason}).strict().refine(data=>data.from<=data.to,{message:'Intervalo do fechamento inválido.'});
 export const accountPeriodReopenCommandSchema=z.object({...base,closure_id:uuid,revision,reason}).strict();

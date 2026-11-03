@@ -81,10 +81,10 @@ export default function IngestionReports() {
     queryKey: ['ingestion_report_index', currentTenant?.id, currentTenant?.timezone, from, to, batch, page, snapshotAt],
     enabled: !!currentTenant,
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc.bind(supabase) as unknown as (
+      const { data, error } = await ((supabase.rpc as unknown as (
         name: string,
         args: Record<string, unknown>,
-      ) => Promise<{ data: unknown; error: unknown }>)('get_ingestion_report_index_v1', {
+      ) => Promise<{ data: unknown; error: unknown }>).bind(supabase))('get_ingestion_report_index_v1', {
         _tenant_id: currentTenant!.id,
         _from: from ? dateOnlyUtcRange(from, currentTenant!.timezone).from : null,
         _to: to ? dateOnlyUtcRange(to, currentTenant!.timezone).toExclusive : null,

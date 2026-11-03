@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
 import {deliveryReceiptCoverConfigSchema,type DeliveryReceiptCoverConfig} from './deliveryReceiptSupplier';
 
-const id=z.string().uuid();
+const id=z.string().guid();
 const nullableText=z.string().nullable();
 const documentSchema=z.object({
   id,kind:z.enum(['nfe','nfse','cte','other_fiscal','operational_reference']),number:nullableText,
@@ -115,7 +115,7 @@ type ReceiptRpcArgs={
 };
 interface RpcResponse {data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
+const rpc=((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
 
 export async function listDeliveryReceipts(tenant:string,actor:string,filters:DeliveryReceiptFilters,
   pagination:DeliveryReceiptPagination={},signal?:AbortSignal) {

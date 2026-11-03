@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid();
+const uuid=z.string().guid();
 export const nativeStatementAccountSchema=z.object({version:z.literal(1),tenant_id:uuid,import_id:uuid,bank_account_id:uuid,account_name:z.string(),
  status:z.enum(['matched_exact','mismatch','incomplete','source_unverified','unsupported_format','ambiguous']),method:z.literal('ofx_exact_v1'),source_verification_id:uuid.nullable(),matching_account_count:z.number().int().nonnegative(),
  revision:z.string().regex(/^[a-f0-9]{32}$/),coverage_verification:z.literal('pending'),checks:z.array(z.object({

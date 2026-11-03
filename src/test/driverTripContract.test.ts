@@ -13,6 +13,7 @@ const baseTrip: Omit<DriverTripQueryRow, 'dispatch_trip_loads'> = {
   tenant_id: 'tenant-1',
   driver_id: 'driver-1',
   vehicle_id: null,
+  tracker_link_id: null,
   load_id: null,
   status: 'in_transit',
   notes: null,

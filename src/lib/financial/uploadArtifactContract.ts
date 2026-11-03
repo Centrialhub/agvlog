@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/);
+const uuid=z.string().guid(),hash=z.string().regex(/^[a-f0-9]{64}$/);
 export const uploadArtifactSchema=z.object({
  version:z.literal(2),tenant_id:uuid,actor_id:uuid,request_id:uuid,artifact_id:uuid,
  source_type:z.enum(['trip','settlement','bank_account','expense_item','expense_draft']),source_id:uuid,

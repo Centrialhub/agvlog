@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {payableXmlCommandSchema,payableXmlResultSchema,parsePayableXmlResult} from './payableXmlContract';
-const uuid=z.string().uuid();
-const inputSchema=payableXmlCommandSchema.innerType().omit({version:true,tenant_id:true,request_id:true});
+const uuid=z.string().guid();
+const inputSchema=z.strictObject(payableXmlCommandSchema.shape).omit({version:true,tenant_id:true,request_id:true});
 export type PayableXmlInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof payableXmlCommandSchema>;
 type Result=z.infer<typeof payableXmlResultSchema>;

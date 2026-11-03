@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),signed=z.string().regex(/^-?\d+$/);
+const uuid=z.string().guid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d*)$/),signed=z.string().regex(/^-?\d+$/);
 export const costFundingSourceSchema=z.object({source_kind:z.enum(['expense_allocation','payable_link']),source_id:uuid,movement_id:uuid,payment_id:uuid.nullable(),gross_reserved_cents:cents,responsible_id:uuid.nullable(),responsible_name:z.string().nullable(),responsible_type:z.enum(['driver','supplier']),disposition_type:z.enum(['driver_custody','payment_recovery'])}).strict();
 export const costDispositionPreviewSchema=costFundingSourceSchema.extend({applied_cents:cents,residual_cents:signed,status:z.literal('pending')});
 export const costDispositionReturnHistorySchema=z.object({id:uuid,request_id:uuid,incoming_movement_id:uuid,amount_cents:cents,occurred_on:z.string(),actor_id:uuid,actor_name:z.string().nullable(),reason:z.string(),created_at:z.string()}).strict();

@@ -1,6 +1,6 @@
 import {expenseCostCoverageSchema} from './expenseCostFundingContract';
 import {z} from 'zod';
-const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
+const uuid=z.string().guid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
 export const payablePortfolioFiltersSchema=z.object({visibility:z.enum(['active','archived','all']).optional(),date_basis:z.enum(['created_at','due_date']),from:date.nullable(),to:date.nullable(),category:z.string().trim().max(100).nullable(),supplier_id:uuid.nullable(),search:z.string().trim().max(200).nullable().optional(),status:z.enum(['pending','approved','partial','paid','overdue','cancelled','unknown']).nullable().optional(),source:z.enum(['manual','system','unknown']).nullable().optional()}).strict().refine(v=>!v.from||!v.to||v.from<=v.to);
 export type PayablePortfolioFilters=z.infer<typeof payablePortfolioFiltersSchema>;
 const costVersion=z.object({expense_id:uuid,verified:z.boolean(),amendment_id:uuid.nullable(),revision,amount_cents:cents}).strict();

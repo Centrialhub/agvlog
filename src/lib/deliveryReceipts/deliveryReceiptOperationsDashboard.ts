@@ -4,7 +4,7 @@ import {uploadSecureFile} from '@/lib/secureUpload';
 import {queueAndSendDeliveryReceiptEmail,type DeliveryReceiptEmailDraft,type DeliveryReceiptRow} from './deliveryReceiptOperations';
 import {deliveryReceiptCoverConfigSchema} from './deliveryReceiptSupplier';
 
-const id=z.string().uuid(),timestamp=z.string().datetime({offset:true});
+const id=z.string().guid(),timestamp=z.string().datetime({offset:true});
 export const deliveryReceiptEmailTemplateSchema=z.object({id,tenant_id:id,supplier_key:z.string().nullable(),supplier_name:z.string(),recipients:z.array(z.string().email()).max(10),
   subject_template:z.string(),body_template:z.string(),cover_config:deliveryReceiptCoverConfigSchema,template_version:z.number().int().positive(),is_active:z.boolean(),created_by:id,updated_by:id,created_at:timestamp,updated_at:timestamp}).strict();
 export type DeliveryReceiptEmailTemplate=z.infer<typeof deliveryReceiptEmailTemplateSchema>;
@@ -39,7 +39,7 @@ export type DeliveryReceiptOcrMatch=z.infer<typeof ocrSearchSchema>['rows'][numb
 
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
+const rpc=((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
 
 export async function getDeliveryReceiptOperations(tenant:string,actor:string,signal?:AbortSignal){
   const request=rpc('get_delivery_receipt_operations_v1',{_tenant_id:tenant});const {data,error}=await(signal?request.abortSignal(signal):request);

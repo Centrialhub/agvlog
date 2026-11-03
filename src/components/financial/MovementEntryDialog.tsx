@@ -12,12 +12,12 @@ import { localDateInputValue } from '@/lib/utils/formatDate';
 import { FinanceOptionPicker } from './FinanceOptionPicker';
 
 const formSchema = z.object({ account: z.string(), driver: z.string(), amount: z.string(), date: z.string(),
-  center: z.object({id:z.string().uuid(),label:z.string()}).nullable().default(null),
+  center: z.object({id:z.string().guid(),label:z.string()}).nullable().default(null),
   description: z.string(), beneficiary: z.string(), reference: z.string(), reason: z.string(),
   nature: z.enum(['driver_advance', 'payment', 'receipt', 'refund', 'customer_advance', 'other']), direction: z.enum(['in', 'out']),
 });
 type Form = z.infer<typeof formSchema>;
-const savedSchema = z.object({ form: formSchema, request: z.string().uuid().nullable() });
+const savedSchema = z.object({ form: formSchema, request: z.string().guid().nullable() });
 function initialForm(initialAccount = '', initialDriver?: {id:string;name:string}): Form {
   return { account: initialAccount, center: null, driver: initialDriver?.id ?? '', amount: '', date: localDateInputValue(), description: '',
     beneficiary: initialDriver?.name ?? '', reference: '', reason: '', nature: 'driver_advance', direction: 'out' };

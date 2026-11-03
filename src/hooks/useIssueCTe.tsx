@@ -111,8 +111,8 @@ export function useIssueCTe() {
           throw new Error('Já existe uma operação com outros valores para estas notas. Consulte/recupere a operação no Monitor CT-e antes de alterar a prévia.');
         throw new Error('Não foi possível reservar as notas para emissão: '+prepared.error.message);
       }
-      const parsed = z.object({id:z.string().uuid(),tenant_id:z.string(),emitter_id:z.string(),cte_payload:z.object({
-        environment:z.enum(['sandbox','homologation','production']),emitterCnpj:z.string(),payload:z.record(z.unknown()),
+      const parsed = z.object({id:z.string().guid(),tenant_id:z.string(),emitter_id:z.string(),cte_payload:z.object({
+        environment:z.enum(['sandbox','homologation','production']),emitterCnpj:z.string(),payload:z.record(z.string(), z.unknown()),
       }).passthrough()}).parse(prepared.data);
       if(parsed.tenant_id!==currentTenant.id||parsed.emitter_id!==input.emitter.id||parsed.cte_payload.environment!==environment)
         throw new Error('Reserva fiscal incompatível com a empresa ou ambiente selecionado.');
@@ -244,7 +244,7 @@ export function useResendCte() {
    .eq('tenant_id',currentTenant.id).eq('doc_type','cte').or('fiscal_document_id.eq.'+id+',cte_document_id.eq.'+id).order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(error)throw error;
   if(!emission?.emitter_id||!emission.request_payload)throw new Error('Sem operação fiscal registrada. Volte à prévia de faturamento; não há reenvio automático.');
-  const body=z.object({emitterCnpj:z.string(),environment:z.enum(['sandbox','homologation','production']),payload:z.record(z.unknown())}).passthrough().parse(emission.request_payload);
+  const body=z.object({emitterCnpj:z.string(),environment:z.enum(['sandbox','homologation','production']),payload:z.record(z.string(), z.unknown())}).passthrough().parse(emission.request_payload);
   requireHubEnvironment(body.environment,emission.environment);
   const result=await hubFiscal.emit({type:'cte',emitterId:emission.emitter_id,fiscalDocumentId:emission.fiscal_document_id||undefined,cteDocumentId:emission.cte_document_id||undefined,body});
   if(['rejected','cancelled'].includes(String(result.hub?.document?.status)))throw new Error(result.hub?.document?.message||'Documento recusado ou cancelado. Corrija pela prévia de faturamento.');

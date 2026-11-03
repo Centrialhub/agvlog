@@ -2,11 +2,11 @@ import {supabase} from '@/integrations/supabase/client';
 import {z} from 'zod';
 import {customerCreditRefundCommandSchema,customerCreditRefundPreviewSchema,customerCreditRefundOptionsSchema,customerCreditRefundQuerySchema,type CustomerCreditRefundCommand,type CustomerCreditRefundQuery} from './customerCreditRefundContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;
-const rpc:Rpc=(name,args)=>(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
+const rpc:Rpc=(name,args)=>((supabase.rpc as unknown as Rpc).bind(supabase))(name,args);
 export class CustomerCreditRefundChangedError extends Error{}
 export async function readCustomerCreditRefundOptions(tenant:string,actor:string,credit:string,query:CustomerCreditRefundQuery){const q=customerCreditRefundQuerySchema.parse(query),{data,error}=await rpc('get_finance_customer_credit_refund_options',{_tenant_id:tenant,_credit_id:credit,_query:q});if(error){if(typeof error==='object'&&'code' in error&&error.code==='40001')throw new CustomerCreditRefundChangedError('A consulta mudou. Reinicie a primeira página.');throw error;}const v=customerCreditRefundOptionsSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.credit_id!==credit||v.kind!==q.kind||v.search!==q.search||v.offset!==q.offset||v.limit!==q.limit||q.expected_revision&&v.revision!==q.expected_revision)throw Error('Consulta fora do crédito e sessão solicitados.');return v;}
-const reversalPendingSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),refund_id:z.string().uuid(),request_id:z.string().uuid(),reason:z.string().trim().min(5).max(2000),uncertain:z.boolean()}).strict();
-const reversalResultSchema=z.object({confirmed:z.literal(true),request_id:z.string().uuid(),reversal_id:z.string().uuid(),refund_id:z.string().uuid(),actor_id:z.string().uuid(),replayed:z.boolean()});
+const reversalPendingSchema=z.object({version:z.literal(1),tenant_id:z.string().guid(),actor_id:z.string().guid(),refund_id:z.string().guid(),request_id:z.string().guid(),reason:z.string().trim().min(5).max(2000),uncertain:z.boolean()}).strict();
+const reversalResultSchema=z.object({confirmed:z.literal(true),request_id:z.string().guid(),reversal_id:z.string().guid(),refund_id:z.string().guid(),actor_id:z.string().guid(),replayed:z.boolean()});
 const reversalKey=(tenant:string,actor:string,refund:string)=>`agvlog:customer-credit-refund-reversal:v1:${tenant}:${actor}:${refund}`;
 export function hasPendingCustomerCreditRefundReversal(tenant:string,actor:string,refund:string){return localStorage.getItem(reversalKey(tenant,actor,refund))!==null;}
 export function discardCustomerCreditRefundReversal(tenant:string,actor:string,refund:string){localStorage.removeItem(reversalKey(tenant,actor,refund));}

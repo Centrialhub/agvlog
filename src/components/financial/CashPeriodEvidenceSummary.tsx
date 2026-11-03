@@ -5,7 +5,7 @@ import {cashPeriodCountSchema} from '@/lib/financial/cashPeriodContract';
 import {formatFinanceCents,movementNatures} from '@/lib/financial/ledgerContract';
 const cents=z.string().regex(/^-?\d+$/);
 const snapshotSchema=z.object({evidence_type:z.literal('cash_count_v1'),count:cashPeriodCountSchema,balances:z.object({opening_cents:cents,in_cents:cents,out_cents:cents,expected_closing_cents:cents,counted_closing_cents:cents,difference_cents:cents})});
-const movementsSchema=z.object({movements:z.array(z.object({id:z.string().uuid(),occurred_on:z.string(),description:z.string(),direction:z.enum(['in','out']),nature:z.string(),amount_cents:z.union([z.string().regex(/^\d+$/),z.number().int().nonnegative().safe()]).transform(String)}))});
+const movementsSchema=z.object({movements:z.array(z.object({id:z.string().guid(),occurred_on:z.string(),description:z.string(),direction:z.enum(['in','out']),nature:z.string(),amount_cents:z.union([z.string().regex(/^\d+$/),z.number().int().nonnegative().safe()]).transform(String)}))});
 /** Displays the saved decision only; reopening never replaces these amounts. */
 export function CashPeriodEvidenceSummary({snapshot}:{snapshot:Record<string,unknown>}){
  const [page,setPage]=useState(1);
