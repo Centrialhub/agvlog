@@ -752,6 +752,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     : (/^[56]/.test(rawCfop) ? rawCfop[0] : '5');
   const isTransportCfop = (c: string) =>
     /^[56](3(5[1-9]|60)|932)$/.test(c);
+  if (subcontract && !isTransportCfop(rawCfop)) missing.push('CFOP válido da subcontratação (confira na aba Fiscal)');
   let cfop = rawCfop;
   if (cfop && isTransportCfop(cfop)) {
     if (hasKnownRoute && cfop[0] !== cfopPrefix) {

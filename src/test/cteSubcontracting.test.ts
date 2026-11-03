@@ -28,6 +28,7 @@ describe('subcontratação no builder (sem emissão)', () => {
       (p:BuildCtePayloadInput)=>{p.subcontracting!.originName='';},
       (p:BuildCtePayloadInput)=>{p.documentType='04';},
       (p:BuildCtePayloadInput)=>{p.cfop='';},
+      (p:BuildCtePayloadInput)=>{p.cfop='0000';},
       (p:BuildCtePayloadInput)=>{p.subcontracting!.source.document.referenced_nfe_keys=['2'.repeat(44)];},
     ]) { const p=input();change(p);expect(buildCtePayload(p).ok).toBe(false); }
   });
