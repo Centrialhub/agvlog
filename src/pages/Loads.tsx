@@ -764,7 +764,18 @@ export default function Loads() {
                         </DropdownMenu>
                       )}
 
-                      {!selectionMode && <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+                      {!selectionMode && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`Abrir detalhes da carga ${l.load_number}`}
+                          onClick={() => navigate(`/loads/${l.id}`)}
+                        >
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>
