@@ -2,7 +2,7 @@ import {useQuery} from '@tanstack/react-query';
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 const uuid=z.string().uuid();
-const sourceSchema=z.object({id:uuid,tenant_id:uuid,receivable_id:uuid,supplier_id:uuid,delivery_stop_id:uuid,amount_cents:z.union([z.number().int().positive().max(99999999999999),z.string().regex(/^[1-9]\d{0,13}$/)]),source_snapshot:z.record(z.unknown())});
+const sourceSchema=z.object({id:uuid,tenant_id:uuid,receivable_id:uuid,supplier_id:uuid,delivery_stop_id:uuid,amount_cents:z.union([z.number().int().positive().max(99999999999999),z.string().regex(/^[1-9]\d{0,13}$/)]),source_snapshot:z.record(z.string(), z.unknown())});
 export type ReceivableUnloadingOrigin=z.infer<typeof sourceSchema>;
 type Reader={from:(table:string)=>{select:(columns:string)=>{eq:(field:string,value:string)=>{eq:(field:string,value:string)=>{maybeSingle:()=>PromiseLike<{data:unknown;error:unknown}>}}}}};
 export async function readReceivableUnloadingOrigin(tenant:string,receivable:string){

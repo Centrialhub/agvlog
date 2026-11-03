@@ -11,7 +11,7 @@ export function parsePayableAction(value:unknown):PayableAction{return z.union([
 export class PayableActionRejected extends Error {constructor(message:string,readonly code:string){super(message);}}
 export async function submitPayableAction(command:PayableAction){
  const parsed=parsePayableAction(command),payment='payable_id' in parsed;
- const rpc=supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
+ const rpc=(supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>).bind(supabase);
  const {data,error}=await rpc(payment?'pay_finance_payable_from_account':'archive_finance_payables',{_payload:parsed});
  if(error){if(['22023','23505','23514','42501','55000','40001'].includes(error.code||''))throw new PayableActionRejected(error.message,error.code!);throw new Error(error.message);}
  const result=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,confirmed:z.literal(true)}).passthrough().parse(data);

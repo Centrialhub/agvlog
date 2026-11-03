@@ -205,7 +205,7 @@ export const stockConsumptionPreviewSchema = z
       )
       .min(1)
       .max(100),
-    snapshot: z.record(z.unknown()),
+    snapshot: z.record(z.string(), z.unknown()),
   })
   .superRefine((data, ctx) => {
     if (

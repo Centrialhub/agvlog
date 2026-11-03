@@ -35,7 +35,7 @@ const parseLimit = (value: string) =>
     : /^0(?:[,.]0{1,2})?$/.test(value.trim())
       ? "0"
       : String(parseMoneyCents(value));
-const rpc = ((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (
+const rpc = ((name: unknown, args: unknown) => ((supabase.rpc as unknown as (name: unknown, args: unknown) => unknown).bind(supabase))(name, args)) as unknown as (
   name: string,
   args: Record<string, unknown>,
 ) => PromiseLike<{

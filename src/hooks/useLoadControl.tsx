@@ -251,7 +251,7 @@ export function useUnloadingCharges(filters: { loadId?: string | null; status?: 
     queryFn: async ({ pageParam, signal }) => {
       const offset = Number(pageParam);
       let q = supabase.from('load_unloading_charges')
-        .select('*, load:load_id(id, load_number, external_load_number)', { count: 'exact' })
+        .select('*, load:loads!load_unloading_charges_load_id_fkey(id, load_number, external_load_number)', { count: 'exact' })
         .eq('tenant_id', currentTenant!.id)
         .order('service_date', { ascending: false })
         .order('id', { ascending: false });

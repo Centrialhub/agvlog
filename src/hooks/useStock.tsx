@@ -49,7 +49,7 @@ export function useStockItems(options: { enabled?: boolean } = {}) {
 
 type StockPage<T>={rows:T[];total:number};
 const stockRpc=async(name:string,args:Record<string,unknown>)=>{
-  const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (rpcName:string,rpcArgs:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>)(name,args);
+  const {data,error}=await ((supabase.rpc as unknown as (rpcName:string,rpcArgs:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>).bind(supabase))(name,args);
   if(error)throw error;return data as Record<string,unknown>;
 };
 

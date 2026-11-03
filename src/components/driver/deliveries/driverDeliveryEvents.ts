@@ -54,7 +54,13 @@ export type DriverStopDocument = {
   fiscal_documents: Pick<Tables<'fiscal_documents'>, 'invoice_number' | 'reference_number'> | null;
 };
 
-export type DriverStop = Tables<'dispatch_stops'> & {
+export type DriverStop = Pick<Tables<'dispatch_stops'>,
+  | 'id' | 'tenant_id' | 'dispatch_trip_id' | 'client_id' | 'stop_order' | 'status'
+  | 'destination' | 'latitude' | 'longitude' | 'notes'
+  | 'actual_arrival_at' | 'actual_departure_at' | 'created_at' | 'updated_at'
+  | 'delivery_window_end' | 'delivery_window_start' | 'estimated_departure_at'
+  | 'planned_arrival_at' | 'risk_level' | 'risk_reason' | 'service_time_minutes'
+> & {
   clients: DriverStopClient | null;
   dispatch_stop_documents: DriverStopDocument[];
 };

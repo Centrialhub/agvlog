@@ -2361,7 +2361,8 @@ export type Database = {
           trade_name?: string | null
           updated_at?: string
           updated_by?: string | null
-          workspace_id: string
+          // Derived and checked by private.enforce_workspace_from_tenant().
+          workspace_id?: string
         }
         Update: {
           accounting_code_client?: string | null
@@ -8356,7 +8357,8 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           weight_kg?: number | null
-          workspace_id: string
+          // Derived and checked by private.enforce_workspace_from_tenant().
+          workspace_id?: string
         }
         Update: {
           active?: boolean
@@ -8872,7 +8874,8 @@ export type Database = {
           updated_by?: string | null
           user_id?: string | null
           version?: number
-          workspace_id: string
+          // Derived and checked by private.enforce_workspace_from_tenant().
+          workspace_id?: string
         }
         Update: {
           address?: Json | null
@@ -14833,7 +14836,8 @@ export type Database = {
           token_expires_at?: string | null
           updated_at?: string
           username: string
-          workspace_id: string
+          // Derived and checked by private.enforce_workspace_from_tenant().
+          workspace_id?: string
         }
         Update: {
           base_url?: string
@@ -24414,7 +24418,8 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vehicle_type_code?: string | null
-          workspace_id: string
+          // Derived and checked by private.enforce_workspace_from_tenant().
+          workspace_id?: string
           year_of_manufacture?: number | null
         }
         Update: {
@@ -28002,7 +28007,7 @@ export type Database = {
         Returns: Json
       }
       get_client_invoice_creation_context: {
-        Args: { _draft?: Json; _report_id?: string; _tenant_id: string }
+        Args: { _draft?: Json; _report_id?: string | null; _tenant_id: string }
         Returns: Json
       }
       get_client_pod_metadata: {
@@ -28819,12 +28824,12 @@ export type Database = {
         Args: {
           _cursor_created_at?: string
           _cursor_id?: string
-          _document_type?: string
-          _expected_revision?: number
-          _load_filter?: string
+          _document_type?: string | null
+          _expected_revision?: number | string | null
+          _load_filter?: string | null
           _page_limit?: number
-          _search?: string
-          _status?: string
+          _search?: string | null
+          _status?: string | null
           _tenant_id: string
         }
         Returns: {
@@ -29609,7 +29614,7 @@ export type Database = {
       }
       list_driver_settlement_filter_options: {
         Args: {
-          _expected_revision?: string
+          _expected_revision?: string | null
           _kind: string
           _page?: number
           _page_size?: number

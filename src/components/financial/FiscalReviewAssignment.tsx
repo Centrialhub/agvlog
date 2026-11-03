@@ -75,13 +75,13 @@ export function FiscalReviewAssignment({
           throw new Error("Pedido fora do documento.");
         localStorage.setItem(key, JSON.stringify(command));
         setPending(command);
-        const rpc = supabase.rpc.bind(supabase) as unknown as (
+        const rpc = (supabase.rpc as unknown as (
           name: string,
           args: Record<string, unknown>,
         ) => PromiseLike<{
           data: unknown;
           error: { code?: string; message: string } | null;
-        }>;
+        }>).bind(supabase);
         const { data, error: failure } = await rpc(
           "assign_finance_fiscal_review",
           { _payload: command },

@@ -9,7 +9,7 @@ const commandSchema = z
     kind: z.enum(["payable", "receivable"]),
     id: z.string().uuid().nullable(),
     expected_updated_at: z.string().nullable(),
-    fields: z.record(z.unknown()),
+    fields: z.record(z.string(), z.unknown()),
     duplicate_reason: z.string().max(2000),
   })
   .strict();
@@ -87,13 +87,13 @@ export async function saveManualTitle(
       });
     localStorage.setItem(key, JSON.stringify(command));
     manualTitleChanged();
-    const rpc = supabase.rpc.bind(supabase) as unknown as (
+    const rpc = (supabase.rpc as unknown as (
       name: string,
       args: Record<string, unknown>,
     ) => PromiseLike<{
       data: unknown;
       error: { code?: string; message: string } | null;
-    }>;
+    }>).bind(supabase);
     const { data, error } = await rpc("save_finance_manual_title", {
       _payload: command,
     });

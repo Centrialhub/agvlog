@@ -32,7 +32,7 @@ export function useVehicleMaintenanceList(vehicleId?: string) {
       if (!currentTenant) return [];
       const makeQuery=()=>{let q = supabase
         .from('vehicle_maintenance')
-        .select('*, vehicles(plate, nickname)')
+        .select('*, vehicles!vehicle_maintenance_vehicle_id_fkey(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .order('scheduled_date', { ascending: false, nullsFirst: false }).order('id');
       if (vehicleId) q = q.eq('vehicle_id', vehicleId);

@@ -561,7 +561,7 @@ export function useResendNFSe() {
       .eq('nfse_document_id',id).eq('doc_type','nfse').order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(error)throw error;
     if(!emission?.emitter_id||!emission.request_payload)throw new Error('Sem operação fiscal registrada. Emita pela prévia após conferir os dados.');
-    const body=z.object({emitterCnpj:z.string(),environment:z.enum(['sandbox','homologation','production']),payload:z.record(z.unknown())}).passthrough().parse(emission.request_payload);
+    const body=z.object({emitterCnpj:z.string(),environment:z.enum(['sandbox','homologation','production']),payload:z.record(z.string(), z.unknown())}).passthrough().parse(emission.request_payload);
     requireHubEnvironment(body.environment,emission.environment);
     const result=await hubFiscal.emit({type:'nfse',emitterId:emission.emitter_id,nfseDocumentId:id,body});
     if(['rejected','cancelled'].includes(String(result.hub?.document?.status)))throw new Error(result.hub?.document?.message||'Documento recusado ou cancelado. Confira o retorno na prévia.');

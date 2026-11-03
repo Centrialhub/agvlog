@@ -53,7 +53,7 @@ const preparedSchema = z.object({
   load_id: z.string().uuid(),
   emitter_id: z.string().uuid(),
   environment: z.enum(['sandbox', 'homologation', 'production']),
-  request_payload: z.record(z.unknown()),
+  request_payload: z.record(z.string(), z.unknown()),
   status: z.string(),
 }).passthrough();
 

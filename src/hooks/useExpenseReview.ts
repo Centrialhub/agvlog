@@ -5,6 +5,7 @@ import {useAuth} from '@/hooks/useAuth';
 import {supabase} from '@/integrations/supabase/client';
 import {expenseReviewError,parseExpenseReviewContext,parseExpenseReviewList,type ExpenseReviewCursor,type ExpenseReviewInput,type ExpenseReviewResult} from '@/lib/financial/expenseReviewCommands';
 import {EXPENSE_REVIEW_CHANGED,createExpenseReviewOutbox,pendingExpenseReview} from '@/lib/financial/expenseReviewOutbox';
+interface ExpenseReviewRequest extends PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>{abortSignal(signal:AbortSignal):ExpenseReviewRequest}
 const invalidations=['finance-legacy-cost-context','finance-legacy-cost-inventory','expense-review-context','expense_approval','driver_expenses','ops_expenses_count','driver_settlements','driver_settlement','financial_obligations','financial_matches_suggested'];
 export function useExpenseReviewList(filter:'pending'|'reviewed',cursor:ExpenseReviewCursor|null){
  const {currentTenant}=useTenant();const {user}=useAuth();const tenant=currentTenant?.id,actor=user?.id;const client=useQueryClient();
@@ -12,7 +13,7 @@ export function useExpenseReviewList(filter:'pending'|'reviewed',cursor:ExpenseR
   for(const key of invalidations)void client.invalidateQueries({queryKey:[key]});
  }).subscribe();return()=>{void supabase.removeChannel(channel);};},[tenant,actor,client]);
  return useQuery({queryKey:['expense_approval',tenant,actor,filter,cursor],enabled:!!tenant&&!!actor,retry:false,
-  queryFn:async({signal})=>{const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>ReturnType<typeof supabase.rpc>)('list_driver_expenses_for_review_v2',{_tenant_id:tenant!,_status:filter,_cursor_expense_at:cursor?.expense_at??null,_cursor_id:cursor?.id??null}).abortSignal(signal);
+  queryFn:async({signal})=>{const {data,error}=await ((supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>ExpenseReviewRequest).bind(supabase))('list_driver_expenses_for_review_v2',{_tenant_id:tenant!,_status:filter,_cursor_expense_at:cursor?.expense_at??null,_cursor_id:cursor?.id??null}).abortSignal(signal);
    if(error)throw new Error(expenseReviewError(error));return parseExpenseReviewList(data,tenant!,actor!,filter,cursor);}});
 }
 export function useExpenseReview(expense?:string){
