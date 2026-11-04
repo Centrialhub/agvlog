@@ -215,7 +215,7 @@ function InvoiceWizardForm({open,onClose,clients,onGenerated}:WizardProps){
                 <Select value={clientId} onValueChange={id=>{setClientId(id);setSelectedCtes(new Set());setSelectedNfses(new Set());setQuote(null);setDraft(null);setPreviewCharges([]);}}>
                   <SelectTrigger id="invoice-client"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
+                    {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name} — {c.tax_id || 'CNPJ não informado'}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
