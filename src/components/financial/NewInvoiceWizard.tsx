@@ -236,6 +236,7 @@ function InvoiceWizardForm({open,onClose,clients,onGenerated}:WizardProps){
               <TabsTrigger value="manual">Serviços avulsos ({manuals.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="ctes" className="mt-4">
+              <p className="mb-2 text-xs text-muted-foreground">CT-es autorizados em produção, ainda não faturados, cujo tomador do frete corresponde ao CNPJ do cliente selecionado.</p>
               <div className="max-h-[400px] overflow-y-auto border rounded">
                 <Table>
                   <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>CT-e</TableHead><TableHead>Emissão</TableHead><TableHead>Destinatário</TableHead><TableHead className="text-right">Frete</TableHead></TableRow></TableHeader>
