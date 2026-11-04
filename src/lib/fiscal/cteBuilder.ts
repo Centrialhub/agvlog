@@ -14,6 +14,8 @@
  */
 
 import { validateInsurance } from './insuranceValidation';
+import { contractorAsTaker, stateFromCteCity, validateCteSubcontracting, type CteSubcontractingSelection } from './cteSubcontracting';
+import { buildLocation } from './cteLocation';
 import { normalizeStateRegistration } from '../fiscalNormalization';
 import { restoreStateRegistrationLeadingZeros } from '../stateRegistrationZeros';
 import {
@@ -151,6 +153,8 @@ export interface CteCargoInfo {
 }
 
 export interface BuildCtePayloadInput {
+  serviceType?: '0' | '1';
+  subcontracting?: CteSubcontractingSelection | null;
   emitter: CteEmitter | null;
   remitter: CteParty | null;
   recipient: CteParty | null;
@@ -219,28 +223,6 @@ export interface BuildCtePayloadResult {
 
 function digits(v?: string | null): string {
   return (v || '').replace(/\D+/g, '');
-}
-
-/**
- * Bloco `inicio` / `fim` (override de UFIni/UFFim) — campos aceitos pelo Hub v1:
- * codigoCidade/cMun | municipio/cidade | uf/estado.
- */
-function buildLocation(
-  address?: CteParty['address'] | null,
-): Record<string, unknown> | undefined {
-  if (!address) return undefined;
-  const city = normalizeCityName(address.city) || undefined;
-  const uf = normalizeUf(address.state) || undefined;
-  const cMun = normalizeIbgeCity(address.city_ibge) || undefined;
-  if (!city && !uf && !cMun) return undefined;
-  return {
-    codigoCidade: cMun,
-    cMun,
-    municipio: city,
-    cidade: city,
-    uf,
-    estado: uf,
-  };
 }
 
 /**
@@ -561,6 +543,14 @@ function buildComponentes(params: {
 export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadResult {
   const missing: string[] = [];
   const warnings: string[] = [];
+  const subcontract = input.serviceType === '1';
+  if (subcontract) {
+    if (!input.cfop?.trim()) missing.push('CFOP da subcontratação (confira na aba Fiscal)');
+    missing.push(...validateCteSubcontracting(input.subcontracting, input.emitter?.environment, input.emitter?.cnpj || '', (input.invoices || []).map(n => digits(n.access_key))));
+    if (input.documentType && input.documentType !== '01') missing.push('Tipo CT-e normal para subcontratação');
+    if (input.subcontracting) input = { ...input, takerRole: 'terceiro', takerParty: contractorAsTaker(input.subcontracting) };
+  } else if (input.subcontracting) missing.push('Serviço subcontratação para vincular CT-e anterior');
+  const previous = subcontract ? input.subcontracting?.source.document : undefined;
 
   if (!input.emitter) missing.push('Emitente');
   else {
@@ -715,8 +705,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   // Regra fixa da operação: início da prestação = endereço da transportadora
   // (emitente do CT-e); fim = endereço de destino da carga (destinatário/recebedor).
   // O trajeto início→fim é o que define UFIni/UFFim e, portanto, o CFOP.
-  const inicio = buildLocation(input.emitter?.address) || buildLocation(input.origin);
-  const fim =
+  const inicio = previous ? buildLocation({ city: input.subcontracting!.originName, city_ibge: previous.origin_city_code, state: stateFromCteCity(previous.origin_city_code) }) : buildLocation(input.emitter?.address) || buildLocation(input.origin);
+  const fim = previous ? buildLocation({ city: input.subcontracting!.destinationName, city_ibge: previous.destination_city_code, state: stateFromCteCity(previous.destination_city_code) }) :
     buildLocation(input.destination) ||
     buildLocation(input.recebedor?.address) ||
     buildLocation(input.recipient?.address);
@@ -762,6 +752,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     : (/^[56]/.test(rawCfop) ? rawCfop[0] : '5');
   const isTransportCfop = (c: string) =>
     /^[56](3(5[1-9]|60)|932)$/.test(c);
+  if (subcontract && !isTransportCfop(rawCfop)) missing.push('CFOP válido da subcontratação (confira na aba Fiscal)');
   let cfop = rawCfop;
   if (cfop && isTransportCfop(cfop)) {
     if (hasKnownRoute && cfop[0] !== cfopPrefix) {
@@ -793,10 +784,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     // Tributária do Serviço" do DACTE. Sem ele o Hub cai no cadastro da
     // empresa (Simples Nacional) e o ICMS não é impresso.
     regimeTributario: emitterRegimeCode,
+    contractorCteSource: previous ? { id: input.subcontracting!.source.id, sha256: input.subcontracting!.source.original_sha256 } : undefined,
     payload: {
       regimeTributario: emitterRegimeCode,
       crt: emitterRegimeCode,
       tipoCtrc: input.documentType || '01',
+      tipoServico: subcontract ? '1' : undefined,
+      documentoAnterior: previous ? { chave: previous.access_key, cnpj: previous.issuer_cnpj, nome: previous.issuer_name,
+        ie: previous.issuer_ie.replace(/[^\dA-Z]/gi, '').toUpperCase(), uf: previous.issuer_state,
+        municipioInicio: previous.origin_city_code, municipioFim: previous.destination_city_code } : undefined,
       naturezaOperacao: input.nature,
       CFOP: cfop,
       serie: input.series != null && input.series !== '' ? String(input.series) : undefined,
@@ -839,6 +835,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       seguradora: seguroCarga,
       seguros: seguroCarga ? [seguroCarga] : undefined,
       tomador: {
+        ...(subcontract ? serializeParty(input.takerParty) : {}),
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
         ...(input.takerRole === 'terceiro' ? { dados: serializeParty(input.takerParty) } : {}),

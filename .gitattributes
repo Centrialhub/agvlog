@@ -9,3 +9,4 @@
 /scripts/provision-local-staging-linux.sh text eol=lf
 # Historical source hashes include original trailing whitespace.
 /docs/qa/edge-source-snapshots-2026-09-26/*.txt text eol=lf whitespace=-blank-at-eol
+/docs/qa/edge-source-snapshots-2026-11-03-proxy-v101/** -text whitespace=-blank-at-eol

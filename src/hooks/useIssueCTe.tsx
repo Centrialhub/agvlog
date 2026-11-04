@@ -47,6 +47,7 @@ export function useIssueCTe() {
     mutationFn: async (input: IssueCteGroupInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if (!input.emitter?.id) throw new Error('Emitente não selecionado');
+      if (input.subcontracting && input.subcontracting.source.tenant_id !== currentTenant.id) throw new Error('Selecione novamente o CT-e da contratante na empresa atual.');
 
       const built = buildCtePayload(input);
       if (!built.ok) {

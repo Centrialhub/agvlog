@@ -37,7 +37,7 @@ function ImportPanel({ tenantId, actorId }: { tenantId: string; actorId: string 
     finally { if (alive.current) setDownloading(null); }
   }
   return <div className="space-y-6">
-    <p className="rounded border bg-muted/30 p-3 text-sm">Os documentos ficam disponíveis para consulta. A emissão de CT-e de subcontratação ainda está pendente; importar aqui não emite nem vincula automaticamente um documento fiscal.</p>
+    <p className="rounded border bg-muted/30 p-3 text-sm">Após importar, abra a prévia de emissão do CT-e e, na aba Transporte, escolha o serviço Subcontratação e selecione o CT-e da contratante. Confira os dados antes de transmitir. Importar aqui não emite um documento fiscal.</p>
     <ContractorCteReview scopeKey={`${tenantId}:${actorId}`} onConfirm={async (file, document) => {
       await importContractorCte(tenantId, actorId, file, document);
       await qc.invalidateQueries({ queryKey: ['contractor-cte-sources'] });

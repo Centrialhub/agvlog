@@ -107,6 +107,37 @@ beforeEach(() => {
 afterAll(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('fiscal Edge handler environment isolation (no external requests)', () => {
+  it('uses the persisted subcontracting snapshot and keeps its route even when the browser downgrades it', async () => {
+    const original = {
+      emitterCnpj: '12345678000199', environment: 'production', contractorCteSource: { id: 'aa000000-0000-4000-8000-000000000001', sha256: 'a'.repeat(64) },
+      payload: { tipoServico: '1', CFOP: '6351', documentoAnterior: { chave: '3'.repeat(44) },
+        inicio: { uf: 'SP', municipio: 'SAO PAULO', codigoCidade: '3550308' },
+        fim: { uf: 'PR', municipio: 'CURITIBA', codigoCidade: '4106902' },
+        emitente: { endereco: { uf: 'MG', municipio: 'MONTES CLAROS', codigoCidade: '3143302' } },
+        destinatario: { endereco: { uf: 'MG', municipio: 'MONTES CLAROS', codigoCidade: '3143302' } } },
+    };
+    state.tables.fiscal_documents = [{ id: 'fiscal-1', tenant_id: tenantId, emitter_id: 'emitter', cte_payload: original }];
+    const response = await request({ action: 'emit', type: 'cte', emitterId: 'emitter', fiscalDocumentId: 'fiscal-1',
+      body: { ...original, externalId: 'changed-in-browser', payload: { tipoServico: '0', CFOP: '5353' } } });
+    expect(response.status).toBe(202);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const sent = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+    expect(sent).toMatchObject({ ...original, externalId: 'agvlog-cte-fiscal-1', idIntegracao: 'agvlog-cte-fiscal-1' });
+  });
+  it('does not dispatch subcontracting without a persisted source snapshot', async () => {
+    const response = await request({ action: 'emit', type: 'cte', emitterId: 'emitter',
+      body: { environment: 'production', emitterCnpj: '12345678000199', externalId: 'unreserved', payload: { tipoServico: '1' } } });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'CTE_SUBCONTRACTING_SNAPSHOT_REQUIRED' } });
+    expect(fetcher).not.toHaveBeenCalled(); expect(state.inserts).toHaveLength(0);
+  });
+  it('a normal outbound row cannot be used to bypass subcontracting source validation', async () => {
+    state.tables.fiscal_documents = [{ id: 'normal-fiscal', tenant_id: tenantId, emitter_id: 'emitter',
+      cte_payload: { environment: 'production', payload: { tipoServico: '0' } } }];
+    const response = await request({ action: 'emit', type: 'cte', emitterId: 'emitter', fiscalDocumentId: 'normal-fiscal',
+      body: { environment: 'production', emitterCnpj: '12345678000199', externalId: 'bypass', payload: { tipoServico: '1' } } });
+    expect(response.status).toBe(409); expect(fetcher).not.toHaveBeenCalled(); expect(state.inserts).toHaveLength(0);
+  });
   it('blocks homologation when only production credentials exist, even with a global key', async () => {
     const response = await emit();
     expect(response.status).toBe(400);

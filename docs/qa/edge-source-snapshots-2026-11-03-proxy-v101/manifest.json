@@ -1,0 +1,81 @@
+{
+  "project": "qcvnsdrbcchaxvawcngk",
+  "function": "hub-fiscal-proxy",
+  "version": 101,
+  "verifyJwt": true,
+  "ezbrSha256": "e51972ab6748c3eae5ecf6737d9e12f8a6e27edd71f778229f37cfcbef9c2ce1",
+  "files": [
+    {
+      "path": "functions/hub-fiscal-proxy/index.ts",
+      "rawSha256": "7f27aa2097a3584add33af1ca8acf96501b87c7b43713b2ed7069de5c939c151",
+      "lfSha256": "7f27aa2097a3584add33af1ca8acf96501b87c7b43713b2ed7069de5c939c151",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-transport.ts",
+      "rawSha256": "bc36598259b65d8efa1142c7dc1f4fb5a89b99d36f6b9a84b5dd6260b0b071c7",
+      "lfSha256": "bc36598259b65d8efa1142c7dc1f4fb5a89b99d36f6b9a84b5dd6260b0b071c7",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-credential-crypto.ts",
+      "rawSha256": "316124440ed449c021d1a2a09a48ef0a6aaddf323a520ba659172ce428795773",
+      "lfSha256": "316124440ed449c021d1a2a09a48ef0a6aaddf323a520ba659172ce428795773",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-cors.ts",
+      "rawSha256": "2f574d36d13ab55fe57fe4557119dd2142558c30fe2000ee2f6713b36de3d763",
+      "lfSha256": "2f574d36d13ab55fe57fe4557119dd2142558c30fe2000ee2f6713b36de3d763",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/cors.ts",
+      "rawSha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679",
+      "lfSha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-dispatch.ts",
+      "rawSha256": "19ebdd3f5f93434eccef852f173f7da51e9fca1bbcc085c66d6146bc35d7026c",
+      "lfSha256": "19ebdd3f5f93434eccef852f173f7da51e9fca1bbcc085c66d6146bc35d7026c",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-submission-outcome.ts",
+      "rawSha256": "4a5bcfb13db81eb1ddb5ab43dbf1d50bcb669ba4e706f03f8049cf0217ba8c23",
+      "lfSha256": "4a5bcfb13db81eb1ddb5ab43dbf1d50bcb669ba4e706f03f8049cf0217ba8c23",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/active-tenant.ts",
+      "rawSha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45",
+      "lfSha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/capabilities.ts",
+      "rawSha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3",
+      "lfSha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-environment.ts",
+      "rawSha256": "1261b530cd65cc404389d0daeccbadc6ec83e7fc068f69a5de553e5f5a56e27d",
+      "lfSha256": "1261b530cd65cc404389d0daeccbadc6ec83e7fc068f69a5de553e5f5a56e27d",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/_shared/fiscal-file-validation.ts",
+      "rawSha256": "0b5a6725233f76082d78bc3d9f571dd32071c9cb3a4e82e815c9e5e7c75391f4",
+      "lfSha256": "0b5a6725233f76082d78bc3d9f571dd32071c9cb3a4e82e815c9e5e7c75391f4",
+      "matchesGit": true
+    },
+    {
+      "path": "functions/hub-fiscal-proxy/deno.json",
+      "rawSha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256",
+      "lfSha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256",
+      "matchesGit": true
+    }
+  ]
+}

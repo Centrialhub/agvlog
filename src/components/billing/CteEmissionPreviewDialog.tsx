@@ -65,6 +65,8 @@ import { recalcIcms } from '@/lib/fiscal/ctePreviewIcms';
 import { applyCteFreightDefaults, applyCteFreightPatch, resolveCtePreviewFreight } from '@/lib/fiscal/ctePreviewFreight';
 import { calculateFreight } from '@/hooks/useFreightCalculator';
 import { useTenant } from '@/hooks/useTenant';
+import ContractorCteSelector from './ContractorCteSelector';
+import { stateFromCteCity, contractorAsTaker } from '@/lib/fiscal/cteSubcontracting';
 import { CteFreightInput } from './CteFreightInput';
 import { groupToEditable, type EditableCte } from './ctePreviewDraft';
 
@@ -166,6 +168,8 @@ function toBuildInput(
   ) =>
     resolveParty(registry, { id: clientId, name, cnpj, ie: ieOverride }, fallbackAddress);
   return {
+    serviceType: e.serviceType,
+    subcontracting: e.subcontracting,
     emitter: emitter
       ? {
           id: emitter.id,
@@ -252,9 +256,9 @@ function toBuildInput(
           insured_amount: e.insurerInsuredAmount || e.cargoValue || null,
         }
       : null,
-    takerRole: e.takerRole,
+    takerRole: e.serviceType === '1' ? 'terceiro' : e.takerRole,
     takerParty:
-      e.takerRole === 'terceiro'
+      e.serviceType === '1' && e.subcontracting ? contractorAsTaker(e.subcontracting) : e.takerRole === 'terceiro'
         ? enrichParty(e.takerName, e.takerCnpj)
         : null,
     driver: e.driverName ? { id: e.driverId, name: e.driverName, cpf: e.driverCpf } : null,
@@ -545,8 +549,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       return;
     }
 
-    const originUf = emitterForActive?.endereco?.uf || null;
-    const destUf = active.recipientState || null;
+    const originUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.origin_city_code) : emitterForActive?.endereco?.uf || null;
+    const destUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.destination_city_code) : active.recipientState || null;
     if (!originUf || !destUf) return;
     
     const isento = icmsIsentoByCst(active.icmsCst);
@@ -566,7 +570,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           Boolean(it._aliqManual),
         );
         
-        if (shouldUpdate) {
+        if (shouldUpdate && (i === activeIdx || (active.serviceType !== '1' && it.serviceType !== '1'))) {
           // Recalcula o ICMS para cada item do lote se for bulk, pois o frete varia
           const itemR = bulkEditFiscal
             ? recalcIcms(it.freightValue || 0, suggested, it.icmsEmbutido, isento)
@@ -583,7 +587,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIdx, active?.recipientState, active?.icmsCst, bulkEditFiscal, emitterForActive?.id]);
+  }, [activeIdx, active?.recipientState, active?.icmsCst, active?.serviceType, active?.subcontracting?.source.id, bulkEditFiscal, emitterForActive?.id]);
 
   // A aplicação operacional emite somente em produção.
   const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
@@ -687,7 +691,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
     // Chaves específicas de cada CT-e que NUNCA devem ser replicadas.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
-      'key', 'transmitted', 'transmitMessage',
+      'key', 'transmitted', 'transmitMessage', 'serviceType', 'subcontracting',
       'invoices', 'loadIds', 'fiscalDocumentIds',
       '_aliqManual',
     ]);
@@ -698,7 +702,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     else if (tabScope === 'tomador') shouldBulk = bulkEditTomador;
     else if (tabScope === 'transporte') shouldBulk = bulkEditTransporte;
     else if (tabScope === 'carga') shouldBulk = bulkEditCarga;
-    else if (tabScope === 'fiscal') shouldBulk = bulkEditFiscal;
+    else if (tabScope === 'fiscal') shouldBulk = bulkEditFiscal && active?.serviceType !== '1';
 
     if (!shouldBulk) {
       setItems((arr) => arr.map((it, i) => (i === activeIdx ? applyCteFreightPatch(it, patch) : it)));
@@ -727,6 +731,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     setItems((arr) =>
       arr.map((it, i) => {
         if (it.transmitted === 'ok') return it;
+        if (tabScope === 'fiscal' && i !== activeIdx && it.serviceType === '1') return it;
         return applyCteFreightPatch(it, i === activeIdx ? { ...bulkPart, ...activePart } : bulkPart);
       }),
     );
@@ -984,6 +989,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
     if (autocompletingAddresses) return;
     const localDestinations = items.filter((item) => {
+      if (item.serviceType === '1') return Boolean(item.subcontracting && item.subcontracting.source.document.origin_city_code === item.subcontracting.source.document.destination_city_code);
       const emitter = selectActiveEmitterById(emitters, item.emitterId);
       return emitter && isSameFiscalMunicipality(
         {city: item.recipientCity, state: item.recipientState, code: item.recipientCityIbge},
@@ -1515,6 +1521,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   </div>
                 </div>
                 <div>
+                  <Label htmlFor="cte-service-type">Tipo de serviço</Label>
+                  <Select value={active.serviceType || '0'} onValueChange={value => patch({ serviceType: value as '0' | '1', subcontracting: null, ...(value === '1' ? { cfop: '' } : {}) })}>
+                    <SelectTrigger id="cte-service-type"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="0">Normal</SelectItem><SelectItem value="1">Subcontratação</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                {active.serviceType === '1' && <ContractorCteSelector key={`${currentTenant?.id}:${active.key}`} tenantId={currentTenant?.id || ''} value={active.subcontracting} disabled={transmitting || active.transmitted === 'ok'} onChange={value => patch({
+                  subcontracting: value, ...(value ? { documentType: '01', takerRole: 'terceiro', takerName: value.source.document.issuer_name, takerCnpj: value.source.document.issuer_cnpj } : {}),
+                })} />}
+                <div>
                   <Label>Motorista</Label>
                   {!active.driverName && (
                     <Badge variant="secondary" className="ml-2 text-[10px]">Emissão com "."</Badge>
@@ -1774,8 +1790,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const cst = e.target.value;
                           const isento = icmsIsentoByCst(cst);
                           const isSimples = isSimpleTaxRegime(emitterForActive);
-                          const originUf = emitterForActive?.endereco?.uf || null;
-                          const aliq = (isento || isSimples) ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                          const originUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.origin_city_code) : emitterForActive?.endereco?.uf || null;
+                          const destUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.destination_city_code) : active.recipientState;
+                          const aliq = (isento || isSimples) ? 0 : suggestIcmsAliquota(originUf, destUf);
                           const patchData: Partial<EditableCte> = {
                             icmsCst: cst,
                             icmsIsento: isento,
@@ -1785,11 +1802,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           
                           // Se não for bulk edit, calculamos base/valor apenas para o ativo aqui
                           // Se for bulk edit, o patch() cuidará de replicar e o useEffect cuidará da sugestão/recalculo
-                          if (bulkEditFiscal) {
+                          if (bulkEditFiscal && active.serviceType !== '1') {
                             // Se for bulk edit, aplicamos a todos os itens do lote que não tenham trava manual
                             setItems((prev) =>
                               prev.map((it) => {
-                                if (it._aliqManual) return it;
+                                if (it._aliqManual || it.serviceType === '1') return it;
                                 const itemR = recalcIcms(it.freightValue || 0, aliq, it.icmsEmbutido, isento);
                                 return {
                                   ...it,
@@ -1898,17 +1915,19 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       size="sm"
                       className="h-7 text-xs"
                       onClick={() => {
-                        const originUf = emitterForActive?.endereco?.uf || null;
+                        const originUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.origin_city_code) : emitterForActive?.endereco?.uf || null;
+                        const destUf = active.serviceType === '1' && active.subcontracting ? stateFromCteCity(active.subcontracting.source.document.destination_city_code) : active.recipientState;
                         const isento = icmsIsentoByCst(active.icmsCst);
-                        const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                        const aliq = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
                         const patchData: Partial<EditableCte> = {
                           icmsAliquota: aliq,
                           _aliqManual: false, // Resetamos a trava ao clicar em recalcular
                         };
 
-                        if (bulkEditFiscal) {
+                        if (bulkEditFiscal && active.serviceType !== '1') {
                           setItems((prev) =>
                             prev.map((it) => {
+                              if (it.serviceType === '1') return it;
                               const itemR = recalcIcms(it.freightValue || 0, aliq, it.icmsEmbutido, isento);
                               return {
                                 ...it,
