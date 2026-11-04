@@ -2,6 +2,7 @@ import { fiscalHubBaseUrl, requireFiscalTransport } from '../_shared/fiscal-tran
 import { decryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
+import { normalizeCteEmissionBody, resolveCteSubcontractingBody } from '../_shared/cte-proxy-payload.ts';
 import { fiscalOperationResponse } from '../_shared/fiscal-submission-outcome.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requireActiveTenant } from '../_shared/active-tenant.ts';
@@ -140,66 +141,6 @@ function jsonRecord(value: unknown): Record<string, unknown> {
     : { value: String(value ?? '') };
 }
 
-/**
- * Última barreira de congruência para CT-e.
- *
- * Há clientes com bundles antigos em cache que ainda enviam `inicio` a partir
- * do remetente e CFOP de venda (ex.: 5253). O Hub transforma esses campos em
- * UFIni/UFfim antes de transmitir à SEFAZ; por isso a correção precisa ocorrer
- * também no proxy, imediatamente antes do POST upstream.
- */
-function normalizeCteEmissionBody(source: Record<string, unknown>): Record<string, unknown> {
-  const body = structuredClone(source) as Record<string, any>;
-  const inner = (body.payload && typeof body.payload === 'object'
-    ? body.payload
-    : body) as Record<string, any>;
-
-  const emitterAddress = inner.emitente?.endereco;
-  const destinationAddress = inner.recebedor?.endereco || inner.destinatario?.endereco;
-
-  const location = (address: Record<string, unknown> | undefined) => {
-    if (!address) return undefined;
-    const city = address.municipio || address.cidade;
-    const state = String(address.uf || address.estado || '').toUpperCase() || undefined;
-    const cityCode = onlyDigits(address.codigoMunicipio || address.codigoCidade || address.cMun) || undefined;
-    if (!city && !state && !cityCode) return undefined;
-    return {
-      codigoCidade: cityCode,
-      cMun: cityCode,
-      municipio: city,
-      cidade: city,
-      uf: state,
-      estado: state,
-    };
-  };
-
-  const inicio = location(emitterAddress);
-  const fim = location(destinationAddress);
-  if (inicio) inner.inicio = inicio;
-  if (fim) inner.fim = fim;
-
-  const ufIni = String(inner.inicio?.uf || '').toUpperCase();
-  const ufFim = String(inner.fim?.uf || '').toUpperCase();
-  const prefix = ufIni && ufFim && ufIni !== ufFim ? '6' : '5';
-  const rawCfop = onlyDigits(inner.CFOP || inner.cfop || inner.ide?.CFOP);
-  const validTransportCfop = /^[56](3(5[1-9]|60)|932)$/.test(rawCfop);
-  const normalizedCfop = validTransportCfop
-    ? `${prefix}${rawCfop.slice(1)}`
-    : `${prefix}353`;
-
-  inner.CFOP = normalizedCfop;
-  inner.cfop = normalizedCfop;
-  inner.ide = { ...(inner.ide || {}), CFOP: normalizedCfop };
-
-  console.log('[hub-fiscal-proxy] CT-e normalized before upstream emission', {
-    ufIni,
-    ufFim,
-    receivedCfop: rawCfop || null,
-    sentCfop: normalizedCfop,
-  });
-  return body;
-}
-
 Deno.serve(withFiscalCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -238,6 +179,7 @@ Deno.serve(withFiscalCors(async (req) => {
       return json(403, { success: false, error: { code: 'NO_OPERATIONAL_TENANT' } });
     }
 
+    const savedCte: { row: Record<string, unknown> | null } = { row: null };
     const tenantHints: Array<{ source: string; tenantIds: Set<string> }> = [];
     const addTenantHint = (source: string, rows: Array<{ tenant_id: string | null }> | null) => {
       tenantHints.push({
@@ -247,8 +189,10 @@ Deno.serve(withFiscalCors(async (req) => {
     };
     const addResourceHint = async (table: string, column: string, value?: string) => {
       if (!value) return;
-      const { data, error } = await admin.from(table).select('tenant_id').eq(column, value).limit(10);
+      const readCte = table === 'fiscal_documents' && action === 'emit' && payload.type === 'cte';
+      const { data, error } = await admin.from(table).select(readCte ? 'tenant_id,emitter_id,cte_payload' : 'tenant_id').eq(column, value).limit(10);
       if (error) throw error;
+      if (readCte && data?.length === 1) savedCte.row = data[0] as Record<string, unknown>;
       addTenantHint(`${table}.${column}`, data as Array<{ tenant_id: string | null }> | null);
     };
     const addBatchResourceHint = async () => {
@@ -593,7 +537,14 @@ Deno.serve(withFiscalCors(async (req) => {
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
-        const rawBody = (payload.body || {}) as Record<string, unknown>;
+        let rawBody = (payload.body || {}) as Record<string, unknown>;
+        if (type === 'cte') {
+          const guarded = resolveCteSubcontractingBody(rawBody, savedCte.row, { tenantId, emitterId: payload.emitterId, fiscalDocumentId: payload.fiscalDocumentId });
+          if (!guarded) {
+            return json(409, { success: false, error: { code: 'CTE_SUBCONTRACTING_SNAPSHOT_REQUIRED', message: 'Selecione o CT-e original e reserve a prévia na empresa e no ambiente corretos antes de transmitir.' } });
+          }
+          rawBody = guarded;
+        }
         const stableLocalId = payload.fiscalDocumentId || payload.cteDocumentId || payload.nfseDocumentId || payload.loadManifestId;
         const idIntegracao = String(
           rawBody.idIntegracao || rawBody.externalId || payload.idIntegracao ||

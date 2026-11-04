@@ -31,3 +31,11 @@ Node22/npm10; instalação com lockfile preservado. Builder legado + subcontrata
 Passaram localmente lockfile/repository/release checks, pipeline (233 casos e um skip preexistente, antes dos dois testes adicionais do manifesto), lint/errors/tipos críticos, qualidade estrutural, sintaxe Edge, TypeScript e build/budget/artefato público. Mudanças posteriores pequenas na prévia ainda dependem da repetição focada e do SHA congelado hospedado.
 
 A sessão de Supabase aberta agora tem somente a organização gatway Fiscal. A navegação ao projeto AGVLog redireciona para Organizations; será necessário voltar à conta AGVLog para aplicar o único forward incremental, depois de concluir o Hub. Nenhuma migration foi aplicada nesta rodada.
+
+## Complemento do proxy e acesso, 04/11
+
+O conector AGV LOG passou a disponibilizar o projeto correto, superando o impedimento da sessão do navegador. Preflight público:943 versões, última20261103174106; hash LF da importação `59a2a1cf643ef5d8f643ead9abedc90cc3a92900af32f36ad07365ffba8ea82d`, fonte e RPC presentes; nova trigger ausente; zero snapshots serviço1/fontes vinculadas. Advisors registram o aviso esperado da RPC de importação SECURITY DEFINER existente; não mudar ACLs/RLS para remover o aviso.
+
+O run41709082285 passou em validate, oito shards e database-and-e2e para SHA1e9234ab. Entretanto a inspeção do bundle ativo `hub-fiscal-proxy` v101 revelou que o proxy também reescreve o trajeto. Os12 arquivos ativos foram preservados em snapshot e comparados com Git: todos idênticos após normalização LF. EZBR anterior `e51972ab6748c3eae5ecf6737d9e12f8a6e27edd71f778229f37cfcbef9c2ce1`.
+
+Delta adicional: proxy consulta a referência persistida junto ao hint de tenant já existente e usa o snapshot canônico na subcontratação, impedindo substituição/downgrade pelo navegador. O normalizador puro foi extraído para preservar o limite estrutural do arquivo e manter comportamento normal. Bundle candidato tem13 arquivos:12 anteriores com alteração somente na entrada, mais o helper novo. Repetir gates no novo SHA; o run anterior não aprova este complemento. Sem emissão externa, mudanças de credenciais ou Auth.
