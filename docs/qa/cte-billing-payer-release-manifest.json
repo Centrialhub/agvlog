@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-cte-billing-payer-only",
+  "filename": "20261104194722_resolve_cte_billing_payer.sql",
+  "sha256": "b84985adc70f5f846cbb0c63ba8ecb1acef8ce032c6b133ffef602e3d060b8ff",
+  "preservedSubcontractingManifestSha256": "b58351ed5ba3426a931dfc446450d2abbc2f8c5c2f1bc1095592878d8178af68"
+}
