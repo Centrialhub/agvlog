@@ -40,6 +40,7 @@ import TripOperationalEventsPanel from '@/components/control-tower/TripOperation
 import { LocationPicker } from '@/components/maps/LocationPicker';
 import type { ResolvedLocation } from '@/lib/geocoding';
 import {prepareLoadDispatch,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
+import {DispatchDocumentAssignments,assignDispatchDocument} from '@/components/loads/DispatchDocumentAssignments';
 import type {RouteStopDraft} from '@/lib/route-planning/routePlanningTypes';
 
 interface DispatchStopInput {
@@ -196,13 +197,17 @@ export default function LoadDetail() {
     setDispatchForm({driver_id:'',vehicle_id:'',notes:''});
     try {
       if(!load||!currentTenant||!user)throw new Error('Sessão não autenticada');
-      const plan=await prepareLoadDispatch(currentTenant.id,load,items,controller.signal);
+      const showPlan=(plan:LoadDispatchPreparation)=>{
+       if(controller.signal.aborted||latestPreparationContext.current!==context)return;
+       setPreparedDispatch(plan);
+       setDispatchForm({driver_id:plan.driverId||'',vehicle_id:plan.vehicleId||'',notes:plan.stops[0]?.notes||''});
+       setDispatchStops(plan.stops.map(stop=>({planned:stop,destination:stop.destination,client_id:stop.client_id||'',
+        fiscal_document_ids:stop.fiscal_document_ids,location:stopLocation(stop),location_exception_reason:stop.location_exception_reason||''})));
+      };
+      const plan=await prepareLoadDispatch(currentTenant.id,load,items,controller.signal,showPlan);
       if(controller.signal.aborted||latestPreparationContext.current!==context)return;
       preparedScope.current=context;
-      setPreparedDispatch(plan);
-      setDispatchForm({driver_id:plan.driverId||'',vehicle_id:plan.vehicleId||'',notes:plan.stops[0]?.notes||''});
-      setDispatchStops(plan.stops.map(stop=>({planned:stop,destination:stop.destination,client_id:stop.client_id||'',
-        fiscal_document_ids:stop.fiscal_document_ids,location:stopLocation(stop),location_exception_reason:stop.location_exception_reason||''})));
+      showPlan(plan);
     }catch(error){if(!controller.signal.aborted&&latestPreparationContext.current===context)setDispatchPreparationError(getErrorMessage(error));}
     finally{if(!controller.signal.aborted&&latestPreparationContext.current===context)setPreparingDispatch(false);}
   };
@@ -497,7 +502,8 @@ export default function LoadDetail() {
                   <DialogDescription>As paradas e notas são preenchidas automaticamente. Confira motorista, veículo e eventuais endereços pendentes.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {preparingDispatch?<p role="status">Carregando a roteirização e localizando os endereços das entregas…</p>:null}
+                  {preparingDispatch?<p role="status">{preparedDispatch?'Notas distribuídas. Consultando os locais de entrega, um endereço por vez…':'Carregando a roteirização e distribuindo as notas…'}</p>:null}
+                  {preparedDispatch?.locationWarning?<p role="alert" className="text-sm text-amber-700">{preparedDispatch.locationWarning}</p>:null}
                   {dispatchPreparationError?<div role="alert"><p>{dispatchPreparationError}</p><Button variant="outline" onClick={()=>void populateStopsFromItems()}>Tentar novamente</Button><Button variant="link" onClick={()=>navigate('/route-planning')}>Abrir Roteirização</Button></div>:null}
                   {preparedDispatch?<p className="text-xs text-muted-foreground">{preparedDispatch.draftId?'Planejamento salvo carregado.':'Paradas montadas automaticamente pelas notas.'} {dispatchStops.filter(s=>!s.location&&s.location_exception_reason.trim().length<20).length} local(is) pendente(s) de revisão.</p>:null}
                   <div>
@@ -549,34 +555,36 @@ export default function LoadDetail() {
                             <Input
                               aria-label={`Destino parada ${idx+1}`}
                               value={stop.destination}
+                              disabled={preparingDispatch}
                               onChange={e => setDispatchStops(previous=>previous.map((item,n)=>n===idx
                                 ? {...item,destination:e.target.value,location:null}:item))}
                               placeholder={`Destino parada ${idx + 1}`}
                               className="h-8 text-xs"
                             />
                             {dispatchStops.length > 1 && (
-                              <Button type="button" variant="ghost" size="sm" aria-label={`Remover parada ${idx+1}`} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
+                              <Button type="button" disabled={preparingDispatch} variant="ghost" size="sm" aria-label={`Remover parada ${idx+1}`} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
                                 ×
                               </Button>
                             )}
                           </div>
                           <div className="space-y-2 pl-7">
-                            <Button type="button" size="sm" variant="outline"
+                            {stop.planned?.location_address?<p className="text-xs text-muted-foreground">{stop.planned.location_address}</p>:null}
+                            <Button type="button" size="sm" variant="outline" disabled={preparingDispatch}
                               onClick={()=>setEditingLocationStop(current=>current===idx?null:idx)}>
                               {stop.location ? 'Local verificado — revisar' : 'Confirmar endereço ou ponto no mapa'}
                             </Button>
                             {editingLocationStop===idx?<div className="pt-1">
                               <LocationPicker tenantId={currentTenant?.id || ''} idPrefix={`dispatch-stop-${idx}`}
-                                address={stop.destination} value={stop.location}
+                                address={stop.planned?.location_address||stop.destination} value={stop.location}
                                 onAddressChange={value=>setDispatchStops(previous=>previous.map((item,n)=>n===idx
-                                  ? {...item,destination:value,location:null}:item))}
+                                  ? {...item,planned:item.planned?{...item.planned,location_address:value}:undefined,destination:item.planned?item.destination:value,location:null}:item))}
                                 onChange={location=>setDispatchStops(previous=>previous.map((item,n)=>n===idx
                                   ? {...item,location,location_exception_reason:''}:item))}/>
                             </div>:null}
                           </div>
                           {!stop.location?<div className="space-y-1 pl-7">
                             <Label htmlFor={`dispatch-stop-exception-${idx}`} className="text-xs">Exceção operacional (mínimo 20 caracteres)</Label>
-                            <Textarea id={`dispatch-stop-exception-${idx}`} rows={2} maxLength={1000}
+                            <Textarea id={`dispatch-stop-exception-${idx}`} rows={2} maxLength={1000} disabled={preparingDispatch}
                               value={stop.location_exception_reason}
                               onChange={event=>updateStop(idx,'location_exception_reason',event.target.value)}
                               placeholder="Justifique por que esta parada pode ser despachada sem localização verificada."/>
@@ -586,19 +594,9 @@ export default function LoadDetail() {
                     </div>
                   </div>
 
-                  <details><summary className="cursor-pointer text-sm">Notas distribuídas automaticamente — revisar vinculação ({dispatchDocuments.length})</summary>
-                  {dispatchDocuments.map((documentId,index)=><div key={documentId}>
-                    <Label htmlFor={`dispatch-document-${index}`}>Documento {documents.find(document=>document.id===documentId)?.invoice_number || documentId.slice(0,8)}</Label>
-                    <Select value={String(dispatchStops.findIndex(stop=>stop.fiscal_document_ids.includes(documentId)))} onValueChange={value=>
-                      setDispatchStops(previous=>previous.map((stop,n)=>({...stop,fiscal_document_ids:n===Number(value)
-                        ? [...stop.fiscal_document_ids.filter(id=>id!==documentId),documentId]
-                        : stop.fiscal_document_ids.filter(id=>id!==documentId)})))}>
-                      <SelectTrigger id={`dispatch-document-${index}`}><SelectValue placeholder="Escolha a parada"/></SelectTrigger>
-                      <SelectContent><SelectItem value="-1">Sem parada</SelectItem>
-                        {dispatchStops.map((stop,n)=><SelectItem key={n} value={String(n)}>Parada {n+1}: {stop.destination || 'Sem destino'}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>)}</details>
+                  {preparedDispatch?<DispatchDocumentAssignments stops={dispatchStops} disabled={preparingDispatch}
+                    documents={dispatchDocuments.map(documentId=>({id:documentId,label:documents.find(document=>document.id===documentId)?.invoice_number||documentId.slice(0,8)}))}
+                    onAssign={(documentId,value)=>setDispatchStops(previous=>assignDispatchDocument(previous,documentId,value))}/>:null}
                   <div>
                     <Label htmlFor="dispatch-notes" className="text-xs">Observações da primeira parada</Label>
                     <Textarea
