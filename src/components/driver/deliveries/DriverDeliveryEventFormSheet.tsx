@@ -191,6 +191,7 @@ export function DriverDeliveryEventFormSheet({
                   onError={(message) => notify({ title: 'Canhoto inválido', description: message, variant: 'destructive' })}
                 />
               )}
+              {def.requiresReceipt?<p className="text-xs text-muted-foreground">Após o envio, a foto do canhoto será analisada pelo serviço de IA do AGVLog (Lovable) para leitura da data e identificação de assinatura visível. Leituras inconclusivas ficam sinalizadas para conferência.</p>:null}
 
               {draft.photoPreviews.length > 0 && (
                 <div className="space-y-1.5">

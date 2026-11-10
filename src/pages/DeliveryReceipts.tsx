@@ -42,6 +42,8 @@ import {
 import {defaultDeliveryReceiptCoverConfig,groupDeliveryReceiptsBySupplier,type DeliveryReceiptCoverConfig} from '@/lib/deliveryReceipts/deliveryReceiptSupplier';
 import {DeliveryReceiptSupplierChannels} from '@/components/delivery-receipts/DeliveryReceiptSupplierChannels';
 import { DeliveryReceiptQualityPolicyPanel } from '@/components/delivery-receipts/DeliveryReceiptQualityPolicyPanel';
+import {ReceiptRecognitionPanel} from '@/components/delivery-receipts/ReceiptRecognitionPanel';
+import {readReceiptRecognitions} from '@/lib/deliveryReceipts/receiptRecognition';
 
 const digitalLabels:Record<string,string>={pending_upload:'Aguardando envio',uploaded:'Enviado',pending_validation:'Aguardando validação',
   validated:'Validado',rejected:'Rejeitado',superseded:'Substituído'};
@@ -108,6 +110,10 @@ export default function DeliveryReceipts(){
     queryFn:({signal})=>listDeliveryReceipts(tenant!,actor!,filters,{limit:DELIVERY_RECEIPT_PAGE_SIZE,offset:(page-1)*DELIVERY_RECEIPT_PAGE_SIZE},signal)});
   const allFiltered=useQuery({queryKey:['delivery-receipts',tenant,actor,'all-filtered',filters],enabled:false,retry:false,
     queryFn:({signal})=>listAllDeliveryReceipts(tenant!,actor!,filters,signal)});
+  const readingIds=(query.data?.rows??[]).map(row=>row.id).sort();
+  const readings=useQuery({queryKey:['delivery-receipt-readings',tenant,actor,readingIds],enabled:!!tenant&&!!actor&&readingIds.length>0,retry:false,
+    queryFn:({signal})=>readReceiptRecognitions(tenant!,actor!,readingIds,signal),
+    refetchInterval:q=>q.state.data?.some(r=>r.status==='queued'||r.status==='processing')?15_000:false});
   const summary=useQuery({queryKey:['delivery-receipts',tenant,actor,'filter-summary'],enabled:!!tenant&&!!actor,retry:false,staleTime:60_000,
     queryFn:({signal})=>getDeliveryReceiptFilterSummary(tenant!,actor!,signal)});
   const operations=useQuery({queryKey:['delivery-receipt-operations',tenant,actor],enabled:!!tenant&&!!actor,retry:false,
@@ -255,7 +261,9 @@ export default function DeliveryReceipts(){
             .filter(row=>row.digital_status==='validated'&&row.has_pdf);
           setSelected(current=>[...new Set([...current,...completeEligible.map(row=>row.id)])]);}}/>
         {allFiltered.isFetching?'Carregando seleção completa…':`Selecionar todos os PDFs validados deste fornecedor no filtro atual${allFiltered.data?` (${eligible.length})`:''}`}</label>:null}
-      {rows.map(row=><Card key={row.id}><CardHeader className="pb-2"><div className="flex flex-wrap items-start justify-between gap-2">
+      {rows.map(row=><Card key={row.id}><CardHeader className="pb-2">
+        <ReceiptRecognitionPanel reading={readings.data?.find(r=>r.receipt_id===row.id)} error={readings.isError} loading={readings.isFetching}/>
+        <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-2"><input aria-label={`Selecionar canhoto da entrega ${fmt(row.delivered_at)}`} className="mt-1" type="checkbox"
           disabled={row.digital_status!=='validated'||!row.has_pdf} checked={selected.includes(row.id)} onChange={event=>{const checked=event.target.checked;setSelected(current=>checked?
             [...current,row.id]:current.filter(id=>id!==row.id));}}/><div><CardTitle className="text-base">Entrega em {fmt(row.delivered_at)}</CardTitle><p className="text-xs text-muted-foreground">{row.destination||'Destino não informado'}</p></div></div>

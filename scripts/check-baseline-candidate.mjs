@@ -7,6 +7,7 @@ import { verifyBaselineSupplements } from "./baseline-supplement-manifest.mjs";
 import { verifyContractorCteRelease } from './contractor-cte-release-manifest.mjs';
 import { verifyCteSubcontractingRelease } from './cte-subcontracting-release-manifest.mjs';
 import { verifyCteBillingPayerRelease } from './cte-billing-payer-release-manifest.mjs';
+import { verifyReceiptOcrRelease } from './receipt-ocr-release-manifest.mjs';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MANIFEST_PATH = "docs/qa/baseline-candidate-manifest.json";
@@ -95,10 +96,11 @@ export async function inspectBaselineCandidate(root = REPOSITORY_ROOT) {
   const releaseAddition = await verifyContractorCteRelease({ root, forwardFiles, entries: directoryEntries });
   const subcontractingAddition = await verifyCteSubcontractingRelease({ root, forwardFiles, entries: directoryEntries });
   const payerAddition = await verifyCteBillingPayerRelease({ root, forwardFiles, entries: directoryEntries });
+  const receiptOcrAddition = await verifyReceiptOcrRelease({ root, forwardFiles, entries: directoryEntries });
   const supplementFiles = new Set(supplements?.forwards.map(({ filename }) => filename) ?? []);
   const followups = await verifyBaselineFollowups({ root, candidate,
-    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename), entries: directoryEntries });
-  return { candidate, followups, supplements, releaseAddition, subcontractingAddition, payerAddition };
+    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename && filename !== receiptOcrAddition?.filename), entries: directoryEntries });
+  return { candidate, followups, supplements, releaseAddition, subcontractingAddition, payerAddition, receiptOcrAddition };
 }
 
 export async function buildBaselineCandidateManifest(root = REPOSITORY_ROOT) {

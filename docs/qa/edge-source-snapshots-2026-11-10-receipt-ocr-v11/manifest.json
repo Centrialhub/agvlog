@@ -1,0 +1,30 @@
+{
+  "project": "qcvnsdrbcchaxvawcngk",
+  "function": "process-delivery-receipt-ocr",
+  "version": 11,
+  "verify_jwt": false,
+  "sourceEzbrSha256": "b2b747529dc1c10b8e5eeb29fb08adeb933abf177d4f6d7d5b69167b4a28a266",
+  "normalization": "LF",
+  "files": [
+    {
+      "name": "process-delivery-receipt-ocr/adapter.ts",
+      "sha256": "f9084b7197f89de389a5cd19a36df55050499aada106cfdf8c5b3081178dcfe3"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/index.ts",
+      "sha256": "f350a8b4c1709bbc1848f8f35ddcbfdb1ba778b814ff5eefb7012aef535a6063"
+    },
+    {
+      "name": "_shared/cors.ts",
+      "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+    },
+    {
+      "name": "_shared/cron-auth.ts",
+      "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+    }
+  ]
+}
