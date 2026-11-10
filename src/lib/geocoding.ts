@@ -37,6 +37,13 @@ export const normalizeAddress = (value: string) => value.trim().replace(/\s+/g, 
 export const buildDeliveryAddress = (parts: Array<string | null | undefined>) =>
   normalizeAddress(parts.filter((part): part is string => Boolean(part?.trim())).join(', '));
 
+export class GeocodingServiceError extends Error {
+  constructor(public readonly kind:'rate_limited'|'unavailable') {
+    super(kind==='rate_limited'?'A busca de endereços atingiu o limite temporário de consultas.':'O serviço de busca de endereços está indisponível.');
+    this.name='GeocodingServiceError';
+  }
+}
+
 export async function geocodeAddress(
   tenantId: string,
   address: string,
@@ -53,6 +60,10 @@ export async function geocodeAddress(
     body,
   });
   if (error) {
+    if ('context' in error && error.context instanceof Response) {
+      if(error.context.status===429)throw new GeocodingServiceError('rate_limited');
+      if([502,503,504].includes(error.context.status))throw new GeocodingServiceError('unavailable');
+    }
     if ('context' in error && error.context instanceof Response && error.context.status === 409) {
       const detail = await error.context.clone().json().catch(() => null);
       if (detail && typeof detail === 'object' && 'error' in detail

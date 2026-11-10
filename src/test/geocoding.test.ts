@@ -40,6 +40,12 @@ describe('address-first location resolution', () => {
     }] }, error: null });
     await expect(geocodeAddress('tenant', 'Rua A, 10')).rejects.toThrow('resposta inválida');
   });
+  it('reports throttling and unavailable services without disguising them as unknown addresses',async()=>{
+    for(const status of [429,502,503,504]){
+      mocks.invoke.mockResolvedValueOnce({data:null,error:{context:new Response('{}',{status})}});
+      await expect(geocodeAddress('tenant','Rua QA 10')).rejects.toMatchObject({kind:status===429?'rate_limited':'unavailable'});
+    }
+  });
 
   it('asks for a fresh review when the targeted address changed', async () => {
     mocks.invoke.mockResolvedValue({ data: null, error: { context: new Response(null, { status: 409 }) } });

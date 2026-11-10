@@ -2,7 +2,7 @@ import {supabase} from '@/integrations/supabase/client';
 import type {LoadItem} from '@/hooks/useLoadItems';
 import type {RoutePlanningDraft} from '@/hooks/useRoutePlanningDrafts';
 import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
-import {geocodeAddress,locationFromCandidate,type ResolvedLocation} from '@/lib/geocoding';
+import {geocodeAddress,GeocodingServiceError,locationFromCandidate,type ResolvedLocation} from '@/lib/geocoding';
 import {consolidateLoadsIntoStops,type ConsolidationLoadItem} from './stopConsolidation';
 import {parseRoutePlanSnapshot} from './routePlanSnapshot';
 import {routeStopOrder} from './routeStopOrder';
@@ -13,6 +13,7 @@ import type {RouteStopDraft} from './routePlanningTypes';
 export interface LoadDispatchPreparation {
  stops:RouteStopDraft[]; draftId?:string; draftVersion?:string;
  driverId?:string; vehicleId?:string; plannedStart?:string; name:string;
+ locationWarning?:string;
 }
 interface RoutingClient {
  id:string;address_street:string|null;address_number:string|null;address_complement:string|null;
@@ -42,26 +43,37 @@ export function savedLoadDispatchPlan(drafts:RoutePlanningDraft[],tenant:string,
   plannedStart:draft.planned_start_at||parsed.snapshot.planned_start_at,name:draft.name};
 }
 export async function resolveAutomaticStopLocations(stops:RouteStopDraft[],signal:AbortSignal,
- searchable:ReadonlySet<string>,search=geocodeAddress,tenant=''):Promise<RouteStopDraft[]> {
- const cache=new Map<string,Promise<ResolvedLocation|null>>();let next=0;
+ searchable:ReadonlySet<string>,search=geocodeAddress,tenant='',onIssue?:(message:string)=>void):Promise<RouteStopDraft[]> {
+ const cache=new Map<string,ResolvedLocation|null>();let lastRequest:number|null=null;
  const result=[...stops];
- async function worker(){while(next<stops.length){signal.throwIfAborted();const index=next++,stop=stops[index];
+ for(let index=0;index<stops.length;index++){signal.throwIfAborted();const stop=stops[index];
   if(stopLocation(stop)||(stop.location_exception_reason?.trim().length??0)>=20||!stop.client_id||!searchable.has(stop.client_id))continue;
   const address=stop.location_address?.trim();if(!address)continue;
-  if(!cache.has(address))cache.set(address,(async()=>{try{const candidates=await search(tenant,address);
+  if(!cache.has(address)){
+   // One request at a time, below the existing 30/minute quota. Cache shared
+   // addresses across suppliers; stop on provider failures instead of flooding it.
+   const delay=lastRequest===null?0:Math.max(0,lastRequest+2100-Date.now());
+   if(delay)await new Promise<void>((resolve,reject)=>{const aborted=()=>{clearTimeout(timer);reject(signal.reason||new DOMException('Aborted','AbortError'));};
+    const timer=setTimeout(()=>{signal.removeEventListener('abort',aborted);resolve();},delay);signal.addEventListener('abort',aborted,{once:true});});
+   signal.throwIfAborted();lastRequest=Date.now();
+   try{const candidates=await search(tenant,address);
    signal.throwIfAborted();const c=candidates[0];
    // Multiple or approximate matches remain visible for review, never guessed.
-   return candidates.length===1&&c.confidence>=0.8&&c.accuracy_m<=150?locationFromCandidate(c,address):null;
-  }catch(error){if(signal.aborted)throw error;return null;}})());
-  const location=await cache.get(address)!;signal.throwIfAborted();
+   cache.set(address,candidates.length===1&&c.confidence>=0.8&&c.accuracy_m<=150?locationFromCandidate(c,address):null);
+   }catch(error){if(signal.aborted)throw error;
+    onIssue?.(`${error instanceof GeocodingServiceError?error.message:'Não foi possível consultar o serviço de endereços.'} As notas continuam distribuídas; confira apenas os locais pendentes.`);
+    break;
+   }
+  }
+  const location=cache.get(address);signal.throwIfAborted();
   if(location)result[index]={...stop,latitude:location.latitude,longitude:location.longitude,location_source:location.source,
    location_address:location.address,location_provider:location.provider,location_accuracy_m:location.accuracy_m,
    location_confidence:location.confidence,location_audit:location.audit};
- }}
- await Promise.all(Array.from({length:Math.min(3,stops.length)},worker));return result;
+ }
+ return result;
 }
 export async function prepareLoadDispatch(tenant:string,load:{id:string;load_number:string;destination:string|null},
- items:LoadItem[],signal:AbortSignal):Promise<LoadDispatchPreparation>{
+ items:LoadItem[],signal:AbortSignal,onPrepared?:(plan:LoadDispatchPreparation)=>void):Promise<LoadDispatchPreparation>{
  const documents=[...new Set(items.flatMap(i=>i.fiscal_document_id?[i.fiscal_document_id]:[]))];
  if(!documents.length||items.some(i=>!i.fiscal_document_id))throw new Error('Revise os documentos da carga antes de preparar o despacho.');
  const drafts=await fetchAllPostgrestPages<RoutePlanningDraft>((from,to)=>supabase.from('route_planning_drafts')
@@ -88,7 +100,10 @@ export async function prepareLoadDispatch(tenant:string,load:{id:string;load_num
     provider:c.address_geocode_provider,accuracy_m:c.address_geocode_accuracy_m,confidence:c.address_geocode_confidence,address_hash:c.address_geocode_hash}:null}};
  });
  const stops=saved?.stops||autoSequenceStops(consolidateLoadsIntoStops([{...load,items:enriched}]));
- return {...saved,name:saved?.name||`Carga ${load.load_number}`,stops:await resolveAutomaticStopLocations(stops,signal,searchable,geocodeAddress,tenant)};
+ const plan={...saved,name:saved?.name||`Carga ${load.load_number}`,stops};
+ signal.throwIfAborted();onPrepared?.(plan);
+ let locationWarning:string|undefined;
+ return {...plan,stops:await resolveAutomaticStopLocations(stops,signal,searchable,geocodeAddress,tenant,message=>{locationWarning=message;}),locationWarning};
 }
 export async function assertLoadDispatchDraftCurrent(tenant:string,plan:LoadDispatchPreparation){
  if(!plan.draftId)return;

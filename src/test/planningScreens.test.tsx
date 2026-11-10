@@ -1,9 +1,10 @@
-import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import LoadDetail from '@/pages/LoadDetail';
 import RoutePlanning from '@/pages/RoutePlanning';
 import {createDispatchOutbox,type DispatchWirePayload} from '@/lib/route-planning/dispatchOutbox';
+import type {LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
 
 vi.mock('@/components/ui/select',async()=>{
   const React=await import('react');
@@ -93,6 +94,40 @@ async function seedPending(){
   await expect(outbox.dispatch('tenant','actor','load:load',body)).rejects.toThrow('Offline');
 }
 describe('real planning screens with isolated transport (not authenticated browser E2E)',()=>{
+  it('LoadDetail invalidates the old point and searches the edited destination instead of the previous street',async()=>{
+    mock.prepare.mockResolvedValueOnce({name:'Carga QA',stops:[{id:'stop-0',recipient_name:'Destino QA',destination:'Destino QA',
+      load_ids:['load'],fiscal_document_ids:['doc-1','doc-2'],invoice_numbers:[],total_weight_kg:30,total_volume_m3:2,
+      total_pallet_count:2,total_value:0,service_time_minutes:20,priority:0,risk_level:'normal',
+      location_address:'Rua anterior, 10',latitude:-16,longitude:-44,location_source:'map_selected'}]});
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByRole('button',{name:'Local verificado — revisar'});
+    fireEvent.change(within(dialog).getByLabelText('Destino parada 1'),{target:{value:'Rua nova, 20'}});
+    expect(within(dialog).queryByText('Rua anterior, 10')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
+    fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
+    await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
+    expect(dispatchCalls()[0][1]._payload.stops[0]).toMatchObject({destination:'Rua nova, 20',location_address:'Rua nova, 20',
+      latitude:-23.55052,longitude:-46.633308});
+  });
+  it('LoadDetail displays bound notes while address lookup is pending and preserves them after provider failure',async()=>{
+    const plan:LoadDispatchPreparation={name:'Carga QA',stops:[{id:'stop-0',recipient_name:'Destino QA',destination:'Destino QA',
+      load_ids:['load'],fiscal_document_ids:['doc-1','doc-2'],invoice_numbers:[],total_weight_kg:30,total_volume_m3:2,
+      total_pallet_count:2,total_value:0,service_time_minutes:20,priority:0,risk_level:'normal',location_address:'Rua QA, 10, Cidade - MG'}]};
+    let finish!:()=>void;
+    mock.prepare.mockImplementationOnce((_tenant,_load,_items,_signal,onPrepared:(plan:LoadDispatchPreparation)=>void)=>{
+      onPrepared(plan);return new Promise(resolve=>{finish=()=>resolve({...plan,locationWarning:'Serviço indisponível. As notas continuam distribuídas.'});});
+    });
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('Notas distribuídas. Consultando os locais');
+    expect(within(dialog).getByRole('button',{name:/Criar Viagem com 1/})).toBeDisabled();
+    fireEvent.click(within(dialog).getByText(/Notas distribuídas automaticamente/));
+    const document=await within(dialog).findByLabelText('Documento 2');expect(document).toHaveValue('0');expect(document).toBeDisabled();
+    expect(within(dialog).getByText('Rua QA, 10, Cidade - MG')).toBeInTheDocument();
+    await act(async()=>{finish();});
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('As notas continuam distribuídas');
+    expect(document).toHaveValue('0');expect(document).not.toBeDisabled();expect(dispatchCalls()).toHaveLength(0);
+  });
   it('LoadDetail dispatches the saved route without asking to redistribute notes or reconfirm verified locations',async()=>{
     const stop=(id:string,doc:string)=>({id,recipient_name:id,destination:id,load_ids:['load'],fiscal_document_ids:[doc],invoice_numbers:[],
       total_weight_kg:10,total_volume_m3:1,total_pallet_count:1,total_value:50,service_time_minutes:45,priority:0,risk_level:'normal',
@@ -193,7 +228,7 @@ describe('real planning screens with isolated transport (not authenticated brows
     fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
     fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-1'));
     fireEvent.click(within(dialog).getByText(/Notas distribuídas automaticamente/));
-    fireEvent.change(within(dialog).getByLabelText('Documento 2'),{target:{value:'1'}});
+    fireEvent.change(await within(dialog).findByLabelText('Documento 2'),{target:{value:'1'}});
     expect(within(dialog).getByLabelText('Documento 2')).toHaveValue('1');
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));
     await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));

@@ -46,6 +46,33 @@ it('sem rascunho gera paradas por destinatário, ordena e distribui todas as not
  expect(plan.stops.every(s=>s.latitude===-16&&s.location_source==='address_geocoded')).toBe(true);
  expect(m.search).toHaveBeenCalledTimes(1);expect(m.filters).toHaveBeenCalledWith('fiscal_documents','tenant_id','tenant');
 });
+it('publica todas as vinculações antes de aguardar a consulta lenta de endereços',async()=>{
+ let finish!:(value:unknown)=>void;
+ const prepared=vi.fn();m.search.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ const pending=prepareLoadDispatch('tenant',{id:'load',load_number:'1',destination:'Rota'},items,new AbortController().signal,prepared);
+ await vi.waitFor(()=>expect(prepared).toHaveBeenCalledOnce());
+ expect(prepared.mock.calls[0][0].stops.flatMap((s:RouteStopDraft)=>s.fiscal_document_ids).sort()).toEqual(['d1','d2']);
+ expect(prepared.mock.calls[0][0].stops.every((s:RouteStopDraft)=>s.location_address?.includes('Rua QA'))).toBe(true);
+ finish([candidate]);await pending;
+});
+it('interrompe a busca após falha do serviço e preserva as notas e endereços para conferência',async()=>{
+ m.search.mockRejectedValueOnce(new Error('provider unavailable'));
+ const plan=await prepareLoadDispatch('tenant',{id:'load',load_number:'1',destination:'Rota'},items,new AbortController().signal);
+ expect(plan.stops.flatMap(s=>s.fiscal_document_ids).sort()).toEqual(['d1','d2']);
+ expect(plan.locationWarning).toContain('As notas continuam distribuídas');expect(m.search).toHaveBeenCalledTimes(1);
+ expect(plan.stops.every(s=>s.location_exception_reason===undefined)).toBe(true);
+});
+it('respeita consultas sequenciais e cancelamento durante a espera entre endereços',async()=>{
+ vi.useFakeTimers();try{
+ const controller=new AbortController(),search=vi.fn().mockResolvedValue([candidate]);
+ const stops=[{...stop(),latitude:null,location_address:'Rua QA 1'},
+  {...stop('s2','d2'),latitude:null,location_address:'Rua QA 2'}];
+ const pending=resolveAutomaticStopLocations(stops,controller.signal,new Set(['c1']),search,'tenant');
+ const rejection=expect(pending).rejects.toThrow();
+ await vi.advanceTimersByTimeAsync(1000);expect(search).toHaveBeenCalledTimes(1);
+ controller.abort();await rejection;expect(search).toHaveBeenCalledTimes(1);
+ }finally{vi.useRealTimers();}
+});
 it('reutiliza localização verificada sem consulta externa',async()=>{
  m.clients=[{id:'c1',address_geocode_status:'verified',address_lat:-16,address_lng:-44,address_geocode_hash:'hash'}];
  const plan=await prepareLoadDispatch('tenant',{id:'load',load_number:'1',destination:null},items.slice(0,1),new AbortController().signal);
