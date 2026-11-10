@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,8 +39,11 @@ import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
 import { LocationPicker } from '@/components/maps/LocationPicker';
 import type { ResolvedLocation } from '@/lib/geocoding';
+import {prepareLoadDispatch,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
+import type {RouteStopDraft} from '@/lib/route-planning/routePlanningTypes';
 
 interface DispatchStopInput {
+  planned?: RouteStopDraft;
   destination: string;
   client_id: string;
   fiscal_document_ids: string[];
@@ -123,6 +126,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function LoadDetail() {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
@@ -172,25 +176,35 @@ export default function LoadDetail() {
   });
   const [dispatchStops, setDispatchStops] = useState<DispatchStopInput[]>([]);
   const [editingLocationStop, setEditingLocationStop] = useState<number | null>(null);
+  const [preparingDispatch,setPreparingDispatch]=useState(false);
+  const [dispatchPreparationError,setDispatchPreparationError]=useState('');
+  const [preparedDispatch,setPreparedDispatch]=useState<LoadDispatchPreparation|null>(null);
+  const preparationAbort=useRef<AbortController|null>(null);
+  const preparedScope=useRef<string|null>(null);
+  const preparationContext=`${currentTenant?.id}:${user?.id}:${id}`;
+  const latestPreparationContext=useRef(preparationContext);latestPreparationContext.current=preparationContext;
+  useEffect(()=>{setPreparedDispatch(null);setDispatchStops([]);setDispatchOpen(false);
+    return ()=>{preparationAbort.current?.abort();};},[preparationContext]);
   const dispatchDocuments=useMemo(()=>Array.from(new Set(items.map(item=>item.fiscal_document_id)
     .filter((documentId):documentId is string=>Boolean(documentId)))),[items]);
 
-  // Auto-populate stops from load items when dialog opens
-  const populateStopsFromItems = () => {
+  const populateStopsFromItems = async () => {
+    preparationAbort.current?.abort();const controller=new AbortController();preparationAbort.current=controller;
+    const context=preparationContext;
     setEditingLocationStop(null);
-    if (items.length === 0) {
-      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
-      return;
-    }
-    // A carga expõe hoje um único destino consolidado, independentemente da
-    // quantidade de itens. O operador pode refinar as paradas no planejamento.
-    const stops: DispatchStopInput[] = [];
-    const destination = load?.destination || '';
-    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments, location:null,location_exception_reason:'' });
-    if (stops.length === 0) {
-      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments, location:null,location_exception_reason:'' });
-    }
-    setDispatchStops(stops);
+    preparedScope.current=null;setPreparingDispatch(true);setDispatchPreparationError('');setPreparedDispatch(null);setDispatchStops([]);
+    setDispatchForm({driver_id:'',vehicle_id:'',notes:''});
+    try {
+      if(!load||!currentTenant||!user)throw new Error('Sessão não autenticada');
+      const plan=await prepareLoadDispatch(currentTenant.id,load,items,controller.signal);
+      if(controller.signal.aborted||latestPreparationContext.current!==context)return;
+      preparedScope.current=context;
+      setPreparedDispatch(plan);
+      setDispatchForm({driver_id:plan.driverId||'',vehicle_id:plan.vehicleId||'',notes:plan.stops[0]?.notes||''});
+      setDispatchStops(plan.stops.map(stop=>({planned:stop,destination:stop.destination,client_id:stop.client_id||'',
+        fiscal_document_ids:stop.fiscal_document_ids,location:stopLocation(stop),location_exception_reason:stop.location_exception_reason||''})));
+    }catch(error){if(!controller.signal.aborted&&latestPreparationContext.current===context)setDispatchPreparationError(getErrorMessage(error));}
+    finally{if(!controller.signal.aborted&&latestPreparationContext.current===context)setPreparingDispatch(false);}
   };
 
   const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
@@ -204,6 +218,8 @@ export default function LoadDetail() {
   const createTrip = useMutation({
     mutationFn: async () => {
       if (!load || !currentTenant) throw new Error('Dados insuficientes');
+      if(preparedScope.current!==preparationContext||preparingDispatch||dispatchPreparationError||!preparedDispatch)throw new Error('Aguarde a preparação da rota antes de despachar.');
+      await assertLoadDispatchDraftCurrent(currentTenant.id,preparedDispatch);
       // Usa exclusivamente a RPC oficial — garante dispatch_trip_loads
       // e dispatch_stop_documents consistentes com o contrato de dados.
       const validStops = dispatchStops;
@@ -219,7 +235,7 @@ export default function LoadDetail() {
       const stopsPayload = validStops.map((s, idx) => ({
         id:`stop-${idx}`,recipient_name:s.destination,load_ids:[load.id],invoice_numbers:[],
         total_weight_kg:0,total_volume_m3:0,total_pallet_count:0,total_value:0,service_time_minutes:20,
-        priority:0,risk_level:'normal' as const,manual_order:idx+1,notes:idx===0?dispatchForm.notes:undefined,
+        priority:0,risk_level:'normal' as const,...s.planned,manual_order:idx+1,notes:idx===0?dispatchForm.notes:s.planned?.notes,
         destination: s.destination,
         client_id: s.client_id || null,
         fiscal_document_ids: s.fiscal_document_ids,
@@ -237,10 +253,11 @@ export default function LoadDetail() {
           attempt_scope:`load:${load.id}`,
           vehicle_id: dispatchForm.vehicle_id || load.vehicle_id || '',
           driver_id: dispatchForm.driver_id || load.driver_id || '',
-          planned_start_at: new Date().toISOString(),
-          route_name: `Carga ${load.load_number}`,
+          planned_start_at: preparedDispatch.plannedStart||new Date().toISOString(),
+          route_name: preparedDispatch.name,
           load_ids: [load.id],
           stops: stopsPayload,
+          planning_draft_id:preparedDispatch.draftId||null,
       });
       return { id: tripId };
     },
@@ -465,11 +482,11 @@ export default function LoadDetail() {
             </Button>
           )}
           {['ready', 'loaded', 'loading'].includes(load.status) && !load.trip_id && (
-            <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) populateStopsFromItems(); }}>
+            <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) void populateStopsFromItems(); else preparationAbort.current?.abort(); }}>
               <DialogTrigger asChild>
                 <Button 
                   size="sm" 
-                  disabled={createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error}
+                  disabled={itemsQuery.isPending||itemsQuery.isError||createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error}
                 >
                   <Send className="h-3 w-3 mr-1" /> Despachar
                 </Button>
@@ -477,12 +494,16 @@ export default function LoadDetail() {
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
-                  <DialogDescription>Confirme motorista, veículo, o ponto físico de cada parada e distribua cada documento uma única vez.</DialogDescription>
+                  <DialogDescription>As paradas e notas são preenchidas automaticamente. Confira motorista, veículo e eventuais endereços pendentes.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  {preparingDispatch?<p role="status">Carregando a roteirização e localizando os endereços das entregas…</p>:null}
+                  {dispatchPreparationError?<div role="alert"><p>{dispatchPreparationError}</p><Button variant="outline" onClick={()=>void populateStopsFromItems()}>Tentar novamente</Button><Button variant="link" onClick={()=>navigate('/route-planning')}>Abrir Roteirização</Button></div>:null}
+                  {preparedDispatch?<p className="text-xs text-muted-foreground">{preparedDispatch.draftId?'Planejamento salvo carregado.':'Paradas montadas automaticamente pelas notas.'} {dispatchStops.filter(s=>!s.location&&s.location_exception_reason.trim().length<20).length} local(is) pendente(s) de revisão.</p>:null}
                   <div>
                     <Label htmlFor="dispatch-driver" className="text-xs">Motorista</Label>
                     <Select
+                      disabled={preparingDispatch}
                       value={dispatchForm.driver_id || load.driver_id || ''}
                       onValueChange={v => setDispatchForm(f => ({ ...f, driver_id: v }))}
                     >
@@ -497,6 +518,7 @@ export default function LoadDetail() {
                   <div>
                     <Label htmlFor="dispatch-vehicle" className="text-xs">Veículo</Label>
                     <Select
+                      disabled={preparingDispatch}
                       value={dispatchForm.vehicle_id || load.vehicle_id || ''}
                       onValueChange={v => setDispatchForm(f => ({ ...f, vehicle_id: v }))}
                     >
@@ -513,7 +535,7 @@ export default function LoadDetail() {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <Label className="text-xs">Paradas ({dispatchStops.length})</Label>
-                      <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={addStop}>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={addStop} disabled={preparingDispatch||!!dispatchPreparationError}>
                         + Parada
                       </Button>
                     </div>
@@ -564,6 +586,7 @@ export default function LoadDetail() {
                     </div>
                   </div>
 
+                  <details><summary className="cursor-pointer text-sm">Notas distribuídas automaticamente — revisar vinculação ({dispatchDocuments.length})</summary>
                   {dispatchDocuments.map((documentId,index)=><div key={documentId}>
                     <Label htmlFor={`dispatch-document-${index}`}>Documento {documents.find(document=>document.id===documentId)?.invoice_number || documentId.slice(0,8)}</Label>
                     <Select value={String(dispatchStops.findIndex(stop=>stop.fiscal_document_ids.includes(documentId)))} onValueChange={value=>
@@ -575,11 +598,12 @@ export default function LoadDetail() {
                         {dispatchStops.map((stop,n)=><SelectItem key={n} value={String(n)}>Parada {n+1}: {stop.destination || 'Sem destino'}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </div>)}
+                  </div>)}</details>
                   <div>
                     <Label htmlFor="dispatch-notes" className="text-xs">Observações da primeira parada</Label>
                     <Textarea
                       id="dispatch-notes"
+                      disabled={preparingDispatch}
                       rows={2}
                       value={dispatchForm.notes}
                       onChange={e => setDispatchForm(f => ({ ...f, notes: e.target.value }))}
@@ -589,7 +613,7 @@ export default function LoadDetail() {
                   <Button
                     className="w-full"
                     onClick={() => createTrip.mutate()}
-                    disabled={createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error || (load.status === 'loading' && !!load.trip_id)}
+                    disabled={preparingDispatch||!!dispatchPreparationError||!preparedDispatch||createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error || (load.status === 'loading' && !!load.trip_id)}
                   >
                     {createTrip.isPending ? 'Despachando...' : 
                      (load.status === 'loading' && !!load.trip_id) ? 'Carga já despachada' : 
