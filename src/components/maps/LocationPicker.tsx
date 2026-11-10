@@ -4,6 +4,7 @@ import { Loader2, MapPin, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {GeocodingAttribution} from './GeocodingAttribution';
 import { geocodeAddress, locationFromCandidate, locationFromMap, type GeocodingCandidate, type ResolvedLocation } from '@/lib/geocoding';
 import '@/lib/maps/leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -98,6 +99,7 @@ export function LocationPicker({ tenantId, idPrefix = 'location', address, value
     <p className="text-xs text-muted-foreground">
       Pesquise o endereço e selecione o resultado. Se o acesso real for diferente, toque no mapa ou arraste o marcador até o ponto exato.
     </p>
+    <GeocodingAttribution providers={[value?.provider,...candidates.map(candidate=>candidate.provider)]}/>
     {value ? <p role="status" className="text-xs text-success">
       Local definido por {value.source === 'address_geocoded' ? 'endereço pesquisado' : 'seleção no mapa'}
       {value.accuracy_m ? ` · precisão estimada ${Math.round(value.accuracy_m)} m` : ''}.
