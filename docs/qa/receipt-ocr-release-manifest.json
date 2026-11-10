@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-receipt-ocr-only",
+  "filename": "20261110151444_enable_receipt_handwriting_recognition.sql",
+  "sha256": "6d19a2b33ecca9aa6d18ecb4fa9f6b330c7c6b98689da3df2ea721b60b6bbf66",
+  "preservedPayerManifestSha256": "cf451d02725623c66b3c48099642b4b258564a22a54ba60fb4cf4b417977ff4e"
+}
