@@ -67,6 +67,12 @@ Deno.serve(async (req) => {
   const idIntegracao: string | undefined = doc.idIntegracao;
   const plugnotasId: string | undefined = doc.plugnotasId;
 
+  // The signed diagnostic has no fiscal document and must stay out of the inbox.
+  if (body?.event === 'webhook.test' && body.test === true && !Object.hasOwn(body, 'document')
+    && !hubId && !idIntegracao && !plugnotasId) {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (!hubId && !idIntegracao && !plugnotasId) {
     return new Response(JSON.stringify({ error: 'missing_identifier' }), { status: 400, headers: corsHeaders });
   }
