@@ -36,7 +36,7 @@ vi.mock('@/components/ui/select',async()=>{
     SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
 });
 
-const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:null as string|null,
+const mock=vi.hoisted(()=>({prepare:vi.fn(),assertPlan:vi.fn(),rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:null as string|null,
   loadError:false,tripLinksError:false,itemsError:false,itemRefetch:vi.fn(),
   load:{id:'load',load_number:'QA',tenant_id:'tenant',status:'ready',driver_id:'driver',vehicle_id:'vehicle',destination:'Destino QA'},
   items:[{id:'item-1',fiscal_document_id:'doc-1',pallet_count:1,weight_kg:10,volume_m3:1},
@@ -44,6 +44,8 @@ const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:nu
 vi.mock('react-router-dom',()=>({useParams:()=>({id:'load'}),useNavigate:()=>mock.navigate}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
+vi.mock('@/lib/route-planning/loadDispatchPreparation',async(importActual)=>({...await importActual<object>(),
+  prepareLoadDispatch:mock.prepare,assertLoadDispatchDraftCurrent:mock.assertPlan}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:()=>({data:mock.items,isError:mock.itemsError,refetch:mock.itemRefetch})}));
 vi.mock('@/hooks/useVehicles',()=>({useVehicles:()=>({data:[{id:'vehicle',plate:'QA-0001',active:true}]})}));
@@ -71,6 +73,10 @@ vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:(tabl
 }}}));
 const trip='80000000-0000-4000-8000-000000000001';let client:QueryClient;
 beforeEach(()=>{vi.clearAllMocks();localStorage.clear();mock.tripId=null;mock.loadError=false;mock.tripLinksError=false;mock.itemsError=false;mock.load.status='ready';
+  mock.assertPlan.mockResolvedValue(undefined);
+  mock.prepare.mockResolvedValue({name:'Carga QA',stops:[{id:'stop-0',recipient_name:'Destino QA',destination:'Destino QA',
+    load_ids:['load'],fiscal_document_ids:['doc-1','doc-2'],invoice_numbers:[],total_weight_kg:30,total_volume_m3:2,
+    total_pallet_count:2,total_value:0,service_time_minutes:20,priority:0,risk_level:'normal'}]});
   Object.defineProperty(Element.prototype,'scrollIntoView',{configurable:true,value:vi.fn()});
   Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
   mock.rpc.mockImplementation((name:string)=>({abortSignal:()=>Promise.resolve({data:name==='get_load_operational_documents'
@@ -87,6 +93,32 @@ async function seedPending(){
   await expect(outbox.dispatch('tenant','actor','load:load',body)).rejects.toThrow('Offline');
 }
 describe('real planning screens with isolated transport (not authenticated browser E2E)',()=>{
+  it('LoadDetail dispatches the saved route without asking to redistribute notes or reconfirm verified locations',async()=>{
+    const stop=(id:string,doc:string)=>({id,recipient_name:id,destination:id,load_ids:['load'],fiscal_document_ids:[doc],invoice_numbers:[],
+      total_weight_kg:10,total_volume_m3:1,total_pallet_count:1,total_value:50,service_time_minutes:45,priority:0,risk_level:'normal',
+      latitude:-16,longitude:-44,location_source:'map_selected',planned_arrival_at:'2030-01-01T12:00:00Z',delivery_window_start:'08:00'});
+    mock.prepare.mockResolvedValueOnce({name:'Rota já planejada',draftId:'draft',draftVersion:'v1',driverId:'driver',vehicleId:'vehicle',
+      plannedStart:'2030-01-01T10:00:00Z',stops:[stop('Entrega 2','doc-2'),stop('Entrega 1','doc-1')]});
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button',{name:/Criar Viagem com 2/}));
+    await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
+    expect(dispatchCalls()[0][1]._payload).toMatchObject({planning_draft_id:'draft',route_name:'Rota já planejada',planned_start_at:'2030-01-01T10:00:00.000Z',
+      stops:[{fiscal_document_ids:['doc-2'],latitude:-16,service_time_minutes:45,planned_arrival_at:'2030-01-01T12:00:00.000Z',delivery_window_start:'08:00'},
+        {fiscal_document_ids:['doc-1'],latitude:-16}]});
+  });
+  it('LoadDetail does not dispatch when the saved route changed in another screen',async()=>{
+    mock.assertPlan.mockRejectedValueOnce(new Error('A rota foi alterada em outra tela.'));
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button',{name:/Criar Viagem com 1/}));
+    await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({description:'A rota foi alterada em outra tela.'})));
+    expect(dispatchCalls()).toHaveLength(0);
+  });
+  it('LoadDetail keeps preparation failures visible and blocks empty fallback dispatch',async()=>{
+    mock.prepare.mockRejectedValueOnce(new Error('Não foi possível carregar o planejamento.'));
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Não foi possível carregar o planejamento.');
+    expect(within(dialog).getByRole('button',{name:/Criar Viagem/})).toBeDisabled();expect(dispatchCalls()).toHaveLength(0);
+  });
   it('does not report a failed load read as a missing load',async()=>{
     mock.loadError=true;show('load');expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar a carga');
     expect(screen.queryByText('Carga não encontrada')).not.toBeInTheDocument();
@@ -100,6 +132,7 @@ describe('real planning screens with isolated transport (not authenticated brows
   it('LoadDetail sends every document through the shared durable dispatch client',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));
     const dialog=await screen.findByRole('dialog');expect(within(dialog).getByLabelText('Motorista')).toHaveAttribute('role','combobox');
+    await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     expect(within(dialog).getByLabelText('Veículo')).toHaveAttribute('role','combobox');
     fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
     fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
@@ -115,6 +148,7 @@ describe('real planning screens with isolated transport (not authenticated brows
   });
   it('LoadDetail does not create an empty extra stop with all documents silently left on the first',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Destino adicional'}});
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));
@@ -129,6 +163,7 @@ describe('real planning screens with isolated transport (not authenticated brows
   });
   it('LoadDetail blocks dispatch before transport when the physical stop has no coordinates',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({
       description:expect.stringContaining('confirme o local por endereço/mapa'),
@@ -137,6 +172,7 @@ describe('real planning screens with isolated transport (not authenticated brows
   });
   it('LoadDetail sends a detailed audited exception when location cannot be verified',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     fireEvent.change(within(dialog).getByLabelText('Exceção operacional (mínimo 20 caracteres)'),{
       target:{value:'Acesso rural ainda sem endereço cartográfico confirmado.'},
     });
@@ -149,12 +185,14 @@ describe('real planning screens with isolated transport (not authenticated brows
   });
   it('LoadDetail assigns separate documents to two stops using the actual selector',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     fireEvent.click(within(dialog).getAllByRole('button',{name:'Confirmar endereço ou ponto no mapa'})[0]);
     fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Segundo destino'}});
     fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
     fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-1'));
+    fireEvent.click(within(dialog).getByText(/Notas distribuídas automaticamente/));
     fireEvent.change(within(dialog).getByLabelText('Documento 2'),{target:{value:'1'}});
     expect(within(dialog).getByLabelText('Documento 2')).toHaveValue('1');
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));
