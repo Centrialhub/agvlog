@@ -557,7 +557,7 @@ export default function LoadDetail() {
                               value={stop.destination}
                               disabled={preparingDispatch}
                               onChange={e => setDispatchStops(previous=>previous.map((item,n)=>n===idx
-                                ? {...item,destination:e.target.value,location:null}:item))}
+                                ? {...item,destination:e.target.value,planned:item.planned?{...item.planned,location_address:e.target.value}:undefined,location:null}:item))}
                               placeholder={`Destino parada ${idx + 1}`}
                               className="h-8 text-xs"
                             />
