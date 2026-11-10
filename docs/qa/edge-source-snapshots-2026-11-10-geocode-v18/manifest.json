@@ -1,0 +1,38 @@
+{
+  "project": "qcvnsdrbcchaxvawcngk",
+  "name": "geocode-address",
+  "version": 18,
+  "verify_jwt": false,
+  "ezbr_sha256": "fc9cf554e49f39a0163fcd7105d1ed1d18040fa851275ab78e641c342cfa6318",
+  "normalization": "LF",
+  "files": [
+    {
+      "name": "geocode-address/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "name": "geocode-address/index.ts",
+      "sha256": "642f551360af4897ffe9c0724e10f1883a73c3cbfa94f7bd0725f6d2c9abf2a2"
+    },
+    {
+      "name": "_shared/active-tenant.ts",
+      "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+    },
+    {
+      "name": "_shared/cors.ts",
+      "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+    },
+    {
+      "name": "_shared/cron-auth.ts",
+      "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+    },
+    {
+      "name": "_shared/geocoding-cache.ts",
+      "sha256": "390ea839164aa1b2b29954e3d180f17f5b34cda5252927fad859605344aaae2c"
+    },
+    {
+      "name": "_shared/geocoding-quality.ts",
+      "sha256": "0acbee73078eda9867b71e30e1172ea7ae884df03d2bbee6a16ddae9045a9237"
+    }
+  ]
+}

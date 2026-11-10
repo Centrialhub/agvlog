@@ -3,6 +3,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import { Check, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {GeocodingAttribution} from './GeocodingAttribution';
 import type { GeocodingCandidate } from '@/lib/geocoding';
 import '@/lib/maps/leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -121,6 +122,7 @@ export function AddressResolutionPicker({ address, subjectLabel, candidates, dis
         <MapAdjustment disabled={disabled} selection={selection} onChange={adjust} />
       </MapContainer>
     </div>
+    <GeocodingAttribution providers={candidates.map(candidate=>candidate.provider)}/>
     <p className="text-xs text-muted-foreground">
       Clique no mapa, arraste o marcador ou informe as coordenadas da portaria. O ajuste manual fica registrado na auditoria.
     </p>

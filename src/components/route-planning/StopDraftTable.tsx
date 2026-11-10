@@ -7,6 +7,7 @@ import { ChevronUp, ChevronDown, AlertTriangle, Wand2, CheckCircle2, MapPin } fr
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 import type { ResolvedLocation } from '@/lib/geocoding';
 import { LocationPicker } from '@/components/maps/LocationPicker';
+import {GeocodingAttribution} from '@/components/maps/GeocodingAttribution';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isValidRouteDuration, MAX_ROUTE_DURATION_MINUTES } from '@/lib/route-planning/timelineSimulation';
 
@@ -234,6 +235,7 @@ export default function StopDraftTable({ tenantId, stops, onMove, onUpdate }: Pr
         })}
       </TableBody>
     </Table>
+    <GeocodingAttribution providers={stops.map(stop=>stop.location_provider)}/>
     <Dialog open={Boolean(editingStop)} onOpenChange={(open) => { if (!open) setEditingId(null); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>

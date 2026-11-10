@@ -41,6 +41,7 @@ import { LocationPicker } from '@/components/maps/LocationPicker';
 import type { ResolvedLocation } from '@/lib/geocoding';
 import {prepareLoadDispatch,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
 import {DispatchDocumentAssignments,assignDispatchDocument} from '@/components/loads/DispatchDocumentAssignments';
+import {GeocodingAttribution} from '@/components/maps/GeocodingAttribution';
 import type {RouteStopDraft} from '@/lib/route-planning/routePlanningTypes';
 
 interface DispatchStopInput {
@@ -594,6 +595,7 @@ export default function LoadDetail() {
                     </div>
                   </div>
 
+                  <GeocodingAttribution providers={dispatchStops.map(stop=>stop.location?.provider)}/>
                   {preparedDispatch?<DispatchDocumentAssignments stops={dispatchStops} disabled={preparingDispatch}
                     documents={dispatchDocuments.map(documentId=>({id:documentId,label:documents.find(document=>document.id===documentId)?.invoice_number||documentId.slice(0,8)}))}
                     onAssign={(documentId,value)=>setDispatchStops(previous=>assignDispatchDocument(previous,documentId,value))}/>:null}

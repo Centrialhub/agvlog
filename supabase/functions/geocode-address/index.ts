@@ -4,6 +4,7 @@ import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { isCronRequest } from '../_shared/cron-auth.ts';
 import { assessNominatimCandidate, type NominatimResult } from '../_shared/geocoding-quality.ts';
 import { candidatesFromCache, GEOCODING_PROVIDER_LIMIT } from '../_shared/geocoding-cache.ts';
+import {queryGeoapify,GeoapifyError,type GeocodingProviderCandidate} from './geoapify.ts';
 
 type ProviderResult = NominatimResult & {
   lat?: string;
@@ -12,6 +13,7 @@ type ProviderResult = NominatimResult & {
 };
 
 type RequestBody = {
+  mode?: unknown;
   tenant_id?: unknown;
   address?: unknown;
   limit?: unknown;
@@ -67,6 +69,13 @@ Deno.serve(async (req) => {
       const tenantContextError = requireActiveTenant(req, body.tenant_id);
       if (tenantContextError) return tenantContextError;
     }
+    if(body.mode==='geoapify_self_test'){
+      if(!cron)return json({error:'forbidden'},403);
+      const candidates=await queryGeoapify('Praça da Sé, São Paulo, SP, Brasil',Deno.env.get('GEOAPIFY_API_KEY'),5);
+      return json({status:candidates.length?'passed':'no_results',provider:'geoapify',synthetic:true,
+        production_records_written:false,candidate_count:candidates.length},candidates.length?200:422);
+    }
+    if(body.mode!==undefined)return json({error:'invalid_mode'},400);
     let tenantId = String(body.tenant_id || '');
     let address = typeof body.address === 'string' ? body.address.trim().replace(/\s+/g, ' ') : '';
     let structuredAddress: StructuredAddress | null = null;
@@ -163,6 +172,7 @@ Deno.serve(async (req) => {
       }
       if (error) throw new Error('entity_candidates_persistence_failed');
     };
+    if(provider==='geoapify'&&!Deno.env.get('GEOAPIFY_API_KEY')?.trim())return json({error:'geocoding_provider_not_configured'},503);
     const { data: cached } = await admin.from('address_geocoding_cache')
       .select('id,candidates,hit_count').eq('tenant_id', tenantId).eq('address_hash', addressHash)
       .eq('provider', provider).gt('expires_at', new Date().toISOString()).maybeSingle();
@@ -187,6 +197,10 @@ Deno.serve(async (req) => {
       return json({ error: 'geocoding_rate_limited', retry_after_ms: Number(quotaResult.retry_after_ms) || 1000 }, 429);
     }
 
+    let candidates:GeocodingProviderCandidate[];
+    if(provider==='geoapify'){
+      candidates=await queryGeoapify(address,Deno.env.get('GEOAPIFY_API_KEY'),GEOCODING_PROVIDER_LIMIT);
+    }else{
     const endpoint = new URL(Deno.env.get('GEOCODING_BASE_URL') || 'https://nominatim.openstreetmap.org/search');
     if (structuredAddress) {
       endpoint.searchParams.set('street', structuredAddress.street);
@@ -220,7 +234,7 @@ Deno.serve(async (req) => {
     const raw = await response.json();
     if (!Array.isArray(raw)) return json({ error: 'invalid_geocoding_response' }, 502);
 
-    const candidates = (raw as ProviderResult[]).flatMap((item) => {
+    candidates = (raw as ProviderResult[]).flatMap((item) => {
       const latitude = Number(item.lat);
       const longitude = Number(item.lon);
       if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
@@ -235,6 +249,7 @@ Deno.serve(async (req) => {
         provider, provider_type: item.addresstype || item.type || null, quality: quality.quality,
       }];
     });
+    }
     if (!await entityAddressIsCurrent()) return json({ error: 'address_snapshot_changed' }, 409);
     if (candidates.length > 0) {
       await admin.from('address_geocoding_cache').upsert({
@@ -252,6 +267,7 @@ Deno.serve(async (req) => {
     await recordEntityCandidates(candidates);
     return json({ query: address, provider, candidates: candidates.slice(0, limit), cache: 'miss' });
   } catch (error) {
+    if(error instanceof GeoapifyError)return json({error:error.code},error.status);
     if (error instanceof DOMException && error.name === 'AbortError') return json({ error: 'geocoding_timeout' }, 504);
     if (error instanceof Error && error.message === 'address_review_already_resolved') return json({ error: 'address_review_already_resolved' }, 409);
     if (error instanceof Error && error.message === 'address_snapshot_changed') return json({ error: 'address_snapshot_changed' }, 409);
