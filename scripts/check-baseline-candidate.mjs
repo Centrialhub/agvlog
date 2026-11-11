@@ -9,6 +9,7 @@ import { verifyCteSubcontractingRelease } from './cte-subcontracting-release-man
 import { verifyCteBillingPayerRelease } from './cte-billing-payer-release-manifest.mjs';
 import { verifyReceiptOcrRelease } from './receipt-ocr-release-manifest.mjs';
 import { verifyOperationsReadRelease } from './operations-read-release-manifest.mjs';
+import { verifyOpenaiReceiptRelease } from './openai-receipt-release-manifest.mjs';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MANIFEST_PATH = "docs/qa/baseline-candidate-manifest.json";
@@ -99,10 +100,11 @@ export async function inspectBaselineCandidate(root = REPOSITORY_ROOT) {
   const payerAddition = await verifyCteBillingPayerRelease({ root, forwardFiles, entries: directoryEntries });
   const receiptOcrAddition = await verifyReceiptOcrRelease({ root, forwardFiles, entries: directoryEntries });
   const operationsReadAddition = await verifyOperationsReadRelease({ root, forwardFiles, entries: directoryEntries });
+  const openaiReceiptAddition = await verifyOpenaiReceiptRelease({ root, forwardFiles, entries: directoryEntries });
   const supplementFiles = new Set(supplements?.forwards.map(({ filename }) => filename) ?? []);
   const followups = await verifyBaselineFollowups({ root, candidate,
-    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename && filename !== receiptOcrAddition?.filename && filename !== operationsReadAddition?.filename), entries: directoryEntries });
-  return { candidate, followups, supplements, releaseAddition, subcontractingAddition, payerAddition, receiptOcrAddition, operationsReadAddition };
+    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename && filename !== receiptOcrAddition?.filename && filename !== operationsReadAddition?.filename && filename !== openaiReceiptAddition?.filename), entries: directoryEntries });
+  return { candidate, followups, supplements, releaseAddition, subcontractingAddition, payerAddition, receiptOcrAddition, operationsReadAddition, openaiReceiptAddition };
 }
 
 export async function buildBaselineCandidateManifest(root = REPOSITORY_ROOT) {

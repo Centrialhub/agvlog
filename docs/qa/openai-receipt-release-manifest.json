@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-openai-receipt-only",
+  "filename": "20261111182259_support_openai_receipt_recognition.sql",
+  "sha256": "55cd180bc9ba5cd028412b27d6fc1cfb030c3a31151887bd5a5510eecc26ef41",
+  "preservedOperationsManifestSha256": "7cea3e68ee4df0c8eff4f79ef6e68f9581d2f4c6a17208d66a577c1c881e6689"
+}
