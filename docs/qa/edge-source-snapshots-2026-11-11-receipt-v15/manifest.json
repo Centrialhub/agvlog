@@ -1,0 +1,41 @@
+{
+  "project": "qcvnsdrbcchaxvawcngk",
+  "function": "process-delivery-receipt-ocr",
+  "version": 15,
+  "verify_jwt": false,
+  "ezbr_sha256": "f8b24792ce58b9c1aa3210f3479ca01edb9a4d0e10b24bda788703bc4a3c3ec4",
+  "files": [
+    {
+      "name": "process-delivery-receipt-ocr/index.ts",
+      "sha256": "2d14689bcb368baef64bc2b5951096658920294cca5df4eaf380d215c74ae646"
+    },
+    {
+      "name": "_shared/cors.ts",
+      "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+    },
+    {
+      "name": "_shared/cron-auth.ts",
+      "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/adapter.ts",
+      "sha256": "49469f89dbcd1eabdb9f1828c0f4570338da36c019c44e637f0c2105f34c96c3"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/recognition.ts",
+      "sha256": "6dd8dcc9ec997b5a5f9af8167ff6734a9e52c560a80f09546dadbf4e6edfbc06"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/worker.ts",
+      "sha256": "3e16ee7fd25bb1d5aa083ec46d24e58ce6202ddcd8236fb4dae2de281d869930"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/synthetic-fixtures.ts",
+      "sha256": "27981b2218441693e333900ae40eee50ab35349779b5815d6be4587684a43278"
+    },
+    {
+      "name": "process-delivery-receipt-ocr/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    }
+  ]
+}

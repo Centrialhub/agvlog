@@ -27,6 +27,11 @@ beforeAll(async()=>{db=new PGlite();await db.exec(`create role anon;create role 
  // with no Storage/provider/network and no operational delivery records.
  await db.exec(readFileSync('supabase/migrations/20260910174335_add_delivery_receipt_ocr_queue.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20261110151444_enable_receipt_handwriting_recognition.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261111182259_support_openai_receipt_recognition.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261111182259_support_openai_receipt_recognition.sql','utf8'));
+ // Only the verifier's isolated-seed sentinel; does not simulate GoTrue/Auth.
+ await db.exec("create table auth.users(email text);insert into auth.users select 'fixture'||g||'@agvlog-e2e.invalid' from generate_series(1,7) g;");
+ await db.exec(readFileSync('supabase/verify/openai_receipt_contract.sql','utf8'));
 },30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);
  await db.query('insert into delivery_receipts(id,tenant_id,processed_path,processed_hash) values($1,$2,$3,$4)',[receipt,tenant,tenant+'/receipt.jpg',hash]);});
@@ -43,6 +48,16 @@ it('persists extracted date/signature independently of delivery timestamp and re
   .toEqual({d:'2026-11-09',s:'present',review:false,preserved:true});
  expect((await db.query("select count(*)::int n from audit where action='ocr_completed'")).rows[0]).toEqual({n:1});
  await expect(complete(c,{...result,signature_presence:'absent'})).rejects.toThrow('result_conflict');
+});
+it('persists OpenAI provenance, preserves delivered_at and replays idempotently',async()=>{
+ const c=await claim(),value={...result,provider:'openai',model:'gpt-6-luna'};
+ expect(await complete(c,value)).toMatchObject({applied:true,replayed:false});expect(await complete(c,value)).toMatchObject({replayed:true});
+ expect((await db.query("select ocr_result->>'provider' provider,delivered_at='2026-11-10T15:00:00Z'::timestamptz preserved from delivery_receipts where id=$1",[receipt])).rows[0]).toEqual({provider:'openai',preserved:true});
+ await expect(complete(c,result)).rejects.toThrow('result_conflict');
+});
+it('rejects unknown/null providers and preserves the service-only completion ACL',async()=>{
+ const c=await claim();for(const provider of ['unknown',null])await expect(complete(c,{...result,provider})).rejects.toThrow('invalid_delivery_receipt_ocr_result');
+ await expect(service("select complete_delivery_receipt_ocr_v2($1,$2,$3,'completed',$4::jsonb,null)",[c.job_id,c.lease_token,c.processed_hash,JSON.stringify({...result,provider:'openai'})],'authenticated')).rejects.toThrow('permission denied');
 });
 it('rejects date without written evidence and malformed signatures before changing the receipt',async()=>{
  const c=await claim();await expect(complete(c,{...result,date_text:'09/11'})).rejects.toThrow('date_without_evidence');
