@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-operations-read-only",
+  "filename": "20261111154053_restore_operations_read_contracts.sql",
+  "sha256": "a122112cfdfd038c3f167424f3303ba05e0fc4d9c228a2afc8f5f79d4c259e89",
+  "preservedReceiptManifestSha256": "34991effdbb1a59d593b35d9c8f8cfeda6c4e1e64f93b6b167a0da3ab32bae62"
+}
