@@ -109,7 +109,7 @@ jobs:
 
   database-and-e2e:
     needs: [validate]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -187,6 +187,8 @@ jobs:
           psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261104194722_resolve_cte_billing_payer.sql
           psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110151444_enable_receipt_handwriting_recognition.sql
           psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/verify/receipt_recognition_contract.sql
+          psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261111154053_restore_operations_read_contracts.sql
+          psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/verify/operations_read_contract.sql
 
       - name: Database lint
         run: ./node_modules/.bin/supabase db lint --local --workdir .local-staging --network-id agvlog-local-staging-loopback --level error --fail-on error
@@ -198,7 +200,11 @@ jobs:
         run: ./node_modules/.bin/supabase test db "$GITHUB_WORKSPACE/supabase/tests/database" --local --workdir .local-staging --network-id agvlog-local-staging-loopback
 
       - name: Install Playwright Chromium
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+        run: |
+          # Keep Ubuntu signature/key verification; avoid the failing Ubuntu DNS mirrors.
+          test -f /etc/apt/apt-mirrors.txt
+          printf '%s\n' 'https://mirrors.edge.kernel.org/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Desktop, tablet and mobile E2E
         env:
