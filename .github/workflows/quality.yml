@@ -109,7 +109,7 @@ jobs:
 
   database-and-e2e:
     needs: [validate]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout

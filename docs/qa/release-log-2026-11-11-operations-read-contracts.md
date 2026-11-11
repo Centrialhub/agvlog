@@ -51,3 +51,11 @@ Não promover o retorno automaticamente nem desfazer hotfix concorrente.
 Horários UTC, SHAs, gate, versão do ledger e screenshots finais serão registrados
 no PR. Advisors de saúde sem achados; segurança/performance têm achados anteriores
 fora deste delta. Nenhuma emissão fiscal ou envio a motorista é teste autorizado.
+
+O primeiro ensaio nativo exigiu corrigir apenas a sessão sintética, incluindo
+active_tenant_id, sem alterar guards. Dois servidores ubuntu-latest (26.04)
+falharam na resolução DNS dos mirrors Ubuntu durante a instalação do Playwright.
+O job database-and-e2e fica fixado em ubuntu-24.04, já utilizado na homologação
+documentada e suportado pelo Playwright. Sem alteração de testes, dependências,
+alvos, credenciais, isolamento ou gates. Documentação consultada:
+https://playwright.dev/docs/intro . Reexecutar o gate completo no SHA final.
