@@ -10,7 +10,7 @@ begin
 end;$guard$;
 set local role authenticated;
 set local request.jwt.claim.sub='10000000-0000-4000-8000-000000000002';
-set local request.jwt.claims='{"role":"authenticated","aal":"aal1","sub":"10000000-0000-4000-8000-000000000002"}';
+set local request.jwt.claims='{"role":"authenticated","aal":"aal1","sub":"10000000-0000-4000-8000-000000000002","active_tenant_id":"20000000-0000-4000-8000-000000000001"}';
 do $contract$
 declare s jsonb;t jsonb;r jsonb;
 begin
@@ -31,7 +31,7 @@ begin
  exception when insufficient_privilege then null;end;
 end;$contract$;
 set local request.jwt.claim.sub='10000000-0000-4000-8000-000000000003';
-set local request.jwt.claims='{"role":"authenticated","aal":"aal1","sub":"10000000-0000-4000-8000-000000000003"}';
+set local request.jwt.claims='{"role":"authenticated","aal":"aal1","sub":"10000000-0000-4000-8000-000000000003","active_tenant_id":"20000000-0000-4000-8000-000000000001"}';
 do $driver_denied$
 begin
  begin
