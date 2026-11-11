@@ -59,3 +59,11 @@ O job database-and-e2e fica fixado em ubuntu-24.04, já utilizado na homologaç�
 documentada e suportado pelo Playwright. Sem alteração de testes, dependências,
 alvos, credenciais, isolamento ou gates. Documentação consultada:
 https://playwright.dev/docs/intro . Reexecutar o gate completo no SHA final.
+
+A indisponibilidade de DNS dos domínios Ubuntu persistiu também no 24.04.
+Somente o mirror de download do runner descartável passa a usar HTTPS
+https://mirrors.edge.kernel.org/ubuntu/ . Pacotes, suites e chaves Ubuntu
+permanecem os mesmos; APT deve validar InRelease/assinaturas e hashes normalmente.
+Nenhum trusted=yes, chave nova, bypass de TLS ou ignore de erro é permitido.
+Fontes consultadas: https://mirrors.edge.kernel.org/ e
+https://documentation.ubuntu.com/security/software-integrity/archive-verification/ .

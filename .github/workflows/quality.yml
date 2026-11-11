@@ -200,7 +200,11 @@ jobs:
         run: ./node_modules/.bin/supabase test db "$GITHUB_WORKSPACE/supabase/tests/database" --local --workdir .local-staging --network-id agvlog-local-staging-loopback
 
       - name: Install Playwright Chromium
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+        run: |
+          # Keep Ubuntu signature/key verification; avoid the failing Ubuntu DNS mirrors.
+          test -f /etc/apt/apt-mirrors.txt
+          printf '%s\n' 'https://mirrors.edge.kernel.org/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Desktop, tablet and mobile E2E
         env:
