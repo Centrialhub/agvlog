@@ -37,7 +37,7 @@ vi.mock('@/components/ui/select',async()=>{
     SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
 });
 
-const mock=vi.hoisted(()=>({prepare:vi.fn(),assertPlan:vi.fn(),rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:null as string|null,
+const mock=vi.hoisted(()=>({prepare:vi.fn(),resolveLocations:vi.fn(),assertPlan:vi.fn(),rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:null as string|null,
   loadError:false,tripLinksError:false,itemsError:false,itemRefetch:vi.fn(),
   load:{id:'load',load_number:'QA',tenant_id:'tenant',status:'ready',driver_id:'driver',vehicle_id:'vehicle',destination:'Destino QA'},
   items:[{id:'item-1',fiscal_document_id:'doc-1',pallet_count:1,weight_kg:10,volume_m3:1},
@@ -46,7 +46,7 @@ vi.mock('react-router-dom',()=>({useParams:()=>({id:'load'}),useNavigate:()=>moc
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/lib/route-planning/loadDispatchPreparation',async(importActual)=>({...await importActual<object>(),
-  prepareLoadDispatch:mock.prepare,assertLoadDispatchDraftCurrent:mock.assertPlan}));
+  prepareLoadDispatch:mock.prepare,resolveAutomaticStopLocations:mock.resolveLocations,assertLoadDispatchDraftCurrent:mock.assertPlan}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:()=>({data:mock.items,isError:mock.itemsError,refetch:mock.itemRefetch})}));
 vi.mock('@/hooks/useVehicles',()=>({useVehicles:()=>({data:[{id:'vehicle',plate:'QA-0001',active:true}]})}));
@@ -94,6 +94,27 @@ async function seedPending(){
   await expect(outbox.dispatch('tenant','actor','load:load',body)).rejects.toThrow('Offline');
 }
 describe('real planning screens with isolated transport (not authenticated browser E2E)',()=>{
+  it('keeps dispatch blocked after confirming only one stop and resumes lookup without losing that point or notes',async()=>{
+    const stop=(id:string,doc:string)=>({id,destination:id,recipient_name:id,client_id:id,load_ids:['load'],
+      fiscal_document_ids:[doc],invoice_numbers:[],location_address:`Rua QA ${id}`,total_weight_kg:0,total_volume_m3:0,
+      total_pallet_count:0,total_value:0,service_time_minutes:20,priority:0,risk_level:'normal'});
+    mock.prepare.mockResolvedValueOnce({name:'QA',stops:[stop('s1','doc-1'),stop('s2','doc-2')],locationWarning:'Busca interrompida.'});
+    mock.resolveLocations.mockImplementationOnce(async(stops)=>stops.map((s:Record<string,unknown>)=>({...s,
+      latitude:-16,longitude:-44,location_source:'address_geocoded'})));
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    const create=await within(dialog).findByRole('button',{name:/Criar Viagem com 2/});expect(create).toBeDisabled();
+    fireEvent.click(within(dialog).getAllByRole('button',{name:'Confirmar endereço ou ponto no mapa'})[0]);
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
+    expect(create).toBeDisabled();expect(within(dialog).getByText(/Falta confirmar 1 parada/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Observações da primeira parada'),{target:{value:'Manter instrução QA'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'Consultar novamente locais pendentes'}));
+    await waitFor(()=>expect(create).not.toBeDisabled());
+    expect(within(dialog).getByLabelText('Observações da primeira parada')).toHaveValue('Manter instrução QA');
+    fireEvent.click(create);await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
+    const payload=dispatchCalls()[0][1]._payload;
+    expect(payload.stops[0]).toMatchObject({latitude:-23.55052,longitude:-46.633308,fiscal_document_ids:['doc-1']});
+    expect(payload.stops[1]).toMatchObject({latitude:-16,longitude:-44,fiscal_document_ids:['doc-2']});
+  });
   it('LoadDetail invalidates the old point and searches the edited destination instead of the previous street',async()=>{
     mock.prepare.mockResolvedValueOnce({name:'Carga QA',stops:[{id:'stop-0',recipient_name:'Destino QA',destination:'Destino QA',
       load_ids:['load'],fiscal_document_ids:['doc-1','doc-2'],invoice_numbers:[],total_weight_kg:30,total_volume_m3:2,
@@ -144,6 +165,8 @@ describe('real planning screens with isolated transport (not authenticated brows
   it('LoadDetail does not dispatch when the saved route changed in another screen',async()=>{
     mock.assertPlan.mockRejectedValueOnce(new Error('A rota foi alterada em outra tela.'));
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
     fireEvent.click(await within(dialog).findByRole('button',{name:/Criar Viagem com 1/}));
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({description:'A rota foi alterada em outra tela.'})));
     expect(dispatchCalls()).toHaveLength(0);
@@ -186,6 +209,10 @@ describe('real planning screens with isolated transport (not authenticated brows
     await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Destino adicional'}});
+    for(let index=0;index<2;index++){
+      fireEvent.click(within(dialog).getAllByRole('button',{name:'Confirmar endereço ou ponto no mapa'})[0]);
+      fireEvent.click(within(dialog).getByLabelText(`Selecionar localização dispatch-stop-${index}`));
+    }
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({description:'Informe o destino e distribua os documentos de cada parada.'})));
     expect(dispatchCalls()).toHaveLength(0);
@@ -199,10 +226,8 @@ describe('real planning screens with isolated transport (not authenticated brows
   it('LoadDetail blocks dispatch before transport when the physical stop has no coordinates',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
     await within(dialog).findByRole('button',{name:/Criar Viagem com 1/});
-    fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
-    await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({
-      description:expect.stringContaining('confirme o local por endereço/mapa'),
-    })));
+    expect(within(dialog).getByRole('button',{name:/Criar Viagem com 1/})).toBeDisabled();
+    expect(within(dialog).getByText(/Falta confirmar 1 parada/)).toBeInTheDocument();
     expect(dispatchCalls()).toHaveLength(0);
   });
   it('LoadDetail sends a detailed audited exception when location cannot be verified',async()=>{

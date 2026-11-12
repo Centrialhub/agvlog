@@ -39,7 +39,7 @@ import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
 import { LocationPicker } from '@/components/maps/LocationPicker';
 import type { ResolvedLocation } from '@/lib/geocoding';
-import {prepareLoadDispatch,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
+import {prepareLoadDispatch,resolveAutomaticStopLocations,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
 import {DispatchDocumentAssignments,assignDispatchDocument} from '@/components/loads/DispatchDocumentAssignments';
 import {GeocodingAttribution} from '@/components/maps/GeocodingAttribution';
 import type {RouteStopDraft} from '@/lib/route-planning/routePlanningTypes';
@@ -214,6 +214,28 @@ export default function LoadDetail() {
   };
 
   const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
+  const pendingLocationCount=dispatchStops.filter(s=>!s.location&&s.location_exception_reason.trim().length<20).length;
+  const retryDispatchLocations=async()=>{
+    if(!currentTenant||!preparedDispatch||preparingDispatch)return;
+    const context=preparationContext,controller=new AbortController();
+    preparationAbort.current?.abort();preparationAbort.current=controller;setPreparingDispatch(true);
+    setEditingLocationStop(null);
+    let locationWarning:string|undefined;
+    try{
+      const stops=dispatchStops.map((s,index)=>({...s.planned,id:s.planned?.id||`stop-${index}`,
+        destination:s.destination,client_id:s.client_id,fiscal_document_ids:s.fiscal_document_ids,
+        latitude:s.location?.latitude??null,longitude:s.location?.longitude??null,
+        location_source:s.location?.source,location_address:s.planned?.location_address||s.destination,
+        location_exception_reason:s.location_exception_reason})) as RouteStopDraft[];
+      const resolved=await resolveAutomaticStopLocations(stops,controller.signal,new Set(stops.map(s=>s.client_id||'')),
+        undefined,currentTenant.id,message=>{locationWarning=message;});
+      if(controller.signal.aborted||latestPreparationContext.current!==context)return;
+      setDispatchStops(previous=>previous.map((s,index)=>({...s,location:s.location||stopLocation(resolved[index])})));
+      setPreparedDispatch(previous=>previous?{...previous,locationWarning}:previous);
+    }catch(error){if(!controller.signal.aborted&&latestPreparationContext.current===context)
+      setPreparedDispatch(previous=>previous?{...previous,locationWarning:getErrorMessage(error)}:previous);
+    }finally{if(!controller.signal.aborted&&latestPreparationContext.current===context)setPreparingDispatch(false);}
+  };
   const removeStop = (idx: number) => {
     setDispatchStops(s => s.filter((_, i) => i !== idx));
     setEditingLocationStop(null);
@@ -506,7 +528,9 @@ export default function LoadDetail() {
                   {preparingDispatch?<p role="status">{preparedDispatch?'Notas distribuídas. Consultando os locais de entrega, um endereço por vez…':'Carregando a roteirização e distribuindo as notas…'}</p>:null}
                   {preparedDispatch?.locationWarning?<p role="alert" className="text-sm text-amber-700">{preparedDispatch.locationWarning}</p>:null}
                   {dispatchPreparationError?<div role="alert"><p>{dispatchPreparationError}</p><Button variant="outline" onClick={()=>void populateStopsFromItems()}>Tentar novamente</Button><Button variant="link" onClick={()=>navigate('/route-planning')}>Abrir Roteirização</Button></div>:null}
-                  {preparedDispatch?<p className="text-xs text-muted-foreground">{preparedDispatch.draftId?'Planejamento salvo carregado.':'Paradas montadas automaticamente pelas notas.'} {dispatchStops.filter(s=>!s.location&&s.location_exception_reason.trim().length<20).length} local(is) pendente(s) de revisão.</p>:null}
+                  {preparedDispatch?<div className="space-y-2"><p className="text-xs text-muted-foreground">{preparedDispatch.draftId?'Planejamento salvo carregado.':'Paradas montadas automaticamente pelas notas.'} {pendingLocationCount} local(is) pendente(s) de revisão.</p>
+                    {pendingLocationCount>0&&!preparingDispatch?<><p role="status" className="text-sm">Falta confirmar {pendingLocationCount} parada(s). Confirme cada local pendente por endereço ou mapa. Validar um local não valida os demais.</p>
+                      <Button variant="outline" onClick={()=>void retryDispatchLocations()}>Consultar novamente locais pendentes</Button></>:null}</div>:null}
                   <div>
                     <Label htmlFor="dispatch-driver" className="text-xs">Motorista</Label>
                     <Select
@@ -613,7 +637,7 @@ export default function LoadDetail() {
                   <Button
                     className="w-full"
                     onClick={() => createTrip.mutate()}
-                    disabled={preparingDispatch||!!dispatchPreparationError||!preparedDispatch||createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error || (load.status === 'loading' && !!load.trip_id)}
+                    disabled={preparingDispatch||pendingLocationCount>0||!!dispatchPreparationError||!preparedDispatch||createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error || (load.status === 'loading' && !!load.trip_id)}
                   >
                     {createTrip.isPending ? 'Despachando...' : 
                      (load.status === 'loading' && !!load.trip_id) ? 'Carga já despachada' : 
