@@ -94,6 +94,33 @@ async function seedPending(){
   await expect(outbox.dispatch('tenant','actor','load:load',body)).rejects.toThrow('Offline');
 }
 describe('real planning screens with isolated transport (not authenticated browser E2E)',()=>{
+  it('authorizes pending locations together while lookup is slow, cancels it, preserves confirmed points and sends textual addresses',async()=>{
+    const stop=(id:string,doc:string)=>({id,destination:id,recipient_name:id,client_id:id,load_ids:['load'],
+      fiscal_document_ids:[doc],invoice_numbers:[],location_address:`Rua documental ${id}, 50, Cidade QA`,total_weight_kg:0,total_volume_m3:0,
+      total_pallet_count:0,total_value:0,service_time_minutes:20,priority:0,risk_level:'normal'});
+    const plan={name:'QA',stops:[{...stop('s1','doc-1'),latitude:-16,longitude:-44,location_source:'map_selected'},stop('s2','doc-2')]};
+    let signal!:AbortSignal,finish!:(value:unknown)=>void;
+    mock.prepare.mockImplementationOnce((_tenant,_load,_items,s,onPrepared)=>{
+      signal=s;onPrepared(plan);return new Promise(resolve=>{finish=resolve;});
+    });
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button',{name:'Liberar despacho sem ajustar o mapa'}));
+    const authorize=within(dialog).getByRole('button',{name:'Autorizar despacho com 1 local(is) pendente(s)'});
+    const reason=within(dialog).getByLabelText('Justificativa da liberação das paradas pendentes');
+    fireEvent.change(reason,{target:{value:'curto'}});expect(authorize).toBeDisabled();
+    fireEvent.change(reason,{target:{value:'Operação autoriza entrega pelo endereço documental; ponto será confirmado em campo.'}});
+    fireEvent.click(authorize);expect(signal.aborted).toBe(true);
+    expect(within(dialog).getByText(/1 parada\(s\) liberada/)).toBeInTheDocument();
+    // A late provider result cannot replace the explicit pending-location release.
+    await act(async()=>{finish({...plan,stops:plan.stops.map(s=>({...s,latitude:0,longitude:0,location_source:'address_geocoded'}))});});
+    const create=within(dialog).getByRole('button',{name:/Criar Viagem com 2/});expect(create).not.toBeDisabled();
+    fireEvent.click(create);await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
+    const payload=dispatchCalls()[0][1]._payload;
+    expect(payload.stops[0]).toMatchObject({latitude:-16,longitude:-44,location_source:'map_selected',location_exception_reason:null});
+    expect(payload.stops[1]).toMatchObject({latitude:null,longitude:null,location_source:'legacy_coordinates',
+      location_address:'Rua documental s2, 50, Cidade QA',fiscal_document_ids:['doc-2'],
+      location_exception_reason:'Operação autoriza entrega pelo endereço documental; ponto será confirmado em campo.'});
+  });
   it('keeps dispatch blocked after confirming only one stop and resumes lookup without losing that point or notes',async()=>{
     const stop=(id:string,doc:string)=>({id,destination:id,recipient_name:id,client_id:id,load_ids:['load'],
       fiscal_document_ids:[doc],invoice_numbers:[],location_address:`Rua QA ${id}`,total_weight_kg:0,total_volume_m3:0,
