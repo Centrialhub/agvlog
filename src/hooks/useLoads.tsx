@@ -23,6 +23,8 @@ const LOAD_HEADER_KEYS = [
   'scheduled_load_at', 'estimated_arrival_at', 'trailer_plate', 'ciot',
   'distribution_manifest', 'shipment_manifest', 'driver_id', 'vehicle_id',
   'merchandise_value', 'payment_method',
+  'actual_load_at', 'gate_departure_at', 'arrival_at', 'driver_type', 'monitor_responsible', 'monitored',
+  'sm_manager', 'sm_release',
 ] as const;
 
 function loadHeaderChanges(values: Partial<Load>): LoadHeaderChanges {
