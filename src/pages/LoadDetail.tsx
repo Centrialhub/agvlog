@@ -42,6 +42,7 @@ import type { ResolvedLocation } from '@/lib/geocoding';
 import {prepareLoadDispatch,resolveAutomaticStopLocations,stopLocation,assertLoadDispatchDraftCurrent,type LoadDispatchPreparation} from '@/lib/route-planning/loadDispatchPreparation';
 import {DispatchDocumentAssignments,assignDispatchDocument} from '@/components/loads/DispatchDocumentAssignments';
 import {GeocodingAttribution} from '@/components/maps/GeocodingAttribution';
+import {DispatchPendingLocationRelease} from '@/components/loads/DispatchPendingLocationRelease';
 import type {RouteStopDraft} from '@/lib/route-planning/routePlanningTypes';
 
 interface DispatchStopInput {
@@ -215,6 +216,13 @@ export default function LoadDetail() {
 
   const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
   const pendingLocationCount=dispatchStops.filter(s=>!s.location&&s.location_exception_reason.trim().length<20).length;
+  const releasePendingLocations=(reason:string)=>{
+    if(!preparedDispatch||!currentTenant||latestPreparationContext.current!==preparationContext||createTrip.isPending||reason.trim().length<20)return;
+    preparationAbort.current?.abort();setPreparingDispatch(false);setEditingLocationStop(null);
+    preparedScope.current=preparationContext;
+    setDispatchStops(previous=>previous.map(stop=>!stop.location&&stop.location_exception_reason.trim().length<20
+      ?{...stop,location_exception_reason:reason.trim()}:stop));
+  };
   const retryDispatchLocations=async()=>{
     if(!currentTenant||!preparedDispatch||preparingDispatch)return;
     const context=preparationContext,controller=new AbortController();
@@ -270,7 +278,7 @@ export default function LoadDetail() {
         latitude:s.location?.latitude ?? null,
         longitude:s.location?.longitude ?? null,
         location_source:s.location?.source || 'legacy_coordinates' as const,
-        location_address:s.location?.address || s.destination,
+        location_address:s.location?.address || s.planned?.location_address || s.destination,
         location_provider:s.location?.provider || null,
         location_accuracy_m:s.location?.accuracy_m ?? null,
         location_confidence:s.location?.confidence ?? null,
@@ -529,8 +537,13 @@ export default function LoadDetail() {
                   {preparedDispatch?.locationWarning?<p role="alert" className="text-sm text-amber-700">{preparedDispatch.locationWarning}</p>:null}
                   {dispatchPreparationError?<div role="alert"><p>{dispatchPreparationError}</p><Button variant="outline" onClick={()=>void populateStopsFromItems()}>Tentar novamente</Button><Button variant="link" onClick={()=>navigate('/route-planning')}>Abrir Roteirização</Button></div>:null}
                   {preparedDispatch?<div className="space-y-2"><p className="text-xs text-muted-foreground">{preparedDispatch.draftId?'Planejamento salvo carregado.':'Paradas montadas automaticamente pelas notas.'} {pendingLocationCount} local(is) pendente(s) de revisão.</p>
-                    {pendingLocationCount>0&&!preparingDispatch?<><p role="status" className="text-sm">Falta confirmar {pendingLocationCount} parada(s). Confirme cada local pendente por endereço ou mapa. Validar um local não valida os demais.</p>
+                    {pendingLocationCount>0&&!preparingDispatch?<><p role="status" className="text-sm">Falta confirmar {pendingLocationCount} parada(s). Confira os locais ou autorize o despacho com localização pendente abaixo.</p>
                       <Button variant="outline" onClick={()=>void retryDispatchLocations()}>Consultar novamente locais pendentes</Button></>:null}</div>:null}
+                  {preparedDispatch?<DispatchPendingLocationRelease count={pendingLocationCount} disabled={createTrip.isPending||!!dispatchPreparationError}
+                    onRelease={releasePendingLocations}/>:null}
+                  {dispatchStops.some(stop=>!stop.location&&stop.location_exception_reason.trim().length>=20)?<p role="status" className="text-sm text-amber-700">
+                    {dispatchStops.filter(stop=>!stop.location&&stop.location_exception_reason.trim().length>=20).length} parada(s) liberada(s) com localização pendente. A justificativa será registrada ao criar a viagem.
+                  </p>:null}
                   <div>
                     <Label htmlFor="dispatch-driver" className="text-xs">Motorista</Label>
                     <Select
