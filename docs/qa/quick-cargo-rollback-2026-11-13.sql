@@ -174,4 +174,3 @@ begin
     else v_result end,'driver_app');
   return v_result;
 end;$function$
-
