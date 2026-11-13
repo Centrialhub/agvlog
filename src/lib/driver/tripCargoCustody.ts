@@ -265,7 +265,7 @@ export async function getCompleteTripCargoControl(tenantId:string,tripId:string)
   ]);return snapshotSchema.parse({...snapshot,loads,documents,seals,evidence,divergences});
 }
 
-export type DriverTripCargoAction = 'accept' | 'start_loading' | 'confirm_cargo' | 'mark_departed' | 'resolve_seals' | 'mark_returned';
+export type DriverTripCargoAction = 'accept' | 'start_loading' | 'confirm_cargo' | 'quick_confirm' | 'mark_departed' | 'resolve_seals' | 'mark_returned';
 export async function updateDriverTripCargo(input: {
   tenantId: string; tripId: string; requestId: string; action: DriverTripCargoAction; payload?: Record<string, unknown>;
 }) {

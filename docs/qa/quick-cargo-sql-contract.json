@@ -1,0 +1,6 @@
+{
+  "signature": "private.driver_update_trip_cargo(uuid,uuid,uuid,text,jsonb)",
+  "before": "839353a24ef5a3303f7ab6ab6b380831",
+  "after": "1419cb03d0dc755b607e47602bb0759c",
+  "acl": "{postgres=X/postgres}"
+}

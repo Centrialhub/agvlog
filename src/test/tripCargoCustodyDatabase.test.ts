@@ -76,6 +76,9 @@ beforeAll(async () => {
   const readiness=readFileSync('supabase/migrations/20261113145153_driver_vehicle_readiness_checklist.sql','utf8').split('do $patch$');
   // This fixture executes the real cargo branch; journey writers have their own native fixture.
   await db.exec(readiness[0]+'do $patch$'+readiness.at(-1));
+  await db.exec(readFileSync('supabase/migrations/20261113165544_driver_quick_cargo_confirmation.sql','utf8'));
+  const quickContract=JSON.parse(readFileSync('docs/qa/quick-cargo-sql-contract.json','utf8'));
+  expect((await db.query<{hash:string}>("select md5(prosrc) hash from pg_proc where oid='private.driver_update_trip_cargo(uuid,uuid,uuid,text,jsonb)'::regprocedure")).rows[0].hash).toBe(quickContract.after);
 }, 30_000);
 
 beforeEach(async () => {
@@ -102,6 +105,35 @@ beforeEach(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe('trip cargo custody executed by PostgreSQL', () => {
+  it('bulk-confirms every note without inventing safety checks, quantities, seals or photographs; replays and rejects stale writes',async()=>{
+    await command('90000000-0000-4000-8000-000000000070','accept',{vehicle_id:id.vehicle});
+    const before=(await db.query<{n:number}>('select count(*)::int n from trip_cargo_document_checks')).rows[0].n;
+    await db.query("insert into fiscal_documents(id,tenant_id,load_id,invoice_number,volume_count) values('83000000-0000-4000-8000-000000000099',$1,$2,'NF-added-after-accept',1)",[id.tenant,id.load]);
+    const row=(await db.query<{revision:string}>("select updated_at::text revision from trip_cargo_controls")).rows[0];
+    const payload={expected_updated_at:row.revision,confirm_all_documents:true};
+    const result=await command('90000000-0000-4000-8000-000000000071','quick_confirm',payload);
+    expect(result.result).toMatchObject({status:'ready_to_depart',confirmed:true});
+    expect(await command('90000000-0000-4000-8000-000000000071','quick_confirm',payload)).toEqual(result);
+    await expect(command('90000000-0000-4000-8000-000000000072','quick_confirm',payload)).rejects.toThrow('trip_cargo_refresh_required');
+    expect((await db.query('select bool_and(driver_confirmed) all_confirmed from trip_cargo_document_checks')).rows).toEqual([{all_confirmed:true}]);
+    expect((await db.query<{n:number}>('select count(*)::int n from trip_cargo_document_checks')).rows[0].n).toBe(before+1);
+    expect((await db.query('select vehicle_checked,tie_down_confirmed,seal_not_applicable_reason from trip_cargo_controls')).rows)
+      .toEqual([{vehicle_checked:false,tie_down_confirmed:false,seal_not_applicable_reason:null}]);
+    expect((await db.query('select confirmed_weight_kg,confirmed_at from trip_cargo_load_checks')).rows).toEqual([{confirmed_weight_kg:null,confirmed_at:null}]);
+    expect((await db.query('select count(*)::int n from trip_cargo_evidence union all select count(*)::int from trip_cargo_seals')).rows).toEqual([{n:0},{n:0}]);
+    await expect(command('90000000-0000-4000-8000-000000000073','mark_departed')).rejects.toThrow('trip_cargo_pre_checklist_required');
+    await db.query("insert into dispatch_events(tenant_id,dispatch_trip_id,event_type,payload,created_by) values($1,$2,'checklist_pre',$3::jsonb,$4)",
+      [id.tenant,id.trip,JSON.stringify({schema_version:2,checklist_model:'vehicle_readiness_v1',checked_items:[0,1,2,3,4,5],total_items:6,answers:[true,false,true,true,true,true]}),id.driverUser]);
+    await command('90000000-0000-4000-8000-000000000074','mark_departed');
+    expect((await db.query('select status from trip_cargo_controls')).rows).toEqual([{status:'departed'}]);
+  });
+  it('requires explicit bulk consent and rejects an operator acting as a driver',async()=>{
+    await command('90000000-0000-4000-8000-000000000075','accept',{vehicle_id:id.vehicle});
+    const row=(await db.query<{revision:string}>("select updated_at::text revision from trip_cargo_controls")).rows[0];
+    await expect(command('90000000-0000-4000-8000-000000000076','quick_confirm',{expected_updated_at:row.revision})).rejects.toThrow('trip_cargo_confirmation_incomplete');
+    await actor(id.operator);
+    await expect(command('90000000-0000-4000-8000-000000000077','quick_confirm',{expected_updated_at:row.revision,confirm_all_documents:true})).rejects.toThrow('trip_cargo_not_authorized');
+  });
   it('accepts the six answered vehicle questions with a reported issue while preserving cargo departure requirements',async()=>{
     await command('90000000-0000-4000-8000-000000000060','accept',{vehicle_id:id.vehicle});
     const docs=(await db.query<{id:string}>('select id from trip_cargo_document_checks')).rows.map(row=>row.id);
