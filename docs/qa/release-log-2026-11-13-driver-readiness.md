@@ -27,6 +27,8 @@ Não há novas tabelas, RPCs públicas, dependências, Secrets ou Edge Functions
 
 ## Publicação e retorno
 
+Regressões de homologação: o primeiro run identificou seis expectativas da tela antiga em `DriverAuxOfflineRoutes`; as 27 verificações foram adaptadas às seis respostas, mantendo CAS, bloqueio em mudança de sessão e revisão da fila. O segundo run passou 9.758 testes de unidade/integração (um skip anterior) e todo o SQL nativo, mas o E2E detectou contraste 4,13:1 no badge de falha da tela de paradas, agora alcançada automaticamente em viagens iniciadas. O badge foi corrigido com cores legíveis nos temas claro/escuro; o teste de autenticação passou a selecionar o h1 exato, pois “Paradas” também aparecia em outro título. Nenhuma assertion de acessibilidade foi reduzida. O candidato atualizado deve repetir o gate completo.
+
 Após CI verde e novo preflight das fontes/ACLs: aplicar somente o SQL revisado, conferir hashes e permissões, integrar o mesmo candidato, aguardar Vercel e conferir `release.json` no alias. Comparar advisors antes/depois. Não produzir respostas de checklist em contas reais para testar. Smoke autenticado final depende de sessão disponível e deve ser distinguido dos testes sintéticos.
 
 Retorno preferido: frontend anterior mantendo o backend aditivo que lê os formatos 1 e 2. Fontes anteriores completas estão em `driver-readiness-rollback-2026-11-13/`. Não restaurar SQL antigo enquanto houver eventos ou fila schema 2; o leitor antigo pode pedir novamente o checklist legado, mas nunca se convertem respostas negativas em oito itens OK. Falhas de gravação, isolamento ou custódia bloqueiam a liberação.

@@ -47,7 +47,7 @@ test("@critical driver is routed to its own workspace or current trip entry", as
       {headers:{apikey:session.publishableKey,Authorization:`Bearer ${session.accessToken}`}});
     expect(response.ok(),await response.text()).toBeTruthy();
     expect(await response.json()).toEqual([{id:trip,tenant_id:fixtureIds.tenantA,driver_id:'60000000-0000-4000-8000-000000000001'}]);
-    await expect(page.getByRole('heading',{name:target.pathname.endsWith('checklist')?/Bem-vindo, Motorista E2E A!/:target.pathname.endsWith('stops')?'Paradas':/Aceite da viagem|Carga e custódia/})).toBeVisible({timeout:20000});
+    await expect(page.getByRole('heading',{level:1,name:target.pathname.endsWith('checklist')?/Bem-vindo, Motorista E2E A!/:target.pathname.endsWith('stops')?'Paradas':/Aceite da viagem|Carga e custódia/,exact:true})).toBeVisible({timeout:20000});
 });
 
 test("@critical client is routed to its scoped portal", async ({ page }) => {
