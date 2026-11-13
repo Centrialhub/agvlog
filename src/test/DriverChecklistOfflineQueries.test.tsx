@@ -52,8 +52,8 @@ beforeEach(() => {
   });
 });
 afterEach(() => { cleanup(); client.clear(); onlineManager.setOnline(true); });
-function show() {
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/driver/checklist?trip=trip-a']}>
+function show(welcome = false) {
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/driver/checklist?trip=trip-a${welcome ? '&welcome=1' : ''}`]}>
     <DriverChecklist />
   </MemoryRouter></QueryClientProvider>);
 }
@@ -64,6 +64,14 @@ async function reconnect() {
   });
 }
 describe('checklist with real paused query hooks and local transport fixtures', () => {
+  it('keeps the welcome entry focused on the six vehicle questions', async () => {
+    mocks.read.mockResolvedValue(saved);
+    show(true);
+    expect(await screen.findByRole('button', { name: 'Está OK' })).toBeEnabled();
+    expect(screen.getByRole('heading', { name: 'Bem-vindo, Motorista QA!' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salvar Pós-Viagem' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Checklist' })).not.toBeInTheDocument();
+  });
   it('ends the cold-cache loader while identity and journey queries remain paused', async () => {
     show(); expect(await screen.findByRole('alert')).toHaveTextContent('Checklist indisponível offline');
     expect(client.getQueryState(['current_driver', 'actor-a', 'tenant-a'])).toMatchObject({ status: 'pending', fetchStatus: 'paused' });
@@ -73,15 +81,15 @@ describe('checklist with real paused query hooks and local transport fixtures', 
   });
   it('reopens the scoped saved checklist while its real network queries are paused', async () => {
     mocks.read.mockResolvedValue(saved);
-    const first = show(); expect(await screen.findByRole('button', { name: 'Salvar Pré-Viagem' })).toBeEnabled();
-    expect(screen.getByText(/2\/8 itens/)).toBeInTheDocument(); first.unmount();
+    const first = show(); expect(await screen.findByRole('button', { name: 'Está OK' })).toBeEnabled();
+    expect(screen.getByText('Pergunta 1 de 6')).toBeInTheDocument(); first.unmount();
     show(); expect(await screen.findByRole('button', { name: 'Salvar Pós-Viagem' })).toBeEnabled();
     expect(mocks.read).toHaveBeenCalledWith('tenant-a', 'actor-a', 'trip-a');
     expect(mocks.rpc).not.toHaveBeenCalled(); expect(mocks.from).not.toHaveBeenCalled();
   });
   it('loads the checklist after reconnecting from a cold cache', async () => {
     show(); await screen.findByRole('alert'); await reconnect();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar Pré-Viagem' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Está OK' })).toBeEnabled());
     expect(screen.queryByText(/Checklist indisponível offline/)).not.toBeInTheDocument();
     expect(mocks.rpc).toHaveBeenCalledWith('current_driver_id', { _tenant_id: 'tenant-a' });
     expect(client.getQueryState(['driver_checklist_trip', 'tenant-a', 'driver-a', 'trip-a'])?.status).toBe('success');
@@ -89,8 +97,9 @@ describe('checklist with real paused query hooks and local transport fixtures', 
   });
   it('removes cached checklist actions after a reconnect confirms revocation', async () => {
     mocks.read.mockResolvedValue(saved); mocks.revoked = true;
-    show(); expect(await screen.findByRole('button', { name: 'Salvar Pré-Viagem' })).toBeEnabled();
+    show(); expect(await screen.findByRole('button', { name: 'Está OK' })).toBeEnabled();
     await reconnect(); expect(await screen.findByRole('alert')).toHaveTextContent('Nenhuma marcação será salva até atualizar');
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(mocks.submit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:'Está OK'})).not.toBeInTheDocument();
   });
 });

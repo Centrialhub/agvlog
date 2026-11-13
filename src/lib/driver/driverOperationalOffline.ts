@@ -33,6 +33,9 @@ export type DriverChecklistCommand = {
   trip_id: string;
   kind: 'pre' | 'post';
   checklist_payload: {
+    schema_version?:2;
+    checklist_model?:string;
+    answers?:boolean[];
     checked_items: number[];
     total_items: number;
     expected_checklist_id: string | null;
@@ -203,7 +206,7 @@ export interface DriverOperationalSnapshot {
   deliveryFiscalSnapshotsByStop?: Record<string, DriverDeliveryFiscalSnapshot>;
   instructions: string[];
   checklist: {
-    pre: { id: string | null; boundaryId: string | null; checkedItems: number[] };
+    pre: { id: string | null; boundaryId: string | null; checkedItems: number[]; payload?:Json };
     post: { id: string | null; boundaryId: string | null; checkedItems: number[] };
   };
   journey: {

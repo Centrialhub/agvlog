@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 import DriverJourney from '@/pages/driver/DriverJourney';
 import DriverIssues from '@/pages/driver/DriverIssues';
 import { DriverChecklistSection } from '@/components/driver/DriverChecklistSection';
+import {DriverVehicleReadiness} from '@/components/driver/DriverVehicleReadiness';
 import type { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
 import { DriverOperationalRecoveryProbe } from './DriverOperationalRecoveryProbe';
 import { driverOfflineOutbox } from '@/lib/driver/driverOfflineOutbox';
@@ -14,7 +15,7 @@ const tenant = '73000000-0000-4000-8000-000000000001', actor = '73000000-0000-40
 const trip = '73000000-0000-4000-8000-000000000003', driver = '73000000-0000-4000-8000-000000000004';
 const params = new URLSearchParams(location.search);
 const state = { tenant: params.get('tenant') ?? tenant, actor: params.get('actor') ?? actor,
-  online: params.get('offline') !== '1', toasts: [] as unknown[], calls: [] as { name: string; args: Record<string, unknown> }[] };
+  online: params.get('offline') !== '1',readinessCompleted:0, toasts: [] as unknown[], calls: [] as { name: string; args: Record<string, unknown> }[] };
 const listeners = new Set<() => void>();
 function useContextScope() { return useSyncExternalStore(listener => { listeners.add(listener); return () => listeners.delete(listener); }, () => `${state.tenant}:${state.actor}`); }
 export function useAuth() { useContextScope(); return { user: { id: state.actor } }; }
@@ -51,7 +52,9 @@ Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => stat
 setOnline(state.online);
 const mode = params.get('mode') ?? 'journey';
 createRoot(document.getElementById('root')!).render(<BrowserRouter><QueryClientProvider client={client}>
-  {mode === 'journey' ? <DriverJourney /> : mode === 'occurrence' ? <DriverIssues /> :
+  {mode === 'journey' ? <DriverJourney /> : mode === 'occurrence' ? <DriverIssues /> :mode==='readiness'?
+    <DriverVehicleReadiness tripId={trip} savedId={null} boundaryId={null} payload={null} disabled={false} driverName="Motorista QA"
+      onComplete={()=>{state.readinessCompleted+=1;}}/>:
     <DriverChecklistSection title="Pré-Viagem" kind="pre" items={['Pneus', 'Óleo']} tripId={trip}
       savedItems={[]} savedId={null} boundaryId={null} disabled={false} />}
   <DriverOperationalRecoveryProbe onReady={captureOperational} />
@@ -60,7 +63,7 @@ export const driverOperationalOfflineHarness = {
   setOnline,
   setContext(tenantId: string, actorId: string) { state.tenant = tenantId; state.actor = actorId; for (const listener of listeners) listener(); },
   inspect: async () => ({ rows: await driverOfflineOutbox.list(tenant, actor),
-    calls: structuredClone(state.calls), toasts: structuredClone(state.toasts),
+    calls: structuredClone(state.calls), toasts: structuredClone(state.toasts),readinessCompleted:state.readinessCompleted,
     mutations: client.getMutationCache().getAll().map(item => ({ status: item.state.status, isPaused: item.state.isPaused })) }),
   recover: async () => operational.recover(),
 };

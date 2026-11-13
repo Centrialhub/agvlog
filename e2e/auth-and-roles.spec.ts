@@ -37,11 +37,17 @@ test("@critical operator reaches the internal operations center", async ({ page 
   await expect(page.getByRole("heading", { name: /operator/i })).toBeVisible({ timeout: 20_000 });
 });
 
-test("@critical driver is routed to the driver workspace", async ({ page }) => {
+test("@critical driver is routed to its own workspace or current trip entry", async ({ page,request }) => {
   await loginThroughUi(page, accounts.driver);
-  await expect(page).toHaveURL(/\/driver$/);
-  await expect(page.getByRole("heading", { name: /Motorista E2E A/i })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText(/Cargas atribuídas/)).toBeVisible();
+  await expect(page).toHaveURL(/\/driver\/(?:checklist|cargo|stops)\?trip=[^&]+(?:&welcome=1)?$/,{timeout:20000});
+  const target=new URL(page.url()),trip=target.searchParams.get('trip');
+  expect(trip).toBeTruthy();
+    const session=await passwordToken(request,accounts.driver);
+    const response=await request.get(`${session.backendUrl}/rest/v1/dispatch_trips?id=eq.${encodeURIComponent(trip)}&select=id,tenant_id,driver_id`,
+      {headers:{apikey:session.publishableKey,Authorization:`Bearer ${session.accessToken}`}});
+    expect(response.ok(),await response.text()).toBeTruthy();
+    expect(await response.json()).toEqual([{id:trip,tenant_id:fixtureIds.tenantA,driver_id:'60000000-0000-4000-8000-000000000001'}]);
+    await expect(page.getByRole('heading',{level:1,name:target.pathname.endsWith('checklist')?/Bem-vindo, Motorista E2E A!/:target.pathname.endsWith('stops')?'Paradas':/Aceite da viagem|Carga e custódia/,exact:true})).toBeVisible({timeout:20000});
 });
 
 test("@critical client is routed to its scoped portal", async ({ page }) => {

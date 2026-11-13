@@ -33,11 +33,11 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
   arrived: 'bg-primary/10 text-primary',
   completed: 'bg-green-100 text-green-700',
-  skipped: 'bg-destructive/10 text-destructive',
-  refused: 'bg-destructive/10 text-destructive',
-  returned: 'bg-destructive/10 text-destructive',
+  skipped: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
+  refused: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
+  returned: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
   partial_delivery: 'bg-amber-100 text-amber-700',
-  failed: 'bg-destructive/10 text-destructive',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
   delivered: 'bg-green-100 text-green-700',
 };
 
@@ -243,7 +243,7 @@ export default function DriverStops() {
 
       {((isOnline && (driverQuery.isLoading || tripResolutionQuery.isLoading || (activeTrip?.id && stopsQuery.isLoading)))
         || (!isOnline && snapshotPending && !routeDenied && (!activeTrip || stopsQuery.isPending))) && !showingOfflineSnapshot ? (
-        <div className="space-y-3" aria-label="Carregando viagem">
+        <div className="space-y-3" role="status" aria-live="polite" aria-label="Carregando viagem">
           {[1, 2, 3].map((item) => (
             <div key={item} className="h-28 w-full animate-pulse rounded-xl bg-muted" />
           ))}

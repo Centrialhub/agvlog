@@ -1,0 +1,24 @@
+[
+  {
+    "name": "driver_create_event(uuid,text,jsonb,uuid,text)",
+    "before": "754dd9335eb987248a81f0179416417e",
+    "after": "0a6db94bb4619243438cfa2fec36e3bb",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+  },
+  {
+    "name": "driver_save_checklist(uuid,text,jsonb)",
+    "before": "2f8ee205ce2a37008605ce556895a4f8",
+    "after": "795991c1878c7552ca0db1a957428198",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+  },
+  {
+    "name": "private.driver_update_trip_cargo(uuid,uuid,uuid,text,jsonb)",
+    "before": "c1680fb132f7940e998c2078eb2defb5",
+    "after": "839353a24ef5a3303f7ab6ab6b380831",
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "name": "private.driver_pre_checklist_complete_v2(jsonb)",
+    "after": "adea2bc2f247569720a542d289e0198b"
+  }
+]

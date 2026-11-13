@@ -8,6 +8,16 @@ import { loginThroughUi } from "./fixtures/session";
 async function expectNoSeriousAxeViolations(page: Page, route: string) {
   const response = await page.goto(route);
   expect(response?.status() ?? 200).toBeLessThan(500);
+  if (route === '/driver') {
+    await expect(page).toHaveURL(/\/driver\/(?:checklist|cargo|stops)\?trip=[^&]+(?:&welcome=1)?$/, { timeout: 20_000 });
+    const entry = new URL(page.url()).pathname;
+    if (entry.endsWith('checklist')) {
+      await expect(page.getByText('Vamos conferir o veículo antes de abrir sua carga.', { exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { level: 1, name: entry.endsWith('stops') ? 'Paradas' : /Aceite da viagem|Carga e custódia/, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('status', { name: 'Carregando viagem' })).toHaveCount(0);
+  }
   await expect(page.locator("main, [role=main]").first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("main, [role=main]").first().locator('h1').first()).toBeVisible();
   // Check the rendered page after finite entrance transitions finish. The axe
