@@ -115,13 +115,16 @@ describe('authenticated auxiliary driver routes reopened offline', () => {
         total_items: 8, expected_checklist_id: 'check-pre', expected_boundary_id: null } } }];
     const first = show('/driver/checklist', <DriverChecklist />);
     await screen.findByText('Dados salvos no aparelho. Novas marcações entrarão na fila de sincronização.');
-    expect(screen.getByText(/3\/8 itens/)).toHaveTextContent('Sincronização pendente');
+    expect(screen.getByRole('button', { name: 'Está OK' })).toBeDisabled();
+    expect(screen.getByText('Há um checklist aguardando sincronização. Confira a fila antes de enviar outro.')).toBeInTheDocument();
     first.unmount();
 
     show('/driver/checklist', <DriverChecklist />);
     await screen.findByText('Dados salvos no aparelho. Novas marcações entrarão na fila de sincronização.');
     expect(mocks.readLatest).toHaveBeenCalledTimes(2);
     expect(mocks.readLatest).toHaveBeenNthCalledWith(2, 'tenant-a', 'actor-a');
+    expect(screen.getByRole('button', { name: 'Está OK' })).toBeDisabled();
+    expect(mocks.submit).not.toHaveBeenCalled();
   });
 
   it('opens a direct checklist link from the exact scoped trip snapshot', async () => {
@@ -193,19 +196,26 @@ describe('checklist availability and session scope', () => {
   });
   it.each(['tenant', 'actor'] as const)('removes old context immediately on %s switch and blocks pending local reads', async key => {
     paused(); const page = show('/driver/checklist', <DriverChecklist />);
-    expect(await screen.findByRole('button', { name: 'Salvar Pré-Viagem' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Está OK' })).toBeEnabled();
     mocks[key] = 'other'; mocks.readLatest.mockReturnValue(new Promise(() => {}));
     page.rerender(<QueryClientProvider client={client}><MemoryRouter><DriverChecklist /></MemoryRouter></QueryClientProvider>);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Está OK' })).not.toBeInTheDocument();
     expect(mocks.submit).not.toHaveBeenCalled();
   });
   it('loads a valid offline checklist and submits its existing revision and boundary to the queue', async () => {
     paused(); show('/driver/checklist', <DriverChecklist />);
-    const button = await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
-    expect(button).toBeEnabled(); fireEvent.click(screen.getAllByRole('checkbox')[2]); fireEvent.click(button);
+    const button = await screen.findByRole('button', { name: 'Está OK' });
+    expect(button).toBeEnabled();
+    for (let question = 0; question < 6; question++) {
+      expect(screen.getByText(`Pergunta ${question + 1} de 6`)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: question === 1 ? 'Precisa de atenção' : 'Está OK' }));
+      if (question < 5) expect(mocks.submit).not.toHaveBeenCalled();
+    }
     await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1));
     expect(mocks.submit).toHaveBeenCalledWith({ kind: 'checklist', aggregateId: 'trip-a', payload: {
-      trip_id: 'trip-a', kind: 'pre', checklist_payload: { checked_items: [0, 1, 2], total_items: 8,
+      trip_id: 'trip-a', kind: 'pre', checklist_payload: { schema_version: 2, checklist_model: 'vehicle_readiness_v1',
+        answers: [true, false, true, true, true, true], checked_items: [0, 1, 2, 3, 4, 5], total_items: 6,
         expected_checklist_id: 'check-pre', expected_boundary_id: null, expected_boundary_request_id: null },
     } });
   });
@@ -288,9 +298,10 @@ describe('checklist queue replay with the real memory outbox service', () => {
 it('blocks saves when an online refresh fails even if a snapshot exists', async () => {
   mocks.online = true;
   show('/driver/checklist', <DriverChecklist />);
-  await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
+  await screen.findByRole('button', { name: 'Está OK' });
   expect(screen.getByRole('alert')).toHaveTextContent('Nenhuma marcação será salva até atualizar');
-  expect(screen.getByRole('button', { name: 'Salvar Pré-Viagem' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Está OK' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Precisa de atenção' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Salvar Pós-Viagem' })).toBeDisabled();
 });
 
@@ -301,9 +312,9 @@ it('uses a successfully loaded empty checklist instead of restoring older checke
   client.setQueryData(['driver_checklist_trip', 'tenant-a', 'driver-a', 'trip-a'], mocks.tripResult.data);
   mocks.put.mockImplementation(async next => { mocks.read.mockResolvedValue(next); });
   show('/driver/checklist?trip=trip-a', <DriverChecklist />);
-  await screen.findByRole('button', { name: 'Salvar Pré-Viagem' });
-  expect(screen.getByText(/0\/8 itens/)).toBeInTheDocument();
-  expect(screen.getAllByRole('checkbox')[0]).not.toBeChecked();
+  await screen.findByRole('button', { name: 'Está OK' });
+  expect(screen.getByText('Pergunta 1 de 6')).toBeInTheDocument();
+  expect(screen.queryByText('Checklist já respondido')).not.toBeInTheDocument();
   await waitFor(() => expect(mocks.put).toHaveBeenCalledTimes(1));
   expect(mocks.put).toHaveBeenCalledWith(expect.objectContaining({ checklist: {
     pre: { id: null, boundaryId: null, checkedItems: [] },
