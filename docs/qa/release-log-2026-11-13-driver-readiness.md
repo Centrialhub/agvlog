@@ -31,6 +31,8 @@ Regressões de homologação: o primeiro run identificou seis expectativas da te
 
 Após CI verde e novo preflight das fontes/ACLs: aplicar somente o SQL revisado, conferir hashes e permissões, integrar o mesmo candidato, aguardar Vercel e conferir `release.json` no alias. Comparar advisors antes/depois. Não produzir respostas de checklist em contas reais para testar. Smoke autenticado final depende de sessão disponível e deve ser distinguido dos testes sintéticos.
 
+O run seguinte confirmou a correção de contraste e autenticação (116 E2E passaram), mas detectou o loader de paradas com `aria-label` em div sem papel acessível. Foi acrescentado `role=status` com anúncio educado, verificado pelo teste de componente existente. O E2E de acessibilidade espera a navegação automática e o fim desse loader antes de inspecionar a página real; mantém todos os critérios axe e não ignora violações.
+
 Retorno preferido: frontend anterior mantendo o backend aditivo que lê os formatos 1 e 2. Fontes anteriores completas estão em `driver-readiness-rollback-2026-11-13/`. Não restaurar SQL antigo enquanto houver eventos ou fila schema 2; o leitor antigo pode pedir novamente o checklist legado, mas nunca se convertem respostas negativas em oito itens OK. Falhas de gravação, isolamento ou custódia bloqueiam a liberação.
 
 ## Orientação para operação

@@ -57,7 +57,7 @@ const renderPage=()=>{
 
 describe('driver stops rendered frontend',()=>{
   it('waits for driver lookup rather than showing no active trip',()=>{
-    mocks.driverPending=true;renderPage();expect(screen.getByLabelText('Carregando viagem')).toBeInTheDocument();
+    mocks.driverPending=true;renderPage();expect(screen.getByRole('status',{name:'Carregando viagem'})).toBeInTheDocument();
     expect(screen.queryByText('Nenhuma viagem ativa')).not.toBeInTheDocument();
   });
   it('shows a plain driver lookup error',async()=>{

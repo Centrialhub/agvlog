@@ -243,7 +243,7 @@ export default function DriverStops() {
 
       {((isOnline && (driverQuery.isLoading || tripResolutionQuery.isLoading || (activeTrip?.id && stopsQuery.isLoading)))
         || (!isOnline && snapshotPending && !routeDenied && (!activeTrip || stopsQuery.isPending))) && !showingOfflineSnapshot ? (
-        <div className="space-y-3" aria-label="Carregando viagem">
+        <div className="space-y-3" role="status" aria-live="polite" aria-label="Carregando viagem">
           {[1, 2, 3].map((item) => (
             <div key={item} className="h-28 w-full animate-pulse rounded-xl bg-muted" />
           ))}

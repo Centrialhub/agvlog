@@ -8,6 +8,10 @@ import { loginThroughUi } from "./fixtures/session";
 async function expectNoSeriousAxeViolations(page: Page, route: string) {
   const response = await page.goto(route);
   expect(response?.status() ?? 200).toBeLessThan(500);
+  if (route === '/driver') {
+    await expect(page).toHaveURL(/\/driver\/(?:checklist|cargo|stops)\?trip=[^&]+(?:&welcome=1)?$/, { timeout: 20_000 });
+    await expect(page.getByRole('status', { name: 'Carregando viagem' })).toHaveCount(0);
+  }
   await expect(page.locator("main, [role=main]").first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("main, [role=main]").first().locator('h1').first()).toBeVisible();
   // Check the rendered page after finite entrance transitions finish. The axe
