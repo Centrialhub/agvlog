@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLoadAggregateCommand } from '@/hooks/useLoadAggregateCommand';
+import { useUpdateLoad } from '@/hooks/useLoads';
 import { pendingLoadAggregateCommand } from '@/lib/loads/loadAggregateOutbox';
-import { applyLoadCommand, createLoadAggregateDatabase, loadAggregateIds as i } from './helpers/loadAggregateDatabase';
+import { applyLoadCommand, createLoadAggregateDatabase, loadAggregateIds as i,seedLoad } from './helpers/loadAggregateDatabase';
 
 vi.hoisted(async () => {
   const { Blob, File } = await import('node:buffer');
@@ -23,6 +24,16 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mock.rpc } }
 let db: PGlite;
 let client: QueryClient;
 let transport: Promise<unknown> = Promise.resolve();
+
+it('carries editable operational fields through useUpdateLoad, durable command validation and the real SQL writer',async()=>{
+ await seedLoad(db);
+ const {result}=renderHook(useUpdateLoad,{wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});
+ await act(async()=>{await result.current.mutateAsync({id:i.load,expectedVersion:1,actual_load_at:'2026-11-10T09:00:00Z',
+  gate_departure_at:'2026-11-10T10:00:00Z',arrival_at:'2026-11-11T11:00:00Z',driver_type:'Agregado',monitor_responsible:'Operação QA',monitored:true});});
+ expect((await db.query('select driver_type,monitor_responsible,monitored,version,status from public.loads where id=$1',[i.load])).rows[0])
+  .toEqual({driver_type:'Agregado',monitor_responsible:'Operação QA',monitored:true,version:2,status:'planned'});
+ expect(mock.rpc.mock.calls[0][1]._payload.changes).toMatchObject({actual_load_at:'2026-11-10T09:00:00Z',monitored:true});
+});
 
 beforeAll(async () => { db = await createLoadAggregateDatabase(); }, 40_000);
 afterAll(async () => { await db?.close(); vi.unstubAllGlobals(); });

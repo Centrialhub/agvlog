@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-load-operational-fields-only",
+  "filename": "20261112190322_editable_load_operational_fields.sql",
+  "sha256": "ae1f1dea27d9bf29d9b1478c0e0767e735f9b06044c7223186dfb2284dcfcbd8",
+  "preservedOpenaiManifestSha256": "bfa2c6f5652adaa0a3193d4b26db89c78c7a7e02ef34f6424de3ecef234902a5"
+}

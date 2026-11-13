@@ -110,6 +110,7 @@ export async function createLoadAggregateDatabase() {
   await db.exec(loadAggregateSql());
   await db.exec(atomicLoadNumberSql());
   await db.exec(atomicLoadForeignKeyIndexSql());
+  await db.exec(readFileSync('supabase/migrations/20261112190322_editable_load_operational_fields.sql','utf8'));
   const i = loadAggregateIds;
   await db.query('insert into public.tenants values($1),($2)', [i.tenant, i.otherTenant]);
   await db.query('insert into auth.users values($1)', [i.operator]);

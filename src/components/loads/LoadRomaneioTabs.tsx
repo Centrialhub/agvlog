@@ -245,10 +245,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
 
   const handleSave = async () => {
     try {
-      await updateLoad.mutateAsync({
-        id: load.id,
-        expectedVersion: load.version,
-        reason: 'Cabeçalho do romaneio atualizado pelo operador.',
+      const changes:Partial<Load>={
         driver_id: form.driver_id !== '__none__' ? form.driver_id : null,
         vehicle_id: form.vehicle_id !== '__none__' ? form.vehicle_id : null,
         trailer_plate: form.trailer_plate || null,
@@ -258,12 +255,28 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
         origin: form.origin || null,
         destination: form.destination || null,
         estimated_arrival_at: fromLocalDT(form.estimated_arrival_at),
+        actual_load_at: fromLocalDT(form.actual_load_at),
+        gate_departure_at: fromLocalDT(form.gate_departure_at),
+        arrival_at: fromLocalDT(form.arrival_at),
+        driver_type: form.driver_type || null,
+        monitor_responsible: form.monitor_responsible || null,
+        sm_manager: form.sm_manager || null,
+        sm_release: form.sm_release || null,
+        monitored: form.monitored,
         ciot: form.ciot || null,
         merchandise_value: form.merchandise_value ? Number(form.merchandise_value) : null,
         notes: form.notes || null,
         distribution_manifest: form.distribution_manifest || null,
         shipment_manifest: form.shipment_manifest || null,
-      });
+      };
+      for(const key of Object.keys(changes) as Array<keyof Load>){
+        const previous=load[key]??null,next=changes[key]??null;
+        const same=key.endsWith('_at')&&previous&&next
+          ?toLocalDT(String(previous))===toLocalDT(String(next)):previous===next;
+        if(same||(key==='monitored'&&Boolean(previous)===next))delete changes[key];
+      }
+      await updateLoad.mutateAsync({id:load.id,expectedVersion:load.version,
+        reason:'Cabeçalho do romaneio atualizado pelo operador.',...changes});
       toast.success('Cabeçalho do romaneio salvo');
       onSaved?.();
     } catch (error: unknown) {
@@ -458,7 +471,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Data do Carregamento</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.actual_load_at} disabled title="Data efetiva controlada pelos eventos operacionais" />
+                <Input aria-label="Data do Carregamento" type="datetime-local" className="h-8 text-xs" value={form.actual_load_at} onChange={e=>setForm({...form,actual_load_at:e.target.value})} />
               </div>
               <div>
                 <Label className="text-[10px]">Data Previsão Chegada</Label>
@@ -466,11 +479,11 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Data Saída (Portaria)</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.gate_departure_at} disabled title="Saída efetiva controlada pelos eventos operacionais" />
+                <Input aria-label="Data Saída (Portaria)" type="datetime-local" className="h-8 text-xs" value={form.gate_departure_at} onChange={e=>setForm({...form,gate_departure_at:e.target.value})} />
               </div>
               <div>
                 <Label className="text-[10px]">Data de Chegada</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.arrival_at} disabled title="Chegada efetiva controlada pelos eventos operacionais" />
+                <Input aria-label="Data de Chegada" type="datetime-local" className="h-8 text-xs" value={form.arrival_at} onChange={e=>setForm({...form,arrival_at:e.target.value})} />
               </div>
             </div>
 
@@ -500,16 +513,16 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Peso Total (kg)</Label>
-                  <Input type="number" step="0.01" className="h-8 text-xs" value={load.total_weight_kg ?? 0} disabled title="Total calculado a partir dos itens atuais" />
+                  <Input aria-label="Peso Total (kg)" type="number" step="0.01" className="h-8 text-xs" value={load.total_weight_kg ?? 0} disabled title="Total calculado a partir dos itens atuais" />
                 </div>
                 <div>
                   <Label className="text-[10px]">Volume M³</Label>
-                  <Input type="number" step="0.001" className="h-8 text-xs" value={load.total_volume_m3 ?? 0} disabled title="Total calculado a partir dos itens atuais" />
+                  <Input aria-label="Volume M³" type="number" step="0.001" className="h-8 text-xs" value={load.total_volume_m3 ?? 0} disabled title="Total calculado a partir dos itens atuais" />
                 </div>
               </div>
               <div>
                 <Label className="text-[10px]">Paletes</Label>
-                <Input type="number" className="h-8 text-xs" value={load.total_pallet_count ?? 0} disabled title="Total calculado a partir dos itens atuais" />
+                <Input aria-label="Paletes" type="number" className="h-8 text-xs" value={load.total_pallet_count ?? 0} disabled title="Total calculado a partir dos itens atuais" />
               </div>
               <div>
                 <Label className="text-[10px]">Valor CT-e Bruto (auto)</Label>
@@ -544,15 +557,15 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Tipo Motorista</Label>
-                <Input className="h-8 text-xs" value={form.driver_type} disabled title="Gerenciado pelo fluxo de monitoramento" />
+                <Input aria-label="Tipo Motorista" maxLength={160} className="h-8 text-xs" value={form.driver_type} onChange={e=>setForm({...form,driver_type:e.target.value})} />
               </div>
               <div>
                 <Label className="text-[10px]">Resp. Monitoramento</Label>
-                <Input className="h-8 text-xs" value={form.monitor_responsible} disabled title="Gerenciado pelo fluxo de monitoramento" />
+                <Input aria-label="Resp. Monitoramento" maxLength={160} className="h-8 text-xs" value={form.monitor_responsible} onChange={e=>setForm({...form,monitor_responsible:e.target.value})} />
               </div>
               <div className="flex items-center justify-between p-2 border rounded-md">
                 <Label className="text-xs">Monitorado</Label>
-                <Switch checked={form.monitored} disabled />
+                <Switch aria-label="Monitorado" checked={form.monitored} onCheckedChange={value=>setForm({...form,monitored:value})} />
               </div>
             </div>
           </div>
@@ -692,10 +705,10 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
         {/* ===================== RISCO ===================== */}
         <TabsContent value="risco" className="p-4 m-0 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div><Label className="text-[10px]">Gerenciadora SM</Label><Input className="h-8 text-xs" value={form.sm_manager} disabled /></div>
-            <div><Label className="text-[10px]">Liberação SM</Label><Input className="h-8 text-xs" value={form.sm_release} disabled /></div>
-            <div><Label className="text-[10px]">Resp. Monitoramento</Label><Input className="h-8 text-xs" value={form.monitor_responsible} disabled /></div>
-            <div className="flex items-center justify-between p-2 border rounded-md"><Label className="text-xs">Monitorado</Label><Switch checked={form.monitored} disabled /></div>
+            <div><Label className="text-[10px]">Gerenciadora SM</Label><Input aria-label="Gerenciadora SM" maxLength={160} className="h-8 text-xs" value={form.sm_manager} onChange={e=>setForm({...form,sm_manager:e.target.value})} /></div>
+            <div><Label className="text-[10px]">Liberação SM</Label><Input aria-label="Liberação SM" maxLength={160} className="h-8 text-xs" value={form.sm_release} onChange={e=>setForm({...form,sm_release:e.target.value})} /></div>
+            <div><Label className="text-[10px]">Resp. Monitoramento</Label><Input aria-label="Resp. Monitoramento" maxLength={160} className="h-8 text-xs" value={form.monitor_responsible} onChange={e=>setForm({...form,monitor_responsible:e.target.value})} /></div>
+            <div className="flex items-center justify-between p-2 border rounded-md"><Label className="text-xs">Monitorado</Label><Switch aria-label="Monitorado" checked={form.monitored} onCheckedChange={value=>setForm({...form,monitored:value})} /></div>
           </div>
           <div className="flex justify-end"><Button onClick={handleSave} size="sm"><Save className="h-3 w-3 mr-1" />Salvar</Button></div>
         </TabsContent>
@@ -727,7 +740,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
         <TabsContent value="ciot" className="p-4 m-0 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><Label className="text-[10px]">CIOT</Label><Input className="h-8 text-xs font-mono" value={form.ciot} onChange={e => setForm({ ...form, ciot: e.target.value })} placeholder="000000000000" /></div>
-            <div><Label className="text-[10px]">Tipo Motorista</Label><Input className="h-8 text-xs" value={form.driver_type} disabled /></div>
+            <div><Label className="text-[10px]">Tipo Motorista</Label><Input aria-label="Tipo Motorista" maxLength={160} className="h-8 text-xs" value={form.driver_type} onChange={e=>setForm({...form,driver_type:e.target.value})} /></div>
             <div><Label className="text-[10px]">Placa Cavalo</Label><Input className="h-8 text-xs" disabled value={vehicle?.plate || '—'} /></div>
             <div><Label className="text-[10px]">Placa Carreta</Label><Input className="h-8 text-xs" value={form.trailer_plate} onChange={e => setForm({ ...form, trailer_plate: e.target.value.toUpperCase() })} /></div>
           </div>
