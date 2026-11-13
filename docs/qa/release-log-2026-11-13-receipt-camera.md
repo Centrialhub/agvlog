@@ -31,6 +31,10 @@ Não se autentica identidade nem assinatura; a IA só reconhece presença visual
 16 testes locais de qualidade, geometria e captura passaram. A captura de
 4032x3024 usa toda a imagem e deixa a nova detecção ao processamento real;
 teste de componente usa transporte/câmera simulados e não aprova câmera física.
+Três E2E locais (desktop/tablet/mobile) também passaram com câmera sintética via
+captureStream, medindo o retângulo real do vídeo/sensor e executando o recorte
+Canvas/decodificação real. Foto inconclusiva permanece em 2400x1800 sem cortes;
+os três navegadores abriram a revisão, sem rede externa, login ou uploads.
 Typecheck, lint e Quality gate completo exigidos no SHA final antes de promoção.
 SHA final, jobs e alias final registrados no PR/recibo de entrega.
 
