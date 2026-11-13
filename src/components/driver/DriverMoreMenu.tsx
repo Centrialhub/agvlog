@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 const links = [
   { href: '/driver/journey', label: 'Jornada', description: 'Pausas e histórico de trabalho', icon: Clock },
   { href: '/driver/checklist', label: 'Checklist', description: 'Conferências de pré e pós-viagem', icon: ClipboardCheck },
-  { href: '/driver/cargo', label: 'Carga e custódia', description: 'Aceite, conferência, lacres e retorno', icon: PackageCheck },
+  { href: '/driver/cargo', label: 'Conferência rápida', description: 'Confirme todas as notas e continue', icon: PackageCheck },
   { href: '/driver/events', label: 'Eventos', description: 'Histórico dos eventos lançados', icon: FileClock },
   { href: '/driver/issues', label: 'Ocorrências', description: 'Problemas e comunicação com a operação', icon: MessageSquareWarning },
   { href: '/driver/expenses', label: 'Gastos', description: 'Comprovantes e despesas das suas viagens', icon: CircleDollarSign },

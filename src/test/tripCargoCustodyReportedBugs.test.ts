@@ -24,7 +24,7 @@ describe('bugs 589 a 592 da custódia de carga', () => {
   });
 
   it('resets trip-scoped drafts and removes newly uploaded files after a failed confirmation', async () => {
-    const source = (await import('@/pages/driver/DriverCargoCustody?raw')).default;
+    const source = (await import('@/pages/driver/DriverCargoCustodyLegacy?raw')).default;
     expect(source).toContain('requestIds.current.clear()');
     expect(source).toContain('setEvidence(emptyEvidence())');
     expect(source).toContain("const identity = `${tripId}:${action}");
@@ -33,7 +33,7 @@ describe('bugs 589 a 592 da custódia de carga', () => {
   });
 
   it('accepts stored and local base photos independently and cleans up partial seal resolution uploads', async () => {
-    const source = (await import('@/pages/driver/DriverCargoCustody?raw')).default;
+    const source = (await import('@/pages/driver/DriverCargoCustodyLegacy?raw')).default;
     expect(source).toContain("snapshot.evidence.some(item => item.evidence_kind === 'loading'))");
     expect(source).toContain("snapshot.evidence.some(item => item.evidence_kind === 'tie_down'))");
     expect(source).toContain('const uploadedPaths: string[] = []');

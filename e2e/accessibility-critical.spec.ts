@@ -14,7 +14,7 @@ async function expectNoSeriousAxeViolations(page: Page, route: string) {
     if (entry.endsWith('checklist')) {
       await expect(page.getByText('Vamos conferir o veículo antes de abrir sua carga.', { exact: true })).toBeVisible();
     } else {
-      await expect(page.getByRole('heading', { level: 1, name: entry.endsWith('stops') ? 'Paradas' : /Aceite da viagem|Carga e custódia/, exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: entry.endsWith('stops') ? 'Paradas' : 'Conferência rápida', exact: true })).toBeVisible();
     }
     await expect(page.getByRole('status', { name: 'Carregando viagem' })).toHaveCount(0);
   }

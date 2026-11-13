@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import DriverCargoCustody from '@/pages/driver/DriverCargoCustody';
+import DriverCargoCustody from '@/pages/driver/DriverCargoCustodyLegacy';
 
 const ids = {
   tenant: '73000000-0000-4000-8000-000000000001', actor: '73000000-0000-4000-8000-000000000002',
