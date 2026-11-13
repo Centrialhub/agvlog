@@ -326,7 +326,7 @@ export async function processReceiptScan(file:File,options:ReceiptCrop|{corners?
     outputContext=output.getContext('2d',{willReadFrequently:true});if(!outputContext)throw new Error('Este navegador não permite validar o scan do canhoto.');
   const qualityPolicy=legacy?undefined:options.qualityPolicy,
     evaluatedQuality=evaluateReceiptQuality(outputContext.getImageData(0,0,output.width,output.height).data,sourceWidth,sourceHeight,output.width,output.height,
-      {corners,processingMs:performance.now()-started,thresholds:qualityPolicy?.thresholds}),
+      {corners:requested||documentDetection?.present?corners:undefined,processingMs:performance.now()-started,thresholds:qualityPolicy?.thresholds}),
     quality=!requested&&documentDetection&&!documentDetection.present?{...evaluatedQuality,accepted:false,requiresConfirmation:false,
       warnings:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.warnings],
       rejectionReasons:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.rejectionReasons]}:evaluatedQuality,

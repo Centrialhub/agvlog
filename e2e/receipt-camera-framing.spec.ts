@@ -42,6 +42,7 @@ test('receipt framing follows the actual sensor and preserves an inconclusive fu
   expect(Math.abs(geometry.video.height-geometry.frame.height)).toBeLessThan(3);
   await page.getByRole('button',{name:'Capturar agora',exact:true}).click();
   await expect(page.getByAltText('Foto original para ajustar as bordas')).toBeVisible({timeout:20000});
+  await expect(page.getByText('O papel foi cortado pela borda da foto. Afaste o celular e fotografe novamente.',{exact:true})).toHaveCount(0);
   const result=await page.evaluate(()=> (window as unknown as {__receiptFrame:unknown}).__receiptFrame);
   expect(result).toMatchObject({accepted:false,width:2400,height:1800,corners:{topLeft:{x:0,y:0},bottomRight:{x:1,y:1}}});
   const handle=page.getByRole('button',{name:'Canto superior esquerdo',exact:true});

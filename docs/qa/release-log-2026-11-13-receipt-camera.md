@@ -21,7 +21,10 @@ prévia reduzida não são enviados como um ajuste manual confirmado.
 A detecção automática ganha pequena margem externa, sem esconder bordas que
 já encostem na foto. Quando a detecção é inconclusiva, a imagem completa é
 preservada e o ajuste de cantos abre automaticamente; não se usa um recorte
-adivinhado. Há alternativa explícita de câmera nativa do celular. Falha de
+adivinhado.
+Uma detecção inconclusiva não produz a afirmação falsa de papel cortado: continua
+bloqueada para revisão por bordas desconhecidas, com a foto original íntegra.
+Há alternativa explícita de câmera nativa do celular. Falha de
 processamento encerra a captura para não repetir erros em um ciclo automático.
 Os limiares de resolução, nitidez, corte e política por cliente permanecem.
 Não se autentica identidade nem assinatura; a IA só reconhece presença visual.
