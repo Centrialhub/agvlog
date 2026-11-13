@@ -3,6 +3,7 @@ import {
   type ReceiptScanQualityPolicy,
   type ReceiptScanQualityThresholds,
 } from '@/lib/driver/receiptQualityPolicy';
+import { paddedReceiptCorners } from './receiptCamera';
 
 export const MIN_RECEIPT_SOURCE_PIXELS = BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS.min_source_pixels;
 export const MIN_RECEIPT_SHORT_SIDE = BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS.min_processed_short_side;
@@ -316,14 +317,16 @@ export async function processReceiptScan(file:File,options:ReceiptCrop|{corners?
   const detectionContext=detection.getContext('2d',{willReadFrequently:true});if(!detectionContext)throw new Error('Este navegador não permite processar a foto do canhoto.');
   detectionContext.drawImage(image,0,0,detection.width,detection.height);const detectionPixels=detectionContext.getImageData(0,0,detection.width,detection.height),legacy='left' in options,
     requested=legacy?cropToReceiptCorners(options):options.corners,documentDetection=requested?null:detectReceiptDocument(detectionPixels.data,detection.width,detection.height),
-    corners=normalizeReceiptCorners(requested??documentDetection?.corners??detectReceiptCorners(detectionPixels.data,detection.width,detection.height)),
+    // An uncertain detector must never discard part of the original photo.
+    corners=normalizeReceiptCorners(requested??(documentDetection?.corners?paddedReceiptCorners(documentDetection.corners):
+      {topLeft:{x:0,y:0},topRight:{x:1,y:0},bottomRight:{x:1,y:1},bottomLeft:{x:0,y:1}})),
     full=document.createElement('canvas');full.width=sourceWidth;full.height=sourceHeight;const fullContext=full.getContext('2d',{willReadFrequently:true});
   if(!fullContext)throw new Error('Este navegador não permite recortar a foto do canhoto.');fullContext.drawImage(image,0,0,sourceWidth,sourceHeight);
   if('close' in image&&typeof image.close==='function')image.close();const rotation=legacy?0:(options.rotation??0),output=rotateCanvas(perspectiveScan(fullContext.getImageData(0,0,sourceWidth,sourceHeight),corners),rotation),
     outputContext=output.getContext('2d',{willReadFrequently:true});if(!outputContext)throw new Error('Este navegador não permite validar o scan do canhoto.');
   const qualityPolicy=legacy?undefined:options.qualityPolicy,
     evaluatedQuality=evaluateReceiptQuality(outputContext.getImageData(0,0,output.width,output.height).data,sourceWidth,sourceHeight,output.width,output.height,
-      {corners,processingMs:performance.now()-started,thresholds:qualityPolicy?.thresholds}),
+      {corners:requested||documentDetection?.present?corners:undefined,processingMs:performance.now()-started,thresholds:qualityPolicy?.thresholds}),
     quality=!requested&&documentDetection&&!documentDetection.present?{...evaluatedQuality,accepted:false,requiresConfirmation:false,
       warnings:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.warnings],
       rejectionReasons:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.rejectionReasons]}:evaluatedQuality,
