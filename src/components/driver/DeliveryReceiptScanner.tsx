@@ -14,6 +14,7 @@ import {
 } from '@/lib/driver/receiptScan';
 import type { ReceiptScanQualityPolicy } from '@/lib/driver/receiptQualityPolicy';
 import { validateUploadFile } from '@/lib/uploadPolicy';
+import { RECEIPT_CAMERA_CONSTRAINTS, receiptCameraLayout } from '@/lib/driver/receiptCamera';
 
 interface DeliveryReceiptScannerProps {
   value: ReceiptScanResult | null;
@@ -31,10 +32,12 @@ const policyLabels:Record<ReceiptScanQualityPolicy['source'],string>={client:'Re
 export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onError}:DeliveryReceiptScannerProps) {
   const cameraInputRef=useRef<HTMLInputElement>(null),galleryRef=useRef<HTMLInputElement>(null),videoRef=useRef<HTMLVideoElement>(null);
   const streamRef=useRef<MediaStream|null>(null),historyRef=useRef<ReceiptCorners[]>([]),capturingRef=useRef(false);
-  const captureLiveRef=useRef<(detected?:ReceiptCorners|null)=>Promise<void>>(async()=>undefined);
+  const captureLiveRef=useRef<()=>Promise<void>>(async()=>undefined);
+  const mounted=useRef(true);
   const [busy,setBusy]=useState(false),[editing,setEditing]=useState(false),[cameraOpen,setCameraOpen]=useState(false);
   const [corners,setCorners]=useState<ReceiptCorners>(initialCorners),[liveCorners,setLiveCorners]=useState<ReceiptCorners|null>(null);
   const [preview,setPreview]=useState<string|null>(null),[sourcePreview,setSourcePreview]=useState<string|null>(null);
+  const [cameraSize,setCameraSize]=useState({width:4,height:3});
 
   useEffect(()=>{
     if(!value){setPreview(null);setSourcePreview(null);return;}
@@ -47,32 +50,35 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
     streamRef.current?.getTracks().forEach(track=>track.stop());streamRef.current=null;historyRef.current=[];capturingRef.current=false;
     setCameraOpen(false);setLiveCorners(null);
   };
-  useEffect(()=>()=>stopCamera(),[]);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;stopCamera();};},[]);
 
   async function scan(file:File,scanCorners?:ReceiptCorners,rotation:ReceiptRotation=0){
     setBusy(true);
     try{validateUploadFile(file,'image');const result=await processReceiptScan(file,scanCorners?{corners:scanCorners,rotation,qualityPolicy}:{rotation,qualityPolicy});
-      onChange(result);setEditing(false);stopCamera();
-    }catch(error){onError(error instanceof Error?error.message:'Não foi possível digitalizar o canhoto.');}
+      if(!mounted.current)return;
+      onChange(result);setEditing(!result.quality.accepted);stopCamera();
+    }catch(error){if(mounted.current){stopCamera();onError(error instanceof Error?error.message:'Não foi possível digitalizar o canhoto.');}}
     finally{setBusy(false);capturingRef.current=false;}
   }
 
   async function startCamera(){
     if(!navigator.mediaDevices?.getUserMedia){cameraInputRef.current?.click();return;}
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+      const stream=await navigator.mediaDevices.getUserMedia(RECEIPT_CAMERA_CONSTRAINTS);
+      if(!mounted.current){stream.getTracks().forEach(track=>track.stop());return;}
       streamRef.current=stream;setCameraOpen(true);historyRef.current=[];
     }catch{cameraInputRef.current?.click();}
   }
 
-  async function captureLive(detected=liveCorners){
+  async function captureLive(){
     const video=videoRef.current;if(!video||!video.videoWidth||capturingRef.current)return;capturingRef.current=true;
     const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
     const context=canvas.getContext('2d');if(!context){capturingRef.current=false;onError('A câmera não permitiu capturar o canhoto.');return;}
     context.drawImage(video,0,0,canvas.width,canvas.height);
     const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/jpeg',.94));
     if(!blob){capturingRef.current=false;onError('A câmera não conseguiu gerar a foto.');return;}
-    await scan(new File([blob],`canhoto-${Date.now()}.jpg`,{type:'image/jpeg',lastModified:Date.now()}),detected??undefined);
+    // Detect again on the full-resolution photo, not on the downscaled preview.
+    await scan(new File([blob],`canhoto-${Date.now()}.jpg`,{type:'image/jpeg',lastModified:Date.now()}));
   }
   captureLiveRef.current=captureLive;
 
@@ -85,7 +91,7 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
       const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)return;context.drawImage(video,0,0,canvas.width,canvas.height);
       const image=context.getImageData(0,0,canvas.width,canvas.height),detection=detectReceiptDocument(image.data,canvas.width,canvas.height);
       setLiveCorners(detection.corners);historyRef.current=nextReceiptCornerHistory(historyRef.current,detection);
-      if(detection.corners&&areReceiptCornersStable(historyRef.current))void captureLiveRef.current(detection.corners);
+      if(detection.corners&&areReceiptCornersStable(historyRef.current))void captureLiveRef.current();
     },350);
     return()=>window.clearInterval(timer);
   },[cameraOpen]);
@@ -99,15 +105,16 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
       <p className="text-[11px] text-muted-foreground">Enquadre o papel inteiro. A câmera detecta estabilidade, corrige perspectiva e valida a leitura.</p></div>
       {value&&value.quality.accepted&&(!value.quality.requiresConfirmation||value.qualityConfirmed)?<FileCheck2 className="h-5 w-5 shrink-0 text-primary" aria-label="Canhoto válido"/>:null}</div>
 
-    {cameraOpen?<div className="space-y-2"><div className="relative overflow-hidden rounded border bg-black">
-      <video ref={videoRef} playsInline muted className="block max-h-[60vh] w-full" aria-label="Prévia da câmera"/>
+    {cameraOpen?<div className="space-y-2"><div className="relative mx-auto overflow-hidden rounded border bg-black" style={receiptCameraLayout(cameraSize.width,cameraSize.height)}>
+      <video ref={videoRef} playsInline muted className="absolute inset-0 h-full w-full object-contain" aria-label="Prévia da câmera"
+        onLoadedMetadata={event=>setCameraSize({width:event.currentTarget.videoWidth,height:event.currentTarget.videoHeight})}/>
       {liveCorners?<svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon
         points={cornerKeys.map(key=>`${liveCorners[key].x*100},${liveCorners[key].y*100}`).join(' ')} fill="rgba(59,130,246,.12)" stroke="white" strokeWidth=".8"/></svg>:null}
       <div className="pointer-events-none absolute inset-x-5 inset-y-8 rounded border-2 border-dashed border-white/80"/></div>
       <p role="status" className="text-center text-xs">Mantenha o papel imóvel. A captura será automática quando as bordas estabilizarem.</p>
       <div className="grid grid-cols-2 gap-2"><Button type="button" onClick={()=>void captureLive()} disabled={busy}>Capturar agora</Button><Button type="button" variant="outline" onClick={stopCamera}><X className="mr-2 h-4 w-4"/>Cancelar</Button></div></div>:null}
 
-    {!cameraOpen&&editing&&value&&sourcePreview?<div className="space-y-2"><p className="text-xs">Arraste os quatro cantos até coincidirem com o papel.</p>
+    {!cameraOpen&&editing&&value&&sourcePreview?<div className="space-y-2"><p className="text-xs">A foto original foi preservada. Se o recorte não ficou correto, arraste os cantos para fora de todo o papel, incluindo data e assinatura.</p>
       <div className="relative mx-auto w-fit max-w-full touch-none overflow-hidden rounded border bg-muted"><img src={sourcePreview} alt="Foto original para ajustar as bordas" className="block max-h-[60vh] max-w-full"/>
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon
           points={cornerKeys.map(key=>`${corners[key].x*100},${corners[key].y*100}`).join(' ')} fill="rgba(59,130,246,.12)" stroke="hsl(var(--primary))" strokeWidth=".8"/></svg>
@@ -130,6 +137,7 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
 
     {!cameraOpen?<div className="grid grid-cols-2 gap-2"><Button type="button" variant="outline" disabled={busy} onClick={()=>void startCamera()}><Camera className="mr-2 h-4 w-4"/>{value?'Refazer':'Abrir scanner'}</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={()=>galleryRef.current?.click()}><ImageIcon className="mr-2 h-4 w-4"/>Galeria</Button>
+      <Button type="button" variant="outline" className="col-span-2" disabled={busy} onClick={()=>cameraInputRef.current?.click()}>Fotografar com a câmera do celular</Button>
       {value?<Button type="button" variant="ghost" disabled={busy} onClick={()=>setEditing(current=>!current)}><Crop className="mr-2 h-4 w-4"/>Ajustar cantos</Button>:null}
       {value?<Button type="button" variant="ghost" disabled={busy} onClick={()=>void scan(value.original,value.corners??corners,rotation)}><RotateCw className="mr-2 h-4 w-4"/>Girar 90°</Button>:null}</div>:null}
     {busy?<p role="status" className="text-xs text-muted-foreground">Corrigindo perspectiva e verificando o canhoto…</p>:null}
