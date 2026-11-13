@@ -23,10 +23,14 @@ test.beforeAll(async () => {
   harnessUrl = new URL('/e2e/fixtures/driver-operational-offline-mutation.html', baseUrl).href;
 });
 test.afterAll(async () => { await server?.close(); });
-async function submit(page: Page, mode: 'journey' | 'checklist' | 'occurrence') {
+async function submit(page: Page, mode: 'journey' | 'checklist' | 'occurrence'|'readiness') {
   if (mode === 'journey') await page.getByRole('button', { name: 'Almoço' }).click();
   else if (mode === 'checklist') {
     await page.getByRole('checkbox').first().click(); await page.getByRole('button', { name: 'Salvar Pré-Viagem' }).click();
+  } else if(mode==='readiness'){
+    await expect(page.getByRole('heading',{name:'Bem-vindo, Motorista QA!'})).toBeVisible();
+    await test.info().attach('vehicle-readiness-welcome',{contentType:'image/png',body:await page.screenshot()});
+    for(let question=0;question<6;question++)await page.getByRole('button',{name:question===1?'Precisa de atenção':'Está OK',exact:true}).click();
   } else {
     await page.getByRole('button', { name: 'Nova', exact: true }).click();
     await page.getByLabel('Tipo', { exact: true }).click(); await page.getByRole('option', { name: 'Outro', exact: true }).click();
@@ -35,7 +39,7 @@ async function submit(page: Page, mode: 'journey' | 'checklist' | 'occurrence') 
   }
 }
 test.describe('actual operational UI / QueryClient / IndexedDB, synthetic transport', () => {
-  for (const mode of ['journey', 'checklist', 'occurrence'] as const) {
+  for (const mode of ['journey', 'checklist', 'occurrence','readiness'] as const) {
     test(`${mode}: stores offline, reopens exact row, rejects foreign recovery and replays once`, async ({ page }) => {
       const externalOrigins: string[] = [];
       const harnessOrigin = new URL(harnessUrl).origin;
@@ -52,8 +56,13 @@ test.describe('actual operational UI / QueryClient / IndexedDB, synthetic transp
       expect(before.mutations).toEqual([{ status: 'success', isPaused: false }]);
       expect(before.toasts).toEqual([expect.objectContaining({ title: expect.stringContaining('aparelho') })]);
       const [row] = before.rows;
-      expect(row).toMatchObject({ kind: mode, state: 'queued', attempts: 0,
+      expect(row).toMatchObject({ kind: mode==='readiness'?'checklist':mode, state: 'queued', attempts: 0,
         tenantId: '73000000-0000-4000-8000-000000000001', actorId: '73000000-0000-4000-8000-000000000002' });
+      if(mode==='readiness'){
+        expect(row.payload).toMatchObject({checklist_payload:{schema_version:2,answers:[true,false,true,true,true,true],checked_items:[0,1,2,3,4,5]}});
+        expect(before.readinessCompleted).toBe(1);
+        await test.info().attach('vehicle-readiness-screen',{contentType:'image/png',body:await page.screenshot()});
+      }
       // Assets stay reachable for this reload; network state is controlled by the harness.
       // This proves IndexedDB durability independently of the separate PWA shell qualification.
       await page.reload();
@@ -79,7 +88,7 @@ test.describe('actual operational UI / QueryClient / IndexedDB, synthetic transp
       const confirmed = await page.evaluate(() => (globalThis as HarnessGlobal).driverOperationalOfflineHarness.inspect());
       expect(confirmed.rows).toEqual([]);
       expect(confirmed.calls).toEqual([{ name: 'driver_apply_offline_command_v1', args: {
-        _tenant_id: row.tenantId, _request_id: row.id, _command: mode === 'journey' ? 'journey_event' : mode, _payload: row.payload,
+        _tenant_id: row.tenantId, _request_id: row.id, _command: mode === 'journey' ? 'journey_event' :mode==='readiness'?'checklist': mode, _payload: row.payload,
       } }]);
       await page.evaluate(() => (globalThis as HarnessGlobal).driverOperationalOfflineHarness.recover());
       expect((await page.evaluate(() => (globalThis as HarnessGlobal).driverOperationalOfflineHarness.inspect())).calls).toEqual(confirmed.calls);

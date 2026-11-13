@@ -72,6 +72,10 @@ beforeAll(async () => {
   const closeEnd = closeHardeningMigration.indexOf('$function$;', closeStart) + '$function$;'.length;
   await db.exec(closeHardeningMigration.slice(closeStart, closeEnd));
   await db.exec(waivedReceiptMigration);
+  await db.exec(readFileSync('docs/qa/driver-readiness-rollback-2026-11-13/private-driver_update_trip_cargo.sql','utf8'));
+  const readiness=readFileSync('supabase/migrations/20261113145153_driver_vehicle_readiness_checklist.sql','utf8').split('do $patch$');
+  // This fixture executes the real cargo branch; journey writers have their own native fixture.
+  await db.exec(readiness[0]+'do $patch$'+readiness.at(-1));
 }, 30_000);
 
 beforeEach(async () => {
@@ -98,6 +102,19 @@ beforeEach(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe('trip cargo custody executed by PostgreSQL', () => {
+  it('accepts the six answered vehicle questions with a reported issue while preserving cargo departure requirements',async()=>{
+    await command('90000000-0000-4000-8000-000000000060','accept',{vehicle_id:id.vehicle});
+    const docs=(await db.query<{id:string}>('select id from trip_cargo_document_checks')).rows.map(row=>row.id);
+    await command('90000000-0000-4000-8000-000000000061','confirm_cargo',{vehicle_checked:true,tie_down_confirmed:true,
+      seal_not_applicable_reason:'Veículo sem ponto de lacre',documents:docs,
+      loads:[{load_id:id.load,volume_count:10,pallet_count:2,weight_kg:100}],evidence:[
+        {kind:'loading',path:`${id.tenant}/trip-cargo/${id.trip}/load.jpg`},{kind:'tie_down',path:`${id.tenant}/trip-cargo/${id.trip}/tie.jpg`}]});
+    const payload={schema_version:2,checklist_model:'vehicle_readiness_v1',checked_items:[0,1,2,3,4,5],total_items:6,answers:[true,false,true,true,true,true]};
+    await db.query("insert into dispatch_events(tenant_id,dispatch_trip_id,event_type,payload,created_by) values($1,$2,'checklist_pre',$3::jsonb,$4)",
+      [id.tenant,id.trip,JSON.stringify(payload),id.driverUser]);
+    await command('90000000-0000-4000-8000-000000000062','mark_departed');
+    expect((await db.query('select status from trip_cargo_controls')).rows).toEqual([{status:'departed'}]);
+  });
   it('pages custody history and every large dossier collection', async () => {
     await command('90000000-0000-4000-8000-000000000050', 'accept', { vehicle_id: id.vehicle });
     const control = (await db.query<{ id: string }>('select id from trip_cargo_controls')).rows[0].id;

@@ -9,7 +9,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import {
   DriverHomeChecklistAlert,
@@ -21,7 +21,7 @@ import {
 import { TRIP_ACTIVE_STATUSES, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
-import { DRIVER_TRIP_SELECT, normalizeDriverTrip, resolveCanonicalTripLink, type DriverTrip } from '@/lib/driverTrip';
+import { DRIVER_TRIP_SELECT,normalizeDriverTrip, resolveCanonicalTripLink, type DriverTrip } from '@/lib/driverTrip';
 import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
 import { getNextDriverStop, getPendingDriverStops, readDriverRouteSnapshot, saveDriverRouteSnapshot } from '@/lib/driver/offlineRouteSnapshot';
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
@@ -31,6 +31,9 @@ import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import type { DriverHomeAssignedLoad } from '@/lib/driver/driverHomeTypes';
 import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 import { DriverHomeTripLists } from '@/components/driver/DriverHomeTripLists';
+import {useDriverOperationalOffline} from '@/hooks/useDriverOperationalOffline';
+import {preChecklistProgress} from '@/lib/driverVehicleReadiness';
+import {driverEntryPath} from '@/lib/driverEntryFlow';
 
 export default function DriverHome() {
   const driverQuery = useCurrentDriver();
@@ -53,6 +56,8 @@ export default function DriverHome() {
     refetch: refetchAutoTrip,
   } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
+  const entryAttempt=useRef('');
+  const operationalOffline=useDriverOperationalOffline();
   const {
     data: activeTrips = [],
     isLoading: tripsLoading,
@@ -309,11 +314,23 @@ export default function DriverHome() {
   }));
   const nextStop = getNextDriverStop(destinationStops);
   const pendingStops = getPendingDriverStops(destinationStops);
+  useEffect(()=>{
+    if(loading||hasDataError||checklist.isLoading||checklist.isError||!autoTrip||!currentTenant||!user||!driver?.active)return;
+    const scope=`${currentTenant.id}:${user.id}:${autoTrip.id}:${checklist.preBoundaryId}`;
+    if(entryAttempt.current===scope)return;
+    const queuedComplete=operationalOffline.commands.some(command=>command.kind==='checklist'&&command.aggregateId===autoTrip.id
+      &&command.state!=='needs_attention'&&command.payload&&typeof command.payload==='object'&&!Array.isArray(command.payload)
+      &&command.payload.kind==='pre'&&preChecklistProgress(command.payload.checklist_payload).complete);
+    const path=driverEntryPath(autoTrip,currentTenant.id,checklist.preCompleted||queuedComplete,multiTenantJourney);
+    if(!path)return;
+    entryAttempt.current=scope;navigate(path,{replace:true});
+  },[autoTrip,checklist.isError,checklist.isLoading,checklist.preBoundaryId,checklist.preCompleted,currentTenant,hasDataError,
+    driver?.active,loading,multiTenantJourney,navigate,operationalOffline.commands,user]);
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold">Olá, {driver?.name || cachedSnapshot?.driver.name || 'Motorista'}</h1>
+        <h1 className="text-lg font-bold">Bem-vindo, {driver?.name || cachedSnapshot?.driver.name || 'Motorista'}!</h1>
         <p className="text-sm text-muted-foreground">Seu roteiro de hoje</p>
       </div>
 

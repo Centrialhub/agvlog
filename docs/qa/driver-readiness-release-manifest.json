@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-driver-readiness-only",
+  "filename": "20261113145153_driver_vehicle_readiness_checklist.sql",
+  "sha256": "e1c0d07b5da16015c88ef649db7f731dae17f65698bef5562275155a1e1fc98d",
+  "preservedLoadFieldsManifestSha256": "99316712e02aadc81acb403433a1ee4c15d8fc1f2c489cf954b3641a343deb14"
+}

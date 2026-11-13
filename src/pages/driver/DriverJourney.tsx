@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { canRecordJourneyEvent, getDriverJourneyState, type JourneyEventType } from '@/lib/driverJourney';
 import { driverErrorMessage } from '@/lib/driverChecklist';
+import {preChecklistProgress} from '@/lib/driverVehicleReadiness';
 import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
@@ -114,13 +115,14 @@ export default function DriverJourney() {
   const queuedChecklistCompleted = (kind: 'pre' | 'post', total: number) => queuedChecklists.some(command => {
     const payload = command.payload as Record<string, unknown>;
     const checklistPayload = payload.checklist_payload;
+    if(kind==='pre')return payload.kind==='pre'&&preChecklistProgress(checklistPayload).complete;
     return payload.kind === kind && !!checklistPayload && typeof checklistPayload === 'object'
       && Array.isArray((checklistPayload as Record<string, unknown>).checked_items)
       && (checklistPayload as Record<string, unknown>).checked_items instanceof Array
       && ((checklistPayload as Record<string, unknown>).checked_items as unknown[]).length === total;
   });
   const preCompleted = checklist.preCompleted
-    || operationalSnapshot?.checklist.pre.checkedItems.length === checklist.preTotalCount
+    || preChecklistProgress(operationalSnapshot?.checklist.pre.payload??{checked_items:operationalSnapshot?.checklist.pre.checkedItems}).complete
     || queuedChecklistCompleted('pre', checklist.preTotalCount);
   const postCompleted = checklist.postCompleted
     || operationalSnapshot?.checklist.post.checkedItems.length === checklist.postTotalCount

@@ -12,6 +12,8 @@ import { PRE_TRIP_ITEMS, POST_TRIP_ITEMS } from '@/lib/driverChecklist';
 import { Button } from '@/components/ui/button';
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
 import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
+import {DriverVehicleReadiness} from '@/components/driver/DriverVehicleReadiness';
+import {useDriverTripActions} from '@/hooks/useDriverTripActions';
 
 function accessDenied(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -36,6 +38,7 @@ export default function DriverChecklist() {
   const { user } = useAuth();
   const offlineCommands = useDriverOperationalOffline();
   const driver = useCurrentDriver();
+  const {accessTrip}=useDriverTripActions();
   const activeTrip = useActiveTrip(driver.data?.id);
   const journey = useDriverJourneyContext();
   const latest = journey.data?.events.at(-1);
@@ -84,7 +87,7 @@ export default function DriverChecklist() {
       const existing = await driverOperationalSnapshotStore.read(currentTenant.id, user.id, trip.data.id);
       if (!existing) return;
       const checklist: DriverOperationalSnapshot['checklist'] = {
-        pre: { id: status.pre?.id ?? null, boundaryId: status.preBoundaryId, checkedItems: status.preItems },
+        pre: { id: status.pre?.id ?? null, boundaryId: status.preBoundaryId, checkedItems: status.preItems,payload:status.pre?.payload },
         post: { id: status.post?.id ?? null, boundaryId: status.postBoundaryId, checkedItems: status.postItems },
       };
       if (JSON.stringify(existing.checklist) === JSON.stringify(checklist)) return;
@@ -116,7 +119,6 @@ export default function DriverChecklist() {
   if (!tripId) return <p>Nenhuma viagem disponível para checklist.</p>;
   if (!effectiveTrip) return <p role="status">Carregando checklist…</p>;
   const savedChecklist = status.isLoading || status.isError ? scopedSnapshot?.checklist : null;
-  const preItems = savedChecklist ? savedChecklist.pre.checkedItems : status.preItems;
   const postItems = savedChecklist ? savedChecklist.post.checkedItems : status.postItems;
   const preId = savedChecklist ? savedChecklist.pre.id : status.pre?.id ?? null;
   const postId = savedChecklist ? savedChecklist.post.id : status.post?.id ?? null;
@@ -127,15 +129,18 @@ export default function DriverChecklist() {
     && command.aggregateId === effectiveTrip.id && command.payload && typeof command.payload === 'object'
     && !Array.isArray(command.payload) && command.payload.event_type === 'start_shift');
   return <div className="space-y-4">
-    <h1 className="text-lg font-bold">Checklist</h1>
+    {params.get('welcome')!=='1'?<h1 className="text-lg font-bold">Checklist</h1>:null}
     {!trip.data && scopedSnapshot && !failed && <p role="status" className="text-xs text-muted-foreground">Dados salvos no aparelho. Novas marcações entrarão na fila de sincronização.</p>}
     {failed && errorNotice}
     {status.isLoading && !scopedSnapshot && <p role="status">Carregando checklist…</p>}
-    <DriverChecklistSection key={`${effectiveTrip.id}-pre`} title="Pré-Viagem" kind="pre" items={PRE_TRIP_ITEMS}
-      tripId={effectiveTrip.id} savedItems={preItems} savedId={preId}
-      boundaryId={preBoundaryId} disabled={disabled || effectiveTrip.status === 'completed'} />
-    <DriverChecklistSection key={`${effectiveTrip.id}-post`} title="Pós-Viagem" kind="post" items={POST_TRIP_ITEMS}
+    <DriverVehicleReadiness key={`${currentTenant?.id}:${user?.id}:${effectiveTrip.id}:${preBoundaryId}`} tripId={effectiveTrip.id}
+      savedId={preId} boundaryId={preBoundaryId} payload={savedChecklist?savedChecklist.pre.payload??{checked_items:savedChecklist.pre.checkedItems}:status.pre?.payload}
+      driverName={driver.data?.name??scopedSnapshot?.trip.driver.name}
+      disabled={disabled || effectiveTrip.status === 'completed'}
+      onComplete={params.get('welcome')==='1'?()=>accessTrip(effectiveTrip.id,effectiveTrip.status,
+        activeTrip.data?.actual_start_at??scopedSnapshot?.trip.actualStartAt,undefined,currentTenant?.id):undefined}/>
+    {params.get('welcome')!=='1'?<DriverChecklistSection key={`${effectiveTrip.id}-post`} title="Pós-Viagem" kind="post" items={POST_TRIP_ITEMS}
       tripId={effectiveTrip.id} savedItems={postItems} savedId={postId}
-      boundaryId={postBoundaryId} disabled={disabled || (!postBoundaryId && !queuedStartBoundary)} />
+      boundaryId={postBoundaryId} disabled={disabled || (!postBoundaryId && !queuedStartBoundary)} />:null}
   </div>;
 }

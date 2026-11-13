@@ -1,10 +1,11 @@
 import { useEffect, useId } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { checklistItems, PRE_TRIP_ITEMS, POST_TRIP_ITEMS } from '@/lib/driverChecklist';
+import { checklistItems, POST_TRIP_ITEMS } from '@/lib/driverChecklist';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { useDriverJourneyContext } from './useDriverJourneyContext';
+import {preChecklistProgress} from '@/lib/driverVehicleReadiness';
 
 export function useChecklistStatus(tripId: string | undefined) {
   const { currentTenant } = useTenant();
@@ -46,14 +47,15 @@ export function useChecklistStatus(tripId: string | undefined) {
     return () => { void supabase.removeChannel(channel); };
   }, [user?.id, currentTenant?.id, qc, subscriptionId]);
 
-  const preItems = checklistItems(query.data?.pre?.payload, PRE_TRIP_ITEMS.length);
+  const preProgress=preChecklistProgress(query.data?.pre?.payload);
+  const preItems = preProgress.items;
   const postItems = checklistItems(query.data?.post?.payload, POST_TRIP_ITEMS.length);
   const isError = query.isError || journey.isError;
   return {
-    preCompleted: !isError && preItems.length === PRE_TRIP_ITEMS.length,
+    preCompleted: !isError && preProgress.complete,
     postCompleted: !isError && !!postBoundary && postItems.length === POST_TRIP_ITEMS.length,
     preCheckedCount: preItems.length, postCheckedCount: postItems.length,
-    preTotalCount: PRE_TRIP_ITEMS.length, postTotalCount: POST_TRIP_ITEMS.length,
+    preTotalCount: preProgress.total, postTotalCount: POST_TRIP_ITEMS.length,
     preItems, postItems, pre: query.data?.pre, post: query.data?.post,
     preBoundaryId: preBoundary?.id ?? null, postBoundaryId: postBoundary?.id ?? null,
     isLoading: journey.isPending || query.isPending,
