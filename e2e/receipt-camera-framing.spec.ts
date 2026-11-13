@@ -20,7 +20,7 @@ let server:ViteDevServer,origin:string;
 test.beforeAll(async()=>{
   server=await createServer({root,configFile:false,logLevel:'error',plugins:[react(),{
     name:'receipt-camera-fixture',configureServer(s){s.middlewares.use((req,res,next)=>{
-      if(req.url==='/'){res.setHeader('content-type','text/html');void s.transformIndexHtml('/','<div id="root"></div><script type="module" src="/receipt-fixture.tsx"></script>').then(html=>res.end(html));}
+      if(req.url==='/'){res.setHeader('content-type','text/html');void s.transformIndexHtml('/','<meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/receipt-fixture.tsx"></script>').then(html=>res.end(html));}
       else if(req.url?.startsWith('/receipt-fixture.tsx'))void s.transformRequest('/receipt-virtual.tsx').then(result=>{res.setHeader('content-type','text/javascript');res.end(result?.code??'');});
       else next();
     });},resolveId(id){if(id==='/receipt-virtual.tsx'||id==='/receipt-fixture.tsx')return '\0receipt-fixture.tsx';if(id==='@/integrations/supabase/client')return '\0receipt-supabase';},
@@ -32,6 +32,7 @@ test.afterAll(async()=>{await server?.close();});
 test('receipt framing follows the actual sensor and preserves an inconclusive full photo @critical',async({page},info)=>{
   await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort('blockedbyclient'));
   await page.goto(origin);await page.getByRole('button',{name:'Abrir scanner',exact:true}).click();
+  expect(await page.evaluate(()=>document.documentElement.clientWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   const video=page.getByLabel('Prévia da câmera');await expect(video).toBeVisible();
   await expect.poll(()=>video.evaluate((element:HTMLVideoElement)=>element.videoWidth)).toBe(2400);
   const geometry=await video.evaluate((element:HTMLVideoElement)=>{const sensor=element.getBoundingClientRect(),frame=element.parentElement!.getBoundingClientRect();
