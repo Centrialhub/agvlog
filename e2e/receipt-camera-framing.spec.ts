@@ -43,6 +43,11 @@ test('receipt framing follows the actual sensor and preserves an inconclusive fu
   await expect(page.getByAltText('Foto original para ajustar as bordas')).toBeVisible({timeout:20000});
   const result=await page.evaluate(()=> (window as unknown as {__receiptFrame:unknown}).__receiptFrame);
   expect(result).toMatchObject({accepted:false,width:2400,height:1800,corners:{topLeft:{x:0,y:0},bottomRight:{x:1,y:1}}});
+  const handle=page.getByRole('button',{name:'Canto superior esquerdo',exact:true});
+  await handle.scrollIntoViewIfNeeded();
+  const handleIsReachable=await handle.evaluate(element=>{const box=element.getBoundingClientRect();
+    return [[3,box.height/2],[box.width/2,3],[box.width-3,box.height/2]].every(([x,y])=>element.contains(document.elementFromPoint(box.x+x,box.y+y)));});
+  expect(handleIsReachable).toBe(true);
   await expect(page.getByRole('button',{name:'Fotografar com a câmera do celular'})).toBeVisible();
   await info.attach('sensor-framing',{body:JSON.stringify({geometry,result}),contentType:'application/json'});
   await info.attach('synthetic-full-photo-review',{body:await page.screenshot(),contentType:'image/png'});

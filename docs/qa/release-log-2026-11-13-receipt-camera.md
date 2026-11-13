@@ -35,6 +35,9 @@ Três E2E locais (desktop/tablet/mobile) também passaram com câmera sintética
 captureStream, medindo o retângulo real do vídeo/sensor e executando o recorte
 Canvas/decodificação real. Foto inconclusiva permanece em 2400x1800 sem cortes;
 os três navegadores abriram a revisão, sem rede externa, login ou uploads.
+Revisão visual identificou puxadores cortados pelo contêiner nos extremos da
+foto. O editor agora reserva espaço externo; o E2E verifica hit-testing real
+nas metades superior/esquerda do puxador, além da geometria do vídeo.
 Typecheck, lint e Quality gate completo exigidos no SHA final antes de promoção.
 SHA final, jobs e alias final registrados no PR/recibo de entrega.
 

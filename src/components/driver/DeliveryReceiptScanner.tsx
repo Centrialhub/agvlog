@@ -115,14 +115,14 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
       <div className="grid grid-cols-2 gap-2"><Button type="button" onClick={()=>void captureLive()} disabled={busy}>Capturar agora</Button><Button type="button" variant="outline" onClick={stopCamera}><X className="mr-2 h-4 w-4"/>Cancelar</Button></div></div>:null}
 
     {!cameraOpen&&editing&&value&&sourcePreview?<div className="space-y-2"><p className="text-xs">A foto original foi preservada. Se o recorte não ficou correto, arraste os cantos para fora de todo o papel, incluindo data e assinatura.</p>
-      <div className="relative mx-auto w-fit max-w-full touch-none overflow-hidden rounded border bg-muted"><img src={sourcePreview} alt="Foto original para ajustar as bordas" className="block max-h-[60vh] max-w-full"/>
+      <div className="rounded border bg-muted p-4"><div className="relative mx-auto w-fit max-w-full touch-none"><img src={sourcePreview} alt="Foto original para ajustar as bordas" className="block max-h-[60vh] max-w-full"/>
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon
           points={cornerKeys.map(key=>`${corners[key].x*100},${corners[key].y*100}`).join(' ')} fill="rgba(59,130,246,.12)" stroke="hsl(var(--primary))" strokeWidth=".8"/></svg>
         {cornerKeys.map(key=><button key={key} type="button" aria-label={cornerLabels[key]} className="absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-primary shadow"
           style={{left:`${corners[key].x*100}%`,top:`${corners[key].y*100}%`}}
           onPointerDown={event=>event.currentTarget.setPointerCapture(event.pointerId)} onPointerMove={event=>{if(!event.currentTarget.hasPointerCapture(event.pointerId))return;
             const rect=event.currentTarget.parentElement!.getBoundingClientRect();setCorner(key,{x:Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width)),y:Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height))});}}/>)}
-      </div><div className="grid grid-cols-2 gap-2"><Button type="button" disabled={busy} onClick={()=>void scan(value.original,corners,value.rotation??0)}><Check className="mr-2 h-4 w-4"/>Aplicar cantos</Button>
+      </div></div><div className="grid grid-cols-2 gap-2"><Button type="button" disabled={busy} onClick={()=>void scan(value.original,corners,value.rotation??0)}><Check className="mr-2 h-4 w-4"/>Aplicar cantos</Button>
         <Button type="button" variant="outline" onClick={()=>setEditing(false)}>Cancelar ajuste</Button></div></div>:null}
 
     {!cameraOpen&&!editing&&preview?<img src={preview} alt="Canhoto recortado" className="max-h-64 w-full rounded border bg-muted object-contain"/>:null}
