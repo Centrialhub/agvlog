@@ -1,0 +1,29 @@
+[
+  {
+    "signature": "public._sync_delivery_receipt_from_proof(uuid)",
+    "beforeMd5": "cbf47f2cb0dd94aad3b5dfefb914e41b",
+    "afterMd5": "3b7d56ba458b6110d5bbefa01393d4a1",
+    "acl": "{postgres=X/postgres}",
+    "config": [
+      "search_path=\"\""
+    ]
+  },
+  {
+    "signature": "public.driver_record_delivery_outcome_without_fiscal_gate_v1(uuid, text, jsonb, uuid, text)",
+    "beforeMd5": "4d543774adab2879e4bd2fcc73fe057d",
+    "afterMd5": "a6954951efeda000f768fe8b52bc11fc",
+    "acl": "{postgres=X/postgres}",
+    "config": [
+      "search_path=\"\""
+    ]
+  },
+  {
+    "signature": "delivery_private.validate_driver_delivery_dispatch_evidence_v1()",
+    "beforeMd5": "39bbc44b2e6cc31ab9ddbaab8311d9bd",
+    "afterMd5": "69628808b2661e3da36f414af85bf1b8",
+    "acl": "{postgres=X/postgres}",
+    "config": [
+      "search_path=\"\""
+    ]
+  }
+]
