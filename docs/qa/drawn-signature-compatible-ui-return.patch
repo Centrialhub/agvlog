@@ -1,0 +1,11 @@
+diff --git b/src/components/driver/deliveries/driverDeliveryEvents.ts a/src/components/driver/deliveries/driverDeliveryEvents.ts
+index 544fbf74..d850b1ee 100644
+--- b/src/components/driver/deliveries/driverDeliveryEvents.ts
++++ a/src/components/driver/deliveries/driverDeliveryEvents.ts
+@@ -33,4 +33,4 @@ export type EventDef = {
+ export const DRIVER_DELIVERY_EVENTS: EventDef[] = [
+-  { key: 'entregue', label: 'ENTREGUE', icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresReceipt: true },
+-  { key: 'devolucao_parcial', label: 'DEVOLUÇÃO PARCIAL', icon: PackageX, category: 'finalizador', finalAction: 'partial', requiresReceiver: true, requiresReceipt: true, showsItems: true, needsOperatorReply: true },
++  { key: 'entregue', label: 'ENTREGUE', icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresReceipt: true, requiresSignature: true },
++  { key: 'devolucao_parcial', label: 'DEVOLUÇÃO PARCIAL', icon: PackageX, category: 'finalizador', finalAction: 'partial', requiresReceiver: true, requiresReceipt: true, requiresSignature: true, showsItems: true, needsOperatorReply: true },
+   { key: 'devolucao_total', label: 'DEVOLUÇÃO TOTAL', icon: Ban, category: 'finalizador', finalAction: 'refused', requiresPhoto: true, showsItems: true, needsOperatorReply: true },

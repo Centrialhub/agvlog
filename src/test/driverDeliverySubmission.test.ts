@@ -274,11 +274,26 @@ describe('delivery frontend submission contract', () => {
     await expect(createDeliverySubmission(input()).submit()).resolves.toMatchObject({queued:true});
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
-  it.each(['entregue','devolucao_parcial'])('requires signature and an accepted receipt scan for %s before uploading', eventKey => {
+  it.each(['entregue','devolucao_parcial'])('requires an accepted receipt scan for %s before uploading', eventKey => {
     expect(() => createDeliverySubmission({...input(),eventKey,receiptScan:null})).toThrow('canhoto legível');
     expect(() => createDeliverySubmission({...input(),eventKey,receiptScan:{...receiptScan(),quality:{...receiptScan().quality,accepted:false}}})).toThrow('canhoto legível');
-    expect(() => createDeliverySubmission({...input(),eventKey,signatureDataUrl:null})).toThrow('canhoto legível');
     expect(mocks.upload).not.toHaveBeenCalled();
+  });
+  it('submits a receipt without drawing or fabricating a signature',async()=>{
+    const result=await createDeliverySubmission({...input(),signatureDataUrl:null,signatureFile:null}).submit();
+    expect(result).toBeDefined();expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.upload).toHaveBeenCalledTimes(3);
+    expect(mocks.upload.mock.calls.some(([request])=>request.folder.includes('/signatures'))).toBe(false);
+    expect(mocks.rpc.mock.calls[0][1]._details.signature_path).toBeNull();
+  });
+  it('preserves an unsigned offline receipt and replays it without requiring a new drawing',async()=>{
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:false});
+    await createDeliverySubmission({...input(),signatureDataUrl:null,signatureFile:null}).submit();
+    expect([...mocks.offline.values()][0].signature).toBeNull();expect(mocks.rpc).not.toHaveBeenCalled();
+    Object.defineProperty(navigator,'onLine',{configurable:true,value:true});
+    await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);expect(mocks.rpc.mock.calls[0][1]._details.signature_path).toBeNull();
+    expect(mocks.offline.size).toBe(0);
   });
   it.each(['entregue','devolucao_parcial'])('requires a valid GPS snapshot for %s before durable release', eventKey => {
     expect(() => createDeliverySubmission({...input(),eventKey,details:{receiver_name:'Recebedor',notes:'Entregue'}})).toThrow('localização GPS válida');

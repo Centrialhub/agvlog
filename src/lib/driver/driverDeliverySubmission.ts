@@ -196,7 +196,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
   if (signatureFile) validateUploadFile(signatureFile,'image');
   if (requiresReceipt) {
     if (typeof details.receiver_name !== 'string' || details.receiver_name.trim().length < 2) throw new Error('Informe o recebedor.');
-    if (!isReceiptScanAcceptable(receiptScan) || (!signatureDataUrl && !signatureFile)) throw new Error('Digitalize um canhoto legível e capture a assinatura para comprovar a entrega.');
+    if (!isReceiptScanAcceptable(receiptScan)) throw new Error('Digitalize um canhoto legível para comprovar a entrega.');
     const latitude=details.latitude,longitude=details.longitude,accuracy=details.accuracy_m;
     if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
       || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180

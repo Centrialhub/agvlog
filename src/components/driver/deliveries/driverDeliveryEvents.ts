@@ -31,8 +31,8 @@ export type EventDef = {
 };
 
 export const DRIVER_DELIVERY_EVENTS: EventDef[] = [
-  { key: 'entregue', label: 'ENTREGUE', icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresReceipt: true, requiresSignature: true },
-  { key: 'devolucao_parcial', label: 'DEVOLUÇÃO PARCIAL', icon: PackageX, category: 'finalizador', finalAction: 'partial', requiresReceiver: true, requiresReceipt: true, requiresSignature: true, showsItems: true, needsOperatorReply: true },
+  { key: 'entregue', label: 'ENTREGUE', icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresReceipt: true },
+  { key: 'devolucao_parcial', label: 'DEVOLUÇÃO PARCIAL', icon: PackageX, category: 'finalizador', finalAction: 'partial', requiresReceiver: true, requiresReceipt: true, showsItems: true, needsOperatorReply: true },
   { key: 'devolucao_total', label: 'DEVOLUÇÃO TOTAL', icon: Ban, category: 'finalizador', finalAction: 'refused', requiresPhoto: true, showsItems: true, needsOperatorReply: true },
   { key: 'chegada_no_cliente', label: 'CHEGADA NO CLIENTE', icon: MapPinned, category: 'informativo' },
   { key: 'solicitar_desconto', label: 'SOLICITAR DESCONTO', icon: Percent, category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },

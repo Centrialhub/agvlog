@@ -122,7 +122,8 @@ async function openEvent(label:string){
 async function fillProof(){
   fireEvent.change(screen.getByLabelText(/Recebedor/),{target:{value:'Recebedor QA'}});
   fireEvent.click(await screen.findByRole('button',{name:'Digitalizar canhoto teste'}));
-  fireEvent.click(screen.getByRole('button',{name:'Assinar teste'}));
+  expect(screen.queryByRole('button',{name:'Assinar teste'})).not.toBeInTheDocument();
+  expect(screen.queryByText('Capture a assinatura')).not.toBeInTheDocument();
 }
 
 describe('driver deliveries rendered frontend',()=>{
@@ -173,7 +174,7 @@ describe('driver deliveries rendered frontend',()=>{
     await waitFor(()=>expect(mocks.snapshotPut).toHaveBeenCalledWith(expect.objectContaining({tenantId:'tenant',actorId:'driver-user',
       tripId:'trip',deliveryItemsByStop:{stop:[expect.objectContaining({id:'item',fiscalDocumentId:'invoice',qty:2})]}})));
   });
-  it('requires start, arrival, receiver, canhoto scan and signature before submission',async()=>{
+  it('requires start, arrival, receiver and canhoto scan before submission',async()=>{
     mocks.started=false;await openDelivery();await fillProof();expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();
     expect(mocks.create).not.toHaveBeenCalled();
   });
@@ -198,7 +199,7 @@ describe('driver deliveries rendered frontend',()=>{
     await openDelivery();expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();await fillProof();
     fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
     expect(await screen.findByRole('button',{name:'Ver evento enviado à operação'})).toBeInTheDocument();
-    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({tripId:'trip',stopId:'stop',eventKey:'entregue',expectedStatus:'arrived',
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({tripId:'trip',stopId:'stop',eventKey:'entregue',expectedStatus:'arrived',signatureDataUrl:null,
       details:expect.objectContaining({latitude:-23.55052,longitude:-46.633308,accuracy_m:8})}));
     expect(mocks.params).toHaveBeenCalledWith({trip:'trip'},{replace:true});
     expect(mocks.invalidate).toHaveBeenCalled();
