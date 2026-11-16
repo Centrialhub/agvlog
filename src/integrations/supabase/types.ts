@@ -28904,6 +28904,14 @@ export type Database = {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
       }
+      get_load_note_checks: {
+        Args: { _tenant_id: string; _load_id: string }
+        Returns: Json
+      }
+      set_load_note_check: {
+        Args: { _tenant_id: string; _load_id: string; _document_id: string; _checked: boolean; _revision: number; _request_id: string }
+        Returns: Json
+      }
       get_load_operational_documents: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json

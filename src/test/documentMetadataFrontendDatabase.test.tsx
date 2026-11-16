@@ -28,7 +28,11 @@ beforeEach(async()=>{
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>({abortSignal:()=>{
   const actor=mock.actor;const work=async()=>{try{
    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let data:unknown;
-   if(name==='update_load_document_metadata'){
+   if(name==='get_load_note_checks'){
+    data=(await operationRpc(db,'select get_load_note_checks($1,$2) result',[args._tenant_id,args._load_id])).rows[0].result;
+   }else if(name==='set_load_note_check'){
+    data=(await operationRpc(db,'select set_load_note_check($1,$2,$3,$4,$5,$6) result',[args._tenant_id,args._load_id,args._document_id,args._checked,args._revision,args._request_id])).rows[0].result;
+   }else if(name==='update_load_document_metadata'){
     data=await updateMetadata(db,args._payload);if(mock.loseReply){mock.loseReply=false;return {data:{},error:null};}
    }else if(name==='get_load_operational_documents'){
     data=(await operationRpc(db,'select get_load_operational_documents($1,$2) result',[args._tenant_id,args._load_id])).rows[0].result;
@@ -55,6 +59,22 @@ async function review(){fireEvent.click(screen.getByRole('button',{name:/Salvar 
 // Includes WASM SQL transactions, React invalidations and DOM interactions; the global coverage run
 // executes many database fixtures concurrently. Keep assertions/retries unchanged, but budget the whole story.
 describe('real metadata conference frontend against local PostgreSQL',{timeout:15000},()=>{
+ it('saves pre-dispatch checks immediately and keeps them across searching and reopening the load',async()=>{
+  const view=show();const first=await screen.findByLabelText('Nota 111 conferida antes do despacho');
+  await waitFor(()=>expect(first).toBeEnabled());fireEvent.click(first);
+  await waitFor(()=>expect(first).toBeChecked());expect(screen.getByText(/1 de 2 notas conferidas/)).toBeInTheDocument();
+  expect(writes()).toHaveLength(0);expect(await count()).toBe(0);
+  fireEvent.change(screen.getByPlaceholderText('Nº NF...'),{target:{value:'222'}});
+  await waitFor(()=>expect(screen.queryByLabelText('Nota 111 conferida antes do despacho')).not.toBeInTheDocument());
+  expect(screen.getByLabelText('Nota 222 conferida antes do despacho')).not.toBeChecked();
+  fireEvent.change(screen.getByPlaceholderText('Nº NF...'),{target:{value:''}});
+  expect(await screen.findByLabelText('Nota 111 conferida antes do despacho')).toBeChecked();
+  view.unmount();client.clear();show();const restored=await screen.findByLabelText('Nota 111 conferida antes do despacho');
+  await waitFor(()=>expect(restored).toBeChecked());fireEvent.click(restored);
+  await waitFor(()=>expect(restored).not.toBeChecked());
+  expect((await db.query('select checked,revision from load_note_check_events order by revision')).rows).toEqual([{checked:true,revision:1},{checked:false,revision:2}]);
+  expect((await db.query('select status from fiscal_documents where id=$1',[i.doc])).rows[0]).toEqual({status:'confirmed'});
+ });
  it('opens without writes, stages XML suggestions, and saves both notes only after explicit review',async()=>{
   show();await screen.findByRole('row',{name:/111/});expect(mock.from).not.toHaveBeenCalled();expect(writes()).toHaveLength(0);
   expect(screen.getByLabelText('Canhoto recebido da nota 111')).toBeDisabled();expect(screen.getByLabelText('Data e hora auditadas da nota 111')).toHaveAttribute('readonly');

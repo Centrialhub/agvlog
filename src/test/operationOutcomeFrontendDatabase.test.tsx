@@ -26,6 +26,7 @@ beforeEach(async()=>{
  client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>({abortSignal:async()=>{
+  if(name==='get_load_note_checks')return {data:[],error:null};
   if(name==='get_operation_document_context'&&mock.contextError)return {data:null,error:{message:'Falha de leitura QA'}};
   try{
    const result=name==='get_operation_document_context'

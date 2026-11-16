@@ -26,6 +26,7 @@ beforeEach(async()=>{
  await seedCorrectableOutcome(db,stop);client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>({abortSignal:async()=>{
+  if(name==='get_load_note_checks')return {data:[],error:null};
   try{
    const data=name==='get_operation_document_context'?(await operationRpc(db,'select get_operation_document_context($1,$2,$3) result',[args._tenant_id,args._load_id,args._document_id])).rows[0].result
     :name==='record_operation_document_correction'?await correctOperation(db,args._payload):await recordOperation(db,args._payload);

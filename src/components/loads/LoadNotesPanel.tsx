@@ -27,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useDocumentMetadataWrites } from '@/hooks/useDocumentMetadataWrites';
 import { useDocumentMetadataDrafts } from '@/hooks/useDocumentMetadataDrafts';
+import { useLoadNoteChecks } from '@/hooks/useLoadNoteChecks';
 import { DocumentMetadataDialog } from './DocumentMetadataDialog';
 import { ADMIN_FIELD_LABELS, type AdminFields, type MetadataItem } from '@/lib/loads/documentMetadata';
 import { documentStatusLabel } from '@/lib/status/documentStatus';
@@ -121,6 +122,7 @@ const docMeta = (value: Json): DocMeta => jsonObject(value) as unknown as DocMet
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const toast = useSonnerToast();
   const qc = useQueryClient();
+  const noteChecks=useLoadNoteChecks(load.id);
   const outcomeWrites=useOperationDocumentOutcomes();
   const redeliveryWrites=useRedelivery();
   const metadataWrites=useDocumentMetadataWrites();
@@ -263,6 +265,12 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       </div>
 
       {/* TOTAIS DE FECHAMENTO (entrada manual) */}
+      <section aria-label="Conferência antes do despacho" className="px-3 py-2 border-b text-xs space-y-1">
+        <p>Conferência antes do despacho: {noteChecks.error?'indisponível':noteChecks.loading?'carregando…':`${inboundDocs.filter(d=>noteChecks.rows.get(d.id)?.checked).length} de ${inboundDocs.length} notas conferidas`}.</p>
+        <p className="text-muted-foreground">Pesquise a nota e marque Conferida. Cada marcação é salva automaticamente nesta carga; não registra entrega, canhoto ou reentrega.</p>
+        {noteChecks.saving?<p role="status">Salvando conferência…</p>:null}
+        {noteChecks.error?<p role="alert">Não foi possível consultar as conferências. <Button size="sm" variant="outline" onClick={noteChecks.refresh}>Atualizar conferências</Button></p>:null}
+      </section>
       <div className="flex flex-wrap items-end gap-3 px-3 py-2 border-b bg-muted/10">
         <div className="flex flex-col">
           <Label className="text-[10px] uppercase text-muted-foreground">Total a receber em Dinheiro</Label>
@@ -407,6 +415,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
+              <TableHead className="text-[10px] whitespace-nowrap text-center">Conferida</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap text-center">Rec. Canhoto</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Nº NFS</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">NUMREF</TableHead>
@@ -426,7 +435,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <TableBody>
             {filteredDocs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="text-center text-xs text-muted-foreground py-6">
+                <TableCell colSpan={15} className="text-center text-xs text-muted-foreground py-6">
                   {inboundDocs.length === 0 ? 'Nenhuma nota fiscal vinculada a esta carga.' : 'Nenhuma nota fiscal corresponde aos filtros.'}
                 </TableCell>
               </TableRow>
@@ -438,6 +447,12 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
               const isNotDelivered = ['not_delivered','returned','refused','failed'].includes(d.status||'') || (!isDelivered&&m.ne);
               return (
                 <TableRow key={d.id} className={isNotDelivered ? 'bg-destructive/5' : isDelivered ? 'bg-success/5' : ''}>
+                  <TableCell className="p-1 text-center">
+                    <Checkbox checked={!!noteChecks.rows.get(d.id)?.checked}
+                      aria-label={`Nota ${d.invoice_number} conferida antes do despacho`}
+                      disabled={noteChecks.blocked}
+                      onCheckedChange={value=>void noteChecks.toggle(d.id,value===true)} />
+                  </TableCell>
                   <TableCell className="p-1 text-center">
                     <Checkbox
                       checked={!!m.rec_canhoto}
