@@ -19,7 +19,7 @@ export function driverUsernameFromEmail(email?: string | null): string | null {
 }
 
 export function validateDriverPassword(password: string): void {
-  if (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || new TextEncoder().encode(password).length > 72) {
-    throw new Error('Use uma senha de 12 ou mais caracteres, com maiúscula, minúscula e número (máximo de 72 bytes).');
+  if (password.length < 6 || !password.trim() || new TextEncoder().encode(password).length > 72) {
+    throw new Error('Use uma senha de pelo menos 6 caracteres. Pode conter só letras ou só números (máximo de 72 bytes).');
   }
 }

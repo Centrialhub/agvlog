@@ -77,8 +77,8 @@ describe("production configuration contract", () => {
     expect(config).toMatch(/\[auth\][\s\S]*?enable_signup = false/);
     expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup = true/);
     expect(config).toContain("enable_anonymous_sign_ins = false");
-    expect(config).toContain("minimum_password_length = 12");
-    expect(config).toContain('password_requirements = "lower_upper_letters_digits"');
+    expect(config).toContain("minimum_password_length = 6");
+    expect(config).toContain('password_requirements = ""');
     expect(config).toContain("[auth.rate_limit]");
     expect(config).toContain("sign_in_sign_ups = 10");
     expect(config).toContain('max_frequency = "1m"');

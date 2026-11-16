@@ -15,7 +15,7 @@ const request='91000000-0000-4000-8000-000000000041';
 const request2='91000000-0000-4000-8000-000000000042';
 const nonce='synthetic-server-nonce-never-returned-to-browser-123456789';
 const login='synthetic.driver@usuario.com';
-const password='SyntheticPassword123';
+const password='xqztkv';
 afterEach(async()=>{await db?.close();vi.restoreAllMocks();});
 async function setup(foreign=false) { db=await setupCombinedDriverCredentials(foreign); }
 

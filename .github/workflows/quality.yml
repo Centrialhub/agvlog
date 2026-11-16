@@ -230,6 +230,9 @@ jobs:
           AGVLOG_RETRY_QA_ARTIFACTS: ${{ runner.temp }}/agvlog-driver-delivery-retry
         run: npm run e2e:critical:3 -- --workers=1 --retries=0 --output=test-results/critical-repeat
 
+      - name: Real Auth accepts simple six-character driver passwords
+        run: node --experimental-strip-types scripts/test-driver-simple-password-auth.mjs
+
       - name: Upload E2E evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
