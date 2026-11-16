@@ -53,7 +53,11 @@ vi.mock('@/hooks/useLoadItems', () => ({ useLoadItems: (loadId: string) => ({ da
     quantity: 1, pallet_count: 1, weight_kg: 10, fiscal_documents: { invoice_number: '123' } },
 ] : [], isLoading: false }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mock.rpc, from: () => {
-  const query = { select: () => query, in: () => query, order: () => query, range: () => Promise.resolve({ data: [], error: null }), update: mock.write, delete: mock.write };
+  let projection='';
+  const query = { select: (value:string) => {projection=value;return query;}, in: () => query, order: () => query,
+    range: () => Promise.resolve(projection.includes('fiscal_documents!load_items_fiscal_tenant_fkey(')
+      ?{ data: [], error: null }:{data:null,error:{code:'PGRST201',message:'More than one relationship between load_items and fiscal_documents'}}),
+    update: mock.write, delete: mock.write };
   return query;
 } } }));
 let client: QueryClient;
@@ -76,6 +80,15 @@ async function selectLoads() {
 }
 
 describe('real reallocation screen with isolated transport', () => {
+  it('keeps the load selectors enabled when metadata has two fiscal-document foreign keys', async () => {
+    render(page());
+    await waitFor(()=>expect(screen.getByLabelText('Carga Origem')).toBeEnabled());
+    await waitFor(()=>expect(client.getQueryState(['reallocation_load_meta','source,target'])?.status).toBe('success'));
+    expect(screen.getByLabelText('Carga Origem')).toBeEnabled();
+    expect(screen.getByLabelText('Carga Destino')).toBeEnabled();
+    expect(screen.getAllByRole('option',{name:/1001/})).toHaveLength(2);
+    expect(mock.rpc).not.toHaveBeenCalled();expect(mock.write).not.toHaveBeenCalled();
+  });
   it('announces success only after confirmation and performs no browser-side cleanup or route rewrite', async () => {
     render(page()); await selectLoads(); fireEvent.click(screen.getByRole('button', { name: 'Mover para 1002' }));
     await waitFor(() => expect(mock.success).toHaveBeenCalledWith('1 item(ns) realocado(s) para 1002'));
