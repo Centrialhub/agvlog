@@ -22,6 +22,7 @@ import { normalizeCity } from '@/lib/utils/normalizeCity';
 import { getErrorMessage } from '@/lib/errors';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { assertReallocationCapacity } from '@/lib/loads/reallocationCapacity';
+import { selectLoadItemFiscalDocument } from '@/lib/loads/loadItemRelations';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const REALLOCATION_FILTER_CHUNK = 100;
@@ -484,7 +485,7 @@ export default function LoadReallocation() {
         const ids = activeLoadIds.slice(index, index + REALLOCATION_FILTER_CHUNK);
         rows.push(...await fetchAllPostgrestPages((from, to) => supabase
           .from('load_items')
-          .select('load_id, order_id, orders(order_number), fiscal_documents(remitter, recipient, recipient_city, recipient_state, invoice_number)')
+          .select(`load_id, order_id, orders(order_number), ${selectLoadItemFiscalDocument('remitter, recipient, recipient_city, recipient_state, invoice_number')}`)
           .in('load_id', ids)
           .order('load_id', { ascending: true })
           .order('id', { ascending: true })
