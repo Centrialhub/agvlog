@@ -49,9 +49,13 @@ describe('driver username policy', () => {
     expect(driverLoginEmail('Joao.Silva')).toBe('joao.silva@usuario.com');
   });
   it.each(['a', 'josé', 'joao@email.com', '.joao', 'joao..silva', 'a'.repeat(41)])('rejects invalid username %s', username => expect(() => driverLoginEmail(username)).toThrow());
-  it('keeps strong passwords and rejects bcrypt byte overflow', () => {
+  it.each(['abcxyz','738291','ABCXYZ',password])('accepts six-character simple passwords and existing longer passwords: %s', value => {
+    expect(() => validateDriverPassword(value)).not.toThrow();
+  });
+  it('rejects short or blank passwords and bcrypt byte overflow', () => {
     expect(() => validateDriverPassword(password)).not.toThrow();
     expect(() => validateDriverPassword('fraca')).toThrow();
+    expect(() => validateDriverPassword('      ')).toThrow();
     expect(() => validateDriverPassword(`Aa1${'á'.repeat(35)}`)).toThrow();
   });
 });

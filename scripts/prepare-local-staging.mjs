@@ -9,7 +9,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const templatePath = 'infra/local-staging/config.toml';
 const templateSha256 = 'df0703b59d0ecac3d5ef7fd98a3cc20c878a861afc7f84cee349a7ff01b7a021';
 const applicationTemplatePath = 'infra/local-staging/application.config.toml';
-const applicationTemplateSha256 = 'ed2bfd2ebf3b634ae07c05b9dd6f6c6ad794c5a975c2649c3d47379858669963';
+const applicationTemplateSha256 = '0cf8bfdccab6527cab81ab80e5d0e594cfd5be3671e68eec1aa3e5fd84edaadf';
 export const LOCAL_STAGING_CLI_VERSION = '2.116.0';
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 // Studio creates snippets as an empty directory; no child path is allowlisted.

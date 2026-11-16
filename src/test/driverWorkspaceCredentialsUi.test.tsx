@@ -18,8 +18,8 @@ function mount(member=false){return render(<QueryClientProvider client={client}>
   {...(member?{userId:'synthetic-user'}:{driverId:'synthetic-driver'})}/></QueryClientProvider>);}
 async function fill(){
   fireEvent.change(await screen.findByLabelText('Usuário'),{target:{value:'synthetic.driver'}});
-  fireEvent.change(screen.getByLabelText('Nova senha'),{target:{value:'SyntheticPassword123'}});
-  fireEvent.change(screen.getByLabelText('Confirmar senha'),{target:{value:'SyntheticPassword123'}});
+  fireEvent.change(screen.getByLabelText('Nova senha'),{target:{value:'xqztkv'}});
+  fireEvent.change(screen.getByLabelText('Confirmar senha'),{target:{value:'xqztkv'}});
 }
 describe('identified credential command UI',()=>{
   it.each([false,true])('converts from the driver/member entry and explains the operation scope, member=%s',async member=>{

@@ -11,7 +11,7 @@ const driver = '33333333-3333-4333-8333-333333333333';
 const user = '44444444-4444-4444-8444-444444444444';
 const workspace = '55555555-5555-4555-8555-555555555555';
 let driverWorkspace: string | null;
-const password = 'SenhaNova12345';
+const password = '738291';
 let authorized: boolean, linked: boolean, managed: boolean, scopeError: string | null, authError: string | null;
 let calls: Array<{ path: string; method: string; body: Record<string, unknown> }>;
 let admin: SupabaseClient;
