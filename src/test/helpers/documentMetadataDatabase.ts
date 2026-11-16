@@ -4,7 +4,7 @@ import {createRedeliveryDatabase} from './redeliveryDatabase.ts';
 import {operationIds as i,operationRpc} from './operationOutcomeDatabase.ts';
 export const documentMetadataMigration='20260830151949_audit_delivery_document_metadata.sql';
 export const documentMetadataSql=()=>readFileSync('supabase/migrations/'+documentMetadataMigration,'utf8');
-export async function createDocumentMetadataDatabase(){const value=await createRedeliveryDatabase();await value.db.exec(documentMetadataSql());return value;}
+export async function createDocumentMetadataDatabase(){const value=await createRedeliveryDatabase();await value.db.exec(documentMetadataSql());await value.db.exec(readFileSync('supabase/migrations/20261116154757_load_note_pre_dispatch_checks.sql','utf8'));return value;}
 export async function metadataContext(db:PGlite,doc=i.doc,load=i.load){
  const result=(await operationRpc<{result:{documents:Array<{id:string;operational_metadata:{revision:string;attempt_id:string|null;fields:Record<string,unknown>;can_receive_receipt:boolean}}>}}>(
   db,'select get_load_operational_documents($1,$2) result',[i.tenant,load])).rows[0].result;

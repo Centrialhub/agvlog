@@ -25,6 +25,7 @@ beforeEach(async()=>{
  client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>({abortSignal:()=>{
+  if(name==='get_load_note_checks')return Promise.resolve({data:[],error:null});
   const actor=mock.actor;const work=async()=>{
    try{
     await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);
