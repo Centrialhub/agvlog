@@ -25,11 +25,12 @@ import NFSePanel from './NFSePanel';
 import ManifestPanel from './ManifestPanel';
 import LoadNotesPanel from './LoadNotesPanel';
 import LoadAggregateRecoveryAlert from './LoadAggregateRecoveryAlert';
+import { LoadRemovalAction } from './LoadRemovalAction';
 import {
   FileText, DollarSign, Package, TrendingUp, FileSignature,
   HandCoins, ShieldCheck, Boxes, Files, Truck, Save, Plus,
   Unlock, Database, Network, DollarSign as DollarIcon, Bot, Search,
-  X as XIcon, Lock, ClipboardCheck, AlertTriangle, Pencil, FileSearch,
+  Lock, ClipboardCheck, AlertTriangle, Pencil, FileSearch,
   FilePlus, Key,
   type LucideIcon,
 } from 'lucide-react';
@@ -361,8 +362,6 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
             onClick: () => navigate(`/checklists?load=${load.id}`) },
           { icon: AlertTriangle, label: 'Ocorrência', color: 'text-red-600',
             onClick: () => navigate(`/incidents?load=${load.id}`) },
-          { icon: XIcon, label: 'Cancelar Carga', color: 'text-destructive',
-            onClick: () => toast.warning('Use o menu Status (acima) para cancelar a carga.') },
           { icon: FileText, label: 'Imprimir', color: 'text-zinc-600',
             onClick: () => window.print() },
         ] satisfies ActionButton[]).map((b, i) => {
@@ -384,6 +383,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
           );
         })}
       </div>
+      <div className="px-2 py-2"><LoadRemovalAction load={load} documentIds={currentDocuments.filter(doc => doc.document_type === 'inbound' && !doc.deleted_at).map(doc => doc.id)} /></div>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-auto flex-wrap p-0">
           <TabsTrigger value="geral" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><FileText className="h-3 w-3 mr-1" />Geral</TabsTrigger>

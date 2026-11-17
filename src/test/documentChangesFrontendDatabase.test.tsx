@@ -3,6 +3,9 @@ import {QueryClient,QueryClientProvider,useQuery} from '@tanstack/react-query';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
 import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
+import { LoadRemovalAction } from '@/components/loads/LoadRemovalAction';
+import { MemoryRouter } from 'react-router-dom';
+import type { Load } from '@/hooks/useLoads';
 import {DocumentChangeRecoveryPanel} from '@/components/loads/DocumentChangeRecoveryPanel';
 import {createDocumentChangeDatabase,documentChangeIds as i,seedDocumentChanges} from './helpers/documentChangesDatabase';
 import {twoPlannedTrips} from './helpers/replanningDatabase';
@@ -41,6 +44,7 @@ vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal
 const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),write:vi.fn(),savePreference:vi.fn(),loseReply:false}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:i.operator}})}));
+vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({success:mock.toast,error:mock.toast})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('@/hooks/useOrders',()=>({useOrders:()=>({data:[]})}));
 vi.mock('@/hooks/useUserUiPreference',()=>({useUserUiPreference:(_key:string,value:unknown)=>({preference:value,isLoaded:true,savePreference:mock.savePreference})}));
@@ -85,6 +89,27 @@ async function choose(dialog:HTMLElement,name:RegExp){const select=within(dialog
  const option=within(select).getByRole('option',{name}) as HTMLOptionElement;fireEvent.change(select,{target:{value:option.value}});
  fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Ajuste confirmado QA'}});}
 describe('real invoice panel and SQL candidate, not HTTP/Auth E2E',()=>{
+ it('releases the load notes through the real confirmation and SQL, preserving the fiscal document',async()=>{
+  render(<MemoryRouter><QueryClientProvider client={client}><LoadRemovalAction load={{id:i.load,load_number:'QA',version:1,on_hold:false} as Load} documentIds={[i.doc]}/></QueryClientProvider></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button',{name:'Excluir carga / Liberar notas'}));
+  expect(writes()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button',{name:'Liberar todas as notas'}));
+  const dialog=await screen.findByRole('dialog');await within(dialog).findByLabelText('Motivo da alteração');
+  expect(writes()).toHaveLength(0);
+  fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Motorista não levará esta encomenda'}});
+  fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar alteração'}));
+  await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.stringContaining('1 nota(s) liberadas')));
+  expect(writes()).toHaveLength(1);
+  expect((await db.query('select load_id from fiscal_documents where id=$1',[i.doc])).rows).toEqual([{load_id:null}]);
+  expect((await db.query('select count(*)::int n from loads where id=$1',[i.load])).rows).toEqual([{n:0}]);
+ });
+ it('explains the operational hold instead of silently removing it or sending a command',()=>{
+  render(<MemoryRouter><QueryClientProvider client={client}><LoadRemovalAction load={{id:i.load,load_number:'QA',version:1,on_hold:true} as Load} documentIds={[i.doc]}/></QueryClientProvider></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button',{name:'Excluir carga / Liberar notas'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('Liberar Travas');
+  expect(screen.getByRole('button',{name:'Liberar todas as notas'})).toBeDisabled();
+  expect(writes()).toHaveLength(0);
+ });
  it('requires an explicit stop and adds the selected note to that exact stop',async()=>{
   show();const dialog=await attachDialog();fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Adicionar nota'}});
   fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar alteração'}));expect(await within(dialog).findByRole('alert')).toHaveTextContent('explicitamente');expect(writes()).toHaveLength(0);

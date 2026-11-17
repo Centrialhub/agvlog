@@ -33,6 +33,10 @@ import { ADMIN_FIELD_LABELS, type AdminFields, type MetadataItem } from '@/lib/l
 import { documentStatusLabel } from '@/lib/status/documentStatus';
 import { useOperationDocumentOutcomes } from '@/hooks/useOperationDocumentOutcomes';
 import { operationResultMessage, type OperationOutcome } from '@/lib/loads/operationDocumentOutcome';
+import { useLoadDocumentChanges } from '@/hooks/useLoadDocumentChanges';
+import { DocumentChangeDialog, type DocumentChangeSelection } from './DocumentChangeDialog';
+import { DocumentChangeRecoveryPanel } from './DocumentChangeRecoveryPanel';
+import { useNavigate } from 'react-router-dom';
 
 type LoadNoteDocument = Pick<Tables<'fiscal_documents'>,
   'id' | 'document_type' | 'deleted_at' | 'delivery_meta' | 'client_load_source' |
@@ -120,6 +124,9 @@ const jsonObject = (value: Json): JsonObject =>
 const docMeta = (value: Json): DocMeta => jsonObject(value) as unknown as DocMeta;
 
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
+  const navigate = useNavigate();
+  const documentChanges = useLoadDocumentChanges();
+  const [removal, setRemoval] = useState<DocumentChangeSelection | null>(null);
   const toast = useSonnerToast();
   const qc = useQueryClient();
   const noteChecks=useLoadNoteChecks(load.id);
@@ -127,7 +134,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const redeliveryWrites=useRedelivery();
   const metadataWrites=useDocumentMetadataWrites();
   const {user}=useAuth();const {currentTenant}=useTenant();
-  const outcomeBlocked=outcomeWrites.isPending||outcomeWrites.pending.length>0||!!outcomeWrites.recoveryError
+  const outcomeBlocked=documentChanges.isPending||documentChanges.pending.length>0||!!documentChanges.recoveryError
+    ||outcomeWrites.isPending||outcomeWrites.pending.length>0||!!outcomeWrites.recoveryError
     ||redeliveryWrites.isPending||redeliveryWrites.pending.length>0||!!redeliveryWrites.recoveryError
     ||metadataWrites.isPending||metadataWrites.pending.length>0||!!metadataWrites.recoveryError;
   const inboundDocs = useMemo(
@@ -576,6 +584,9 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   </TableCell>
                   <TableCell className="p-1">
                     <div className="flex items-center gap-1 justify-center">
+                      <Button size="sm" variant="outline" className="h-7 text-[10px]" aria-label={`Retirar nota ${d.invoice_number} da carga`}
+                        disabled={outcomeBlocked || dirty.has(d.id) || documentChanges.isPending || documentChanges.pending.length > 0 || !!documentChanges.recoveryError}
+                        onClick={() => setRemoval({ action: 'detach', documentIds: [d.id] })}>Retirar da carga</Button>
                       <Button
                         size="sm"
                         variant={isDelivered ? 'default' : 'outline'}
@@ -642,6 +653,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         </Table>
       </div>
 
+      <DocumentChangeRecoveryPanel />
+      <DocumentChangeDialog api={documentChanges} loadId={load.id} selection={removal} onClose={() => setRemoval(null)}
+        onFailure={message => toast.error(message)} onConfirmed={result => {
+          drafts.drop(result.document_ids);
+          toast.success('Nota retirada da carga e disponível para nova programação.');
+          if (result.load_removed) navigate('/loads'); else onSaved?.();
+        }} />
       {outcomeSelection?<OutcomeDialog loadId={load.id} documentId={outcomeSelection.docId}
         invoiceNumber={inboundDocs.find(d=>d.id===outcomeSelection.docId)?.invoice_number||'—'} outcome={outcomeSelection.outcome}
         onClose={()=>setOutcomeSelection(null)} onConfirmed={result=>{
