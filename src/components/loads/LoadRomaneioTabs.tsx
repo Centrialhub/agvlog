@@ -602,7 +602,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
           </div>
 
           {/* Painel de Notas Fiscais (POPUP_LG_ROMEXP_CLI) */}
-          <LoadNotesPanel load={load} documents={documents} onSaved={onSaved} />
+          <LoadNotesPanel load={load} documents={documents} onSaved={onSaved} onLoadRemoved={() => navigate('/loads')} />
 
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={updateLoad.isPending}>

@@ -36,7 +36,6 @@ import { operationResultMessage, type OperationOutcome } from '@/lib/loads/opera
 import { useLoadDocumentChanges } from '@/hooks/useLoadDocumentChanges';
 import { DocumentChangeDialog, type DocumentChangeSelection } from './DocumentChangeDialog';
 import { DocumentChangeRecoveryPanel } from './DocumentChangeRecoveryPanel';
-import { useNavigate } from 'react-router-dom';
 
 type LoadNoteDocument = Pick<Tables<'fiscal_documents'>,
   'id' | 'document_type' | 'deleted_at' | 'delivery_meta' | 'client_load_source' |
@@ -48,6 +47,7 @@ interface Props {
   load: Load;
   documents: LoadNoteDocument[];
   onSaved?: () => void;
+  onLoadRemoved?: () => void;
 }
 
 const PAYMENT_METHODS = [
@@ -123,8 +123,7 @@ const jsonObject = (value: Json): JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
 const docMeta = (value: Json): DocMeta => jsonObject(value) as unknown as DocMeta;
 
-export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
-  const navigate = useNavigate();
+export default function LoadNotesPanel({ load, documents, onSaved, onLoadRemoved }: Props) {
   const documentChanges = useLoadDocumentChanges();
   const [removal, setRemoval] = useState<DocumentChangeSelection | null>(null);
   const toast = useSonnerToast();
@@ -658,7 +657,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         onFailure={message => toast.error(message)} onConfirmed={result => {
           drafts.drop(result.document_ids);
           toast.success('Nota retirada da carga e disponível para nova programação.');
-          if (result.load_removed) navigate('/loads'); else onSaved?.();
+          if (result.load_removed) onLoadRemoved?.(); else onSaved?.();
         }} />
       {outcomeSelection?<OutcomeDialog loadId={load.id} documentId={outcomeSelection.docId}
         invoiceNumber={inboundDocs.find(d=>d.id===outcomeSelection.docId)?.invoice_number||'—'} outcome={outcomeSelection.outcome}

@@ -18,6 +18,8 @@ vi.mock('@/components/loads/NFSePanel',()=>({default:()=>null}));
 vi.mock('@/components/loads/ManifestPanel',()=>({default:()=>null}));
 vi.mock('@/components/loads/LoadNotesPanel',()=>({default:()=>null}));
 vi.mock('@/components/loads/LoadAggregateRecoveryAlert',()=>({default:()=>null}));
+// This suite isolates header edits; removal is exercised with native SQL in documentChangesFrontendDatabase.
+vi.mock('@/components/loads/LoadRemovalAction',()=>({LoadRemovalAction:()=>null}));
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 it('sends only an edited monitoring flag and preserves original timestamp seconds in untouched fields',async()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
