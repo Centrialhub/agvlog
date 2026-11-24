@@ -21,4 +21,7 @@ describe('invoice product source', () => {
     expect(invoiceProductSource([])).toBeUndefined();
     expect(() => invoiceProductSource([{description:'Resumo sem quantidade',quantity:0,unit:'UN',unitPrice:0,totalPrice:0,ncm:'',cfop:''}])).toThrow('quantidade');
   });
+  it('leaves scanned summaries outside XML product expansion without blocking their import', () => {
+    expect(invoiceProductSource([{description:'Resumo digitalizado',quantity:0,unit:'',unitPrice:0,totalPrice:0,ncm:'',cfop:''}],'scan_nfe')).toBeUndefined();
+  });
 });

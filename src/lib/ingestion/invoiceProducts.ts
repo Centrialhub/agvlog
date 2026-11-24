@@ -1,6 +1,7 @@
 import type { ParsedNFeItem } from '@/lib/documentParsers';
 
-export function invoiceProductSource(items: ParsedNFeItem[]) {
+export function invoiceProductSource(items: ParsedNFeItem[], sourceKind?: string) {
+  if (sourceKind && sourceKind !== 'xml') return undefined;
   if (!items.length) return undefined;
   if (items.length > 1000) throw new Error('A nota excede o limite de 1.000 produtos.');
   return { version: 1, items: items.map((item, index) => {
