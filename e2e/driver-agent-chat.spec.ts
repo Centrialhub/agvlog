@@ -7,7 +7,7 @@ async function send(page:Page,message:string){
  await page.getByRole('textbox',{name:'Mensagem',exact:true}).fill(message);
  await expect(page.getByRole('button',{name:'Enviar mensagem',exact:true})).toBeEnabled();
  await page.getByRole('button',{name:'Enviar mensagem',exact:true}).click();
- await expect(page.getByText('Mensagem registrada no servidor. Isso não confirma a leitura.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('status').filter({hasText:'Mensagem registrada no servidor. Isso não confirma a leitura.'})).toBeVisible();
 }
 function receivedLiveMessages(page:Page){
  const messages=new Set<string>();

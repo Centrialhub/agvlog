@@ -54,7 +54,7 @@ function Conversation({driverId,eventId,agentId,active,actor}:{driverId:string|n
   {query.isPending?<p role="status">Carregando mensagens...</p>:null}
   {query.error?<p role="alert">{chatError(query.error)}</p>:null}
   {query.hasNextPage?<Button variant="outline" disabled={query.isFetchingNextPage} onClick={()=>void query.fetchNextPage()}>Carregar mensagens anteriores</Button>:null}
-  <div ref={history} role="log" aria-live="polite" aria-label="Histórico da conversa" className="flex-1 max-h-[55vh] min-h-48 overflow-y-auto space-y-2"
+  <div ref={history} role="log" tabIndex={0} aria-live="polite" aria-label="Histórico da conversa" className="flex-1 max-h-[55vh] min-h-48 overflow-y-auto space-y-2"
    onScroll={()=>{const node=history.current;if(node){stickToBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<100;if(stickToBottom.current)setHasNew(false);}}}>
    {!query.isPending&&!query.error&&!context.error&&rows.length===0?<p>Nenhuma mensagem disponível nesta conversa.</p>:null}
    {rows.map(row=><article key={row.id} className={'rounded border p-3 '+(row.sender_id===actor?'bg-primary/10':'bg-background')}>
