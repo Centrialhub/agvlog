@@ -66,6 +66,7 @@ export type DriverStop = Pick<Tables<'dispatch_stops'>,
 };
 
 export type StopProduct = {
+  invoiceNumber?: string;
   id: string;
   fiscalDocumentId?: string;
   attemptId?: string | null;

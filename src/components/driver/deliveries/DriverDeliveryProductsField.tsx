@@ -34,7 +34,7 @@ export function DriverDeliveryProductsField({
       {products.length > 0 && (
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Produtos do cliente ({products.length})</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Selecione os produtos devolvidos ({products.length})</p>
             <button
               type="button"
               onClick={() => draft.setReturnedItems(Object.fromEntries(products.map((product) => [product.id, product.qty])))}
@@ -64,7 +64,7 @@ export function DriverDeliveryProductsField({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium leading-tight">{product.name}</p>
-                      <p className="text-[10px] text-muted-foreground">SKU {product.sku} · {product.qty} {product.unit} · R$ {product.price.toFixed(2)}</p>
+                      <p className="text-[10px] text-muted-foreground">{product.invoiceNumber ? `NF ${product.invoiceNumber} · ` : ''}SKU {product.sku} · {product.qty} {product.unit}</p>
                     </div>
                   </button>
                   {checked && (
@@ -85,7 +85,7 @@ export function DriverDeliveryProductsField({
                         className="h-7 text-xs w-20"
                       />
                       <span className="text-[10px] text-muted-foreground">/ {product.qty} {product.unit}</span>
-                      <span className="ml-auto text-[10px] font-semibold">R$ {(quantity * product.price).toFixed(2)}</span>
+                      {product.price > 0 && <span className="ml-auto text-[10px] font-semibold">R$ {(quantity * product.price).toFixed(2)}</span>}
                     </div>
                   )}
                 </div>
@@ -95,7 +95,7 @@ export function DriverDeliveryProductsField({
           {totalReturnedQuantity > 0 && (
             <div className="flex items-center justify-between pt-1 border-t border-border text-xs">
               <span className="text-muted-foreground">Total devolução</span>
-              <span className="font-semibold">R$ {totalReturnValue.toFixed(2)}</span>
+              <span className="font-semibold">{totalReturnValue > 0 ? `R$ ${totalReturnValue.toFixed(2)}` : `${products.filter(product => (draft.returnedItems[product.id] || 0) > 0).length} produto(s) selecionado(s)`}</span>
             </div>
           )}
           <Textarea rows={2} value={draft.returnReason} onChange={(event) => draft.setReturnReason(event.target.value)} aria-label="Motivo da devolução" placeholder="Motivo da devolução (avaria, validade, divergência...)" className="text-sm" />

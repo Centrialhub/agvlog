@@ -25,6 +25,7 @@ import {
 type Notice = { title: string; description?: string; variant?: 'destructive' };
 
 type Props = {
+  receiptCaptureScope?: string;
   onCloseAutoFocus?: (event: Event) => void;
   stopsLoading?: boolean;
   stopsError?: boolean;
@@ -56,6 +57,7 @@ type Props = {
 };
 
 export function DriverDeliveryEventFormSheet({
+  receiptCaptureScope,
   selection,
   stopsLoading = false,
   stopsError = false,
@@ -185,13 +187,15 @@ export function DriverDeliveryEventFormSheet({
                   <Button type="button" variant="outline" onClick={() => void refetchReceiptQualityPolicy()}>Tentar novamente</Button>
                 </div>
                 : <DeliveryReceiptScanner
+                  key={receiptCaptureScope}
+                  captureScope={receiptCaptureScope}
                   value={draft.receiptScan}
                   qualityPolicy={receiptQualityPolicy}
                   onChange={draft.setReceiptScan}
-                  onError={(message) => notify({ title: 'Canhoto inválido', description: message, variant: 'destructive' })}
+                  onError={(message) => notify({ title: 'Não foi possível preparar o canhoto', description: message, variant: 'destructive' })}
                 />
               )}
-              {def.requiresReceipt?<p className="text-xs text-muted-foreground">Após o envio, a foto do canhoto será analisada pelo serviço de IA do AGVLog (Lovable) para leitura da data e identificação de assinatura visível. Leituras inconclusivas ficam sinalizadas para conferência.</p>:null}
+              {def.requiresReceipt?<p className="text-xs text-muted-foreground">Ao confirmar o evento, o original e a imagem digitalizada ficam vinculados à entrega para consulta da equipe. A IA lê a data e identifica a assinatura visível; leituras inconclusivas ficam sinalizadas para conferência.</p>:null}
 
               {draft.photoPreviews.length > 0 && (
                 <div className="space-y-1.5">

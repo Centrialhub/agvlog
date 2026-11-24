@@ -2,7 +2,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
-import DriverChat from '@/pages/driver/DriverChat';
+import DriverChat from '@/components/driver/DriverGeneralChat';
 import {DriverConversation} from '@/components/driver/DriverConversation';
 import {ChatRecoveryPanel} from '@/components/driver/ChatRecoveryPanel';
 import {pendingChat} from '@/lib/driver/chatOutbox';

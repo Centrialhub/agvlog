@@ -15,8 +15,10 @@ import {
 import type { ReceiptScanQualityPolicy } from '@/lib/driver/receiptQualityPolicy';
 import { validateUploadFile } from '@/lib/uploadPolicy';
 import { RECEIPT_CAMERA_CONSTRAINTS, receiptCameraLayout } from '@/lib/driver/receiptCamera';
+import { loadReceiptCapture, saveReceiptCapture } from '@/lib/driver/receiptCaptureStore';
 
 interface DeliveryReceiptScannerProps {
+  captureScope?: string;
   value: ReceiptScanResult | null;
   qualityPolicy: ReceiptScanQualityPolicy;
   onChange: (value: ReceiptScanResult | null) => void;
@@ -29,11 +31,13 @@ const cornerKeys=Object.keys(cornerLabels) as Array<keyof ReceiptCorners>;
 
 const policyLabels:Record<ReceiptScanQualityPolicy['source'],string>={client:'Regra específica do cliente',tenant:'Regra da empresa',baseline:'Padrão do aplicativo'};
 
-export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onError}:DeliveryReceiptScannerProps) {
+export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onError,captureScope}:DeliveryReceiptScannerProps) {
   const cameraInputRef=useRef<HTMLInputElement>(null),galleryRef=useRef<HTMLInputElement>(null),videoRef=useRef<HTMLVideoElement>(null);
   const streamRef=useRef<MediaStream|null>(null),historyRef=useRef<ReceiptCorners[]>([]),capturingRef=useRef(false);
   const captureLiveRef=useRef<()=>Promise<void>>(async()=>undefined);
   const mounted=useRef(true);
+  const operation=useRef(0),callbacks=useRef({onChange,onError});callbacks.current={onChange,onError};
+  const [captureSaved,setCaptureSaved]=useState(false);
   const [busy,setBusy]=useState(false),[editing,setEditing]=useState(false),[cameraOpen,setCameraOpen]=useState(false);
   const [corners,setCorners]=useState<ReceiptCorners>(initialCorners),[liveCorners,setLiveCorners]=useState<ReceiptCorners|null>(null);
   const [preview,setPreview]=useState<string|null>(null),[sourcePreview,setSourcePreview]=useState<string|null>(null);
@@ -51,14 +55,32 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
     setCameraOpen(false);setLiveCorners(null);
   };
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;stopCamera();};},[]);
+  useEffect(()=>{
+    if(!captureScope)return;
+    const generation=operation.current;let current=true;setBusy(true);
+    void loadReceiptCapture(captureScope).then(async saved=>{
+      if(!saved||!current||!mounted.current||operation.current!==generation)return;
+      const samePolicy=saved.qualityPolicy?.policy_id===qualityPolicy.policy_id&&saved.qualityPolicy?.version===qualityPolicy.version;
+      const restored=samePolicy?saved:await processReceiptScan(saved.original,{corners:saved.corners,rotation:saved.rotation,qualityPolicy});
+      if(!samePolicy&&current&&mounted.current&&operation.current===generation)await saveReceiptCapture(captureScope,restored);
+      if(!current||!mounted.current||operation.current!==generation)return;
+      callbacks.current.onChange(restored);setEditing(!restored.quality.accepted);setCaptureSaved(true);
+    }).catch(error=>{if(current&&mounted.current)callbacks.current.onError(error instanceof Error?error.message:'Não foi possível recuperar a foto.');})
+      .finally(()=>{if(current&&mounted.current&&operation.current===generation)setBusy(false);});
+    return()=>{current=false;operation.current++;};
+  },[captureScope,qualityPolicy.policy_id,qualityPolicy.version]);
 
   async function scan(file:File,scanCorners?:ReceiptCorners,rotation:ReceiptRotation=0){
+    const generation=++operation.current;
     setBusy(true);
     try{validateUploadFile(file,'image');const result=await processReceiptScan(file,scanCorners?{corners:scanCorners,rotation,qualityPolicy}:{rotation,qualityPolicy});
-      if(!mounted.current)return;
+      if(!mounted.current||operation.current!==generation)return;
+      if(captureScope)await saveReceiptCapture(captureScope,result);
+      if(!mounted.current||operation.current!==generation)return;
+      setCaptureSaved(!!captureScope);
       onChange(result);setEditing(!result.quality.accepted);stopCamera();
-    }catch(error){if(mounted.current){stopCamera();onError(error instanceof Error?error.message:'Não foi possível digitalizar o canhoto.');}}
-    finally{setBusy(false);capturingRef.current=false;}
+    }catch(error){if(mounted.current&&operation.current===generation){stopCamera();onError(error instanceof Error?error.message:'Não foi possível digitalizar o canhoto.');}}
+    finally{if(mounted.current&&operation.current===generation){setBusy(false);capturingRef.current=false;}}
   }
 
   async function startCamera(){
@@ -131,6 +153,7 @@ export default function DeliveryReceiptScanner({value,qualityPolicy,onChange,onE
     {value?.quality.accepted&&value.quality.requiresConfirmation&&!value.qualityConfirmed?<Button type="button" variant="outline" className="w-full" onClick={()=>onChange(confirmReceiptScanQuality(value))}>
       <Check className="mr-2 h-4 w-4"/>Li o canhoto e confirmo que está legível</Button>:null}
     {value?<p className="text-[11px] text-muted-foreground">Original preservado · scan {value.quality.processedWidth}×{value.quality.processedHeight} · ~{value.quality.estimatedDpi??0} DPI · {value.quality.processingMs??0} ms</p>:null}
+    {value&&captureSaved?<p role="status" className="text-xs">Foto salva neste aparelho. Confirme o evento para vinculá-la à entrega e disponibilizá-la à equipe.</p>:null}
     <p className="text-[11px] text-muted-foreground" data-testid="receipt-quality-policy">
       {policyLabels[value?.qualityPolicy?.source??qualityPolicy.source]} · versão {value?.qualityPolicy?.version??qualityPolicy.version}
     </p>

@@ -56,6 +56,7 @@ export function extractClientLoadFromObservation(observation: string): { value: 
 }
 
 export interface ParsedNFeItem {
+  code?: string;
   description: string;
   quantity: number;
   unit: string;
@@ -207,6 +208,7 @@ function extractItems(detElements: Element[]): ParsedNFeItem[] {
       description: getTagText(prod, 'xProd'),
       quantity: parseFloat(getTagText(prod, 'qCom')) || 0,
       unit: getTagText(prod, 'uCom'),
+      code: getTagText(prod, 'cProd'),
       unitPrice: parseFloat(getTagText(prod, 'vUnCom')) || 0,
       totalPrice: parseFloat(getTagText(prod, 'vProd')) || 0,
       ncm: getTagText(prod, 'NCM'),

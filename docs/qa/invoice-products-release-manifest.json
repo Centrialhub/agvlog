@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-invoice-products-only",
+  "filename": "20261124194623_invoice_product_items.sql",
+  "sha256": "ac673932c0e55e60e22a7f00927c20de3cfdf89033a7374b017f454e16c8a4a9",
+  "preservedAgentChatManifestSha256": "45f4af6be564e0dba683abb8b039540b1fa7ebf7309cf2c3c6a859cccd454043"
+}

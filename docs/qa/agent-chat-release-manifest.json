@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-agent-chat-only",
+  "filename": "20261124194200_driver_agent_chat_threads.sql",
+  "sha256": "118eda8849703ca5fb8ae9c6c7c1e5c738b2441bf346ec28784ec60178578677",
+  "preservedQuickCargoManifestSha256": "7b3e4d7896078d5f799f9a3836477c7e74bd46514cd64ee63fe572b991fd6b89"
+}
