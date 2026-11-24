@@ -4,7 +4,6 @@ import {
   type ReceiptScanQualityThresholds,
 } from '@/lib/driver/receiptQualityPolicy';
 import { paddedReceiptCorners } from './receiptCamera';
-import { enhanceReceiptPixels } from './receiptEnhancement';
 
 export const MIN_RECEIPT_SOURCE_PIXELS = BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS.min_source_pixels;
 export const MIN_RECEIPT_SHORT_SIDE = BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS.min_processed_short_side;
@@ -332,6 +331,7 @@ export async function processReceiptScan(file:File,options:ReceiptCrop|{corners?
       warnings:['Foto inteira preservada: confira se o papel, a data e a assinatura estão visíveis. Ajuste os cantos somente se necessário.',...evaluatedQuality.warnings]}:evaluatedQuality;
   // Evaluate the real capture first: illumination correction cannot turn a rejected capture into accepted evidence.
   const enhanced=outputContext.getImageData(0,0,output.width,output.height);
+  const {enhanceReceiptPixels}=await import('./receiptEnhancement');
   enhanced.data.set(enhanceReceiptPixels(enhanced.data,output.width,output.height));outputContext.putImageData(enhanced,0,0);
   const processed=new File([await canvasBlob(output,.94)],'canhoto-digitalizado.jpg',{type:'image/jpeg',lastModified:Date.now()}),thumbnail=await createThumbnail(output),
     [originalHash,processedHash,thumbnailHash]=await Promise.all([sha256File(file),sha256File(processed),sha256File(thumbnail)]);

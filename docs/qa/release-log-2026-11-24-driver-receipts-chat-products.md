@@ -33,6 +33,7 @@
 - Navegador sintético: dois testes Chromium passaram, usando câmera/canvas e IndexedDB reais, sem Auth, rede externa, OCR ou dados operacionais. Recuperação após reload e isolamento por parada; imagem vazia permanece rejeitada.
 - Chat: testes de banco, interface e outbox; E2E nativo preparado com dois navegadores e Realtime, limitado ao backend descartável `127.0.0.1:55321`. Pendentes no CI do candidato.
 - Typecheck local passou. Quality gate completo, contratos PostgreSQL hospedados, build e smoke do alias: pendentes.
+- Primeiro candidato `2c708c726276b3277b23f4aaa715f345f2981b79`, PR #35, run `45479486863`: oito shards unitários passaram; validate bloqueou o build pelo App de 501,7 KiB. Corrigido com imports assíncronos de tratamento da imagem e limpeza da cópia local, sem elevar o limite. Build local subsequente passou: App 499,3 KiB; artefato público sem sourcemaps ou segredos reconhecidos. 84 testes focados de scanner/envio passaram novamente. A correção será validada em novo SHA completo.
 
 ## Limitações de homologação
 
