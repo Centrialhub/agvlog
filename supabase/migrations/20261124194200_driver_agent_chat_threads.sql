@@ -3,8 +3,8 @@ set local statement_timeout='60s';
 do $preflight$ begin
  if to_regprocedure('private.is_request_tenant_member(uuid)') is null
   or to_regprocedure('driver_chat_private.context(uuid,uuid)') is null then raise exception 'agent_chat_prerequisites_missing';end if;
- if (select md5(prosrc) from pg_proc where oid='driver_chat_private.list_messages(uuid,uuid,jsonb)'::regprocedure)
-  <>'1874707414e6b17d54944ecf4bf8fadd' then raise exception 'agent_chat_legacy_source_changed';end if;
+ if (select md5(replace(prosrc,chr(13),'')) from pg_proc where oid='driver_chat_private.list_messages(uuid,uuid,jsonb)'::regprocedure)
+  <>'edaf730a269b55907d93802751765a54' then raise exception 'agent_chat_legacy_source_changed';end if;
 end;$preflight$;
 
 alter table public.driver_direct_messages add column agent_user_id uuid;

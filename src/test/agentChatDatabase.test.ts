@@ -14,6 +14,14 @@ beforeAll(async()=>{db=await createAgentChatDatabase();
  expect(actual.rows.sort((a,b)=>a.name.localeCompare(b.name))).toEqual(contract.functions.map(f=>({name:f.name,hash:f.after})).sort((a,b)=>a.name.localeCompare(b.name)));
 },30000);
 afterAll(()=>db?.close());beforeEach(async()=>{await db.exec('begin');await agentActor(db);});afterEach(()=>db.exec('rollback'));
+it('accepts the same frozen source with Linux line endings and keeps private messages out of general chat',async()=>{
+ const linux=await createAgentChatDatabase(true);
+ try{await linux.exec('begin');await agentActor(linux);
+  await agentSend(linux,await agentPayload(linux));
+  expect((await agentList(linux)).messages).toHaveLength(1);
+  expect((await chatList(linux)).messages).toHaveLength(0);
+ }finally{await linux.exec('rollback');await linux.close();}
+},30000);
 it('keeps two agent conversations separate, replies in both directions and hides them from general chat and other agents',async()=>{
  await agentSend(db,await agentPayload(db,i.operator,'Para operação'));
  await agentSend(db,await agentPayload(db,i.admin,'Para administração'));

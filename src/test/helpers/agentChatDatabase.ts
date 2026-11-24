@@ -4,10 +4,10 @@ import {chatIds,createDriverChatDatabase,chatActor} from './driverChatDatabase';
 import {operationRpc} from './operationOutcomeDatabase';
 import {randomUUID} from 'node:crypto';
 export const agentChatMigration='20261124194200_driver_agent_chat_threads.sql';
-export async function installAgentChat(db:PGlite){
+export async function installAgentChat(db:PGlite,normalizeLineEndings=false){
  // Exact captured live chat sources; the fixture's original historical MFA helpers differ.
  const functions=JSON.parse(readFileSync('docs/qa/agent-chat-previous-functions.json','utf8')) as Array<{definition:string}>;
- for(const source of functions)await db.exec(source.definition);
+ for(const source of functions)await db.exec(normalizeLineEndings?source.definition.replace(/\r/g,''):source.definition);
  // Partial fixture only: active-tenant membership guard. CI executes the real production guard on PostgreSQL 17.
  await db.exec(`create schema if not exists private;
  create or replace function private.is_request_tenant_member(uuid) returns boolean language sql stable as
@@ -15,7 +15,7 @@ export async function installAgentChat(db:PGlite){
  await db.query("select set_config('test.agent_tenant',$1,false)",[chatIds.tenant]);
  await db.exec(readFileSync('supabase/migrations/'+agentChatMigration,'utf8'));
 }
-export async function createAgentChatDatabase(){const db=await createDriverChatDatabase();await installAgentChat(db);return db;}
+export async function createAgentChatDatabase(normalizeLineEndings=false){const db=await createDriverChatDatabase();await installAgentChat(db,normalizeLineEndings);return db;}
 export const agentActor=async(db:PGlite,actor=chatIds.user,tenant=chatIds.tenant)=>{
  await chatActor(db,actor);await db.query("select set_config('test.agent_tenant',$1,false)",[tenant]);
 };
