@@ -11,22 +11,45 @@ import Scanner from '@/components/driver/DeliveryReceiptScanner';
 import{BASELINE_RECEIPT_SCAN_QUALITY_THRESHOLDS as thresholds}from'@/lib/driver/receiptQualityPolicy';
 const canvas=document.createElement('canvas');canvas.width=2400;canvas.height=1800;
 const ctx=canvas.getContext('2d');ctx.fillStyle='#777';ctx.fillRect(0,0,2400,1800);
+const scope=new URLSearchParams(location.search).get('scope');
+if(scope){ctx.fillStyle='#eee';ctx.fillRect(0,0,2400,1800);ctx.fillStyle='#111';ctx.font='bold 64px sans-serif';
+ for(let n=0;n<18;n++)ctx.fillText('CANHOTO SINTETICO - ENTREGA 123456 - 24/11/2026',40,100+n*90);}
 const stream=canvas.captureStream(4);Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>stream},configurable:true});
 function App(){const[value,setValue]=useState(null),[error,setError]=useState('');return <div style={{maxWidth:480,margin:'auto',padding:12}}>
-<Scanner value={value} qualityPolicy={{source:'baseline',policy_id:null,version:1,tenant_id:'10000000-0000-4000-8000-000000000001',client_id:null,thresholds,resolved_at:'2026-11-13T00:00:00Z'}}
+<Scanner value={value} captureScope={scope?JSON.stringify(['synthetic-tenant','synthetic-actor','synthetic-trip',scope,'delivered']):undefined} qualityPolicy={{source:'baseline',policy_id:null,version:1,tenant_id:'10000000-0000-4000-8000-000000000001',client_id:null,thresholds,resolved_at:'2026-11-13T00:00:00Z'}}
 onChange={next=>{setValue(next);window.__receiptFrame=next?{crop:next.crop,corners:next.corners,width:next.quality.processedWidth,height:next.quality.processedHeight,accepted:next.quality.accepted}:null;}} onError={setError}/><p role="alert">{error}</p></div>}
 createRoot(document.getElementById('root')).render(<App/>);`;
 let server:ViteDevServer,origin:string;
 test.beforeAll(async()=>{
   server=await createServer({root,configFile:false,logLevel:'error',plugins:[react(),{
     name:'receipt-camera-fixture',configureServer(s){s.middlewares.use((req,res,next)=>{
-      if(req.url==='/'){res.setHeader('content-type','text/html');void s.transformIndexHtml('/','<meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/receipt-fixture.tsx"></script>').then(html=>res.end(html));}
+      if(req.url?.split('?')[0]==='/'){res.setHeader('content-type','text/html');void s.transformIndexHtml('/','<meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/receipt-fixture.tsx"></script>').then(html=>res.end(html));}
       else if(req.url?.startsWith('/receipt-fixture.tsx'))void s.transformRequest('/receipt-virtual.tsx').then(result=>{res.setHeader('content-type','text/javascript');res.end(result?.code??'');});
       else next();
     });},resolveId(id){if(id==='/receipt-virtual.tsx'||id==='/receipt-fixture.tsx')return '\0receipt-fixture.tsx';if(id==='@/integrations/supabase/client')return '\0receipt-supabase';},
     load(id){if(id==='\0receipt-fixture.tsx')return fixture;if(id==='\0receipt-supabase')return 'export const supabase={};';},
   }],resolve:{alias:[{find:/^@\/(?!integrations\/supabase\/client$)(.*)/,replacement:path.join(root,'src')+'/$1'}]},server:{host:'127.0.0.1',port:0,fs:{allow:[root]}}});
   await server.listen();const address=server.httpServer!.address();if(!address||typeof address==='string')throw Error('No owned camera fixture port');origin='http://127.0.0.1:'+address.port;
+});
+
+test('keeps the real photo in IndexedDB across reloads and isolates delivery scopes @critical',async({page})=>{
+  await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort('blockedbyclient'));
+  await page.goto(origin+'/?scope=stop-a');
+  await page.getByRole('button',{name:'Abrir scanner',exact:true}).click();
+  const video=page.getByLabel('Prévia da câmera');
+  await expect.poll(()=>video.evaluate((element:HTMLVideoElement)=>element.videoWidth)).toBe(2400);
+  await page.getByRole('button',{name:'Capturar agora',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Foto salva neste aparelho'})).toBeVisible({timeout:20000});
+  const first=await page.evaluate(()=>(window as unknown as {__receiptFrame:unknown}).__receiptFrame);
+  expect(first).toMatchObject({accepted:true});
+  await page.reload();
+  await expect(page.getByRole('status').filter({hasText:'Foto salva neste aparelho'})).toBeVisible({timeout:20000});
+  expect(await page.evaluate(()=>(window as unknown as {__receiptFrame:unknown}).__receiptFrame)).toEqual(first);
+  await page.goto(origin+'/?scope=stop-b');
+  await expect(page.getByRole('button',{name:'Abrir scanner',exact:true})).toBeEnabled();
+  await expect(page.getByRole('status').filter({hasText:'Foto salva neste aparelho'})).toHaveCount(0);
+  await page.goto(origin+'/?scope=stop-a');
+  await expect(page.getByRole('status').filter({hasText:'Foto salva neste aparelho'})).toBeVisible();
 });
 test.afterAll(async()=>{await server?.close();});
 test('receipt framing follows the actual sensor and preserves an inconclusive full photo @critical',async({page},info)=>{

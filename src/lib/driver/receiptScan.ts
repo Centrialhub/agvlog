@@ -327,10 +327,13 @@ export async function processReceiptScan(file:File,options:ReceiptCrop|{corners?
   const qualityPolicy=legacy?undefined:options.qualityPolicy,
     evaluatedQuality=evaluateReceiptQuality(outputContext.getImageData(0,0,output.width,output.height).data,sourceWidth,sourceHeight,output.width,output.height,
       {corners:requested||documentDetection?.present?corners:undefined,processingMs:performance.now()-started,thresholds:qualityPolicy?.thresholds}),
-    quality=!requested&&documentDetection&&!documentDetection.present?{...evaluatedQuality,accepted:false,requiresConfirmation:false,
-      warnings:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.warnings],
-      rejectionReasons:['Não foi possível confirmar as quatro bordas do papel. Ajuste os cantos manualmente.',...evaluatedQuality.rejectionReasons]}:evaluatedQuality,
-    processed=new File([await canvasBlob(output)],'canhoto-digitalizado.jpg',{type:'image/jpeg',lastModified:Date.now()}),thumbnail=await createThumbnail(output),
+    quality=!requested&&documentDetection&&!documentDetection.present?{...evaluatedQuality,requiresConfirmation:evaluatedQuality.accepted,
+      warnings:['Foto inteira preservada: confira se o papel, a data e a assinatura estão visíveis. Ajuste os cantos somente se necessário.',...evaluatedQuality.warnings]}:evaluatedQuality;
+  // Evaluate the real capture first: illumination correction cannot turn a rejected capture into accepted evidence.
+  const enhanced=outputContext.getImageData(0,0,output.width,output.height);
+  const {enhanceReceiptPixels}=await import('./receiptEnhancement');
+  enhanced.data.set(enhanceReceiptPixels(enhanced.data,output.width,output.height));outputContext.putImageData(enhanced,0,0);
+  const processed=new File([await canvasBlob(output,.94)],'canhoto-digitalizado.jpg',{type:'image/jpeg',lastModified:Date.now()}),thumbnail=await createThumbnail(output),
     [originalHash,processedHash,thumbnailHash]=await Promise.all([sha256File(file),sha256File(processed),sha256File(thumbnail)]);
   const completedQuality={...quality,processingMs:Math.round(performance.now()-started)};
   return {original:file,processed,thumbnail,originalHash,processedHash,thumbnailHash,capturedAt:new Date().toISOString(),scanMode:requested?'manual_crop':'document_scan',

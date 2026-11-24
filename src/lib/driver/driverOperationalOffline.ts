@@ -200,7 +200,7 @@ export interface DriverOperationalSnapshot {
   /** Allocation-specific delivery items, cached per stop for an authenticated offline reopen. */
   deliveryItemsByStop?: Record<string, Array<{
     id: string; fiscalDocumentId: string; attemptId: string | null; isHistorical: boolean;
-    sku: string; name: string; qty: number; unit: string; price: number; documentStatus: string;
+    sku: string; name: string; qty: number; unit: string; price: number; documentStatus: string; invoiceNumber?: string;
   }>>;
   /** Exact fiscal allocation precondition captured while online, keyed by stop. */
   deliveryFiscalSnapshotsByStop?: Record<string, DriverDeliveryFiscalSnapshot>;

@@ -430,6 +430,10 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
       try{result={...resultSchema.parse(response.data),queued:false as const};}
       catch(error){await markAttention('remote_conflict',new Error(`Resposta remota incompatível: ${deliveryErrorMessage(error)}`));return queuedResult();}
       await offlineStore.remove(requestId).catch(() => undefined);
+      await import('@/lib/driver/receiptCaptureStore').then(({receiptCaptureScope,removeReceiptCapture})=>{
+        const capture=receiptCaptureScope(tenantId,actorId,tripId,stopId,eventKey);
+        return capture?removeReceiptCapture(capture):undefined;
+      }).catch(()=>undefined);
       durableSaved=false;
       durableDraft=null;
       return result;

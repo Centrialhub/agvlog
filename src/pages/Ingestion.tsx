@@ -55,6 +55,7 @@ import { useDrivers as useOperatorDrivers } from '@/hooks/useDrivers';
 import { useAuth } from '@/hooks/useAuth';
 import { useItemPreparationWrites } from '@/hooks/useItemPreparationWrites';
 import { createConfirmedOrderLoad, prepareOrderItems } from '@/lib/ingestion/prepareOrderItems';
+import { invoiceProductSource } from '@/lib/ingestion/invoiceProducts';
 import { getEdgeFunctionErrorMessage } from '@/lib/ingestion/edgeFunctionError';
 import type { RouteDestination } from '@/hooks/useOperationalRoutes';
 
@@ -961,6 +962,7 @@ export default function Ingestion() {
                   const src = doc.source;
                   const sourceMeta = {
                     ingestion_source: src.sourceKind || 'xml',
+                    invoice_products: invoiceProductSource(src.items, src.sourceKind),
                     // Preserve source evidence even when normalization requires review.
                     recipient_fiscal: {
                       cnpj: src.recipientCnpj || null,
@@ -1136,6 +1138,7 @@ export default function Ingestion() {
             const src = doc.source;
             const sourceMeta = {
                     ingestion_source: src.sourceKind || 'xml',
+                    invoice_products: invoiceProductSource(src.items, src.sourceKind),
                     // Preserve source evidence even when normalization requires review.
                     recipient_fiscal: {
                       cnpj: src.recipientCnpj || null,
@@ -1302,6 +1305,7 @@ export default function Ingestion() {
                   const src = doc.source;
                   const sourceMeta = {
                     ingestion_source: src.sourceKind || 'xml',
+                    invoice_products: invoiceProductSource(src.items, src.sourceKind),
                     // Preserve source evidence even when normalization requires review.
                     recipient_fiscal: {
                       cnpj: src.recipientCnpj || null,

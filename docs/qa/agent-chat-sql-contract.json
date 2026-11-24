@@ -1,0 +1,79 @@
+{
+  "migration": "20261124194200_driver_agent_chat_threads.sql",
+  "functions": [
+    {
+      "name": "driver_chat_private.list_messages",
+      "before": "1874707414e6b17d54944ecf4bf8fadd",
+      "after": "3298f4d09e5f57674e1309a17ac6c932",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_context",
+      "after": "7a367366a556fb5d4e16e794386efef9",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_message_json",
+      "after": "59ab0d4e9f2a449458631a55edfede2b",
+      "definer": false,
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_list",
+      "after": "1ca60403c0d22ce18a15dd949d6b25c7",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_send",
+      "after": "4704a1e776d468ad654532afb2d85be1",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_contacts",
+      "after": "e1829d31e56cc6dcc085084a403c5297",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "driver_chat_private.agent_inbox",
+      "after": "24aa8f9f114eec1dffb9f4ec3839792d",
+      "definer": true,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "public.get_driver_agent_chat_context",
+      "after": "89de3298860a5f430b6bbfbb2070f0db",
+      "definer": false,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "public.list_driver_agent_chat_messages",
+      "after": "0a5177fd19f4c95ae280e92c1b9ace4f",
+      "definer": false,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "public.send_driver_agent_chat_message",
+      "after": "8f32b103d3b8adcfa9948823b1e689d1",
+      "definer": false,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "public.list_driver_chat_agents",
+      "after": "320bfad8a3f8eda6334a42a673817cc8",
+      "definer": false,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "name": "public.list_driver_agent_inbox",
+      "after": "6fd204283c4b25acfeb11b01170b7c34",
+      "definer": false,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    }
+  ],
+  "compatibleRollbackSha256": "704187ff345c23836f1cd0acf11ac9a40b3f33151b92e4924fc9f6e8e345acd4"
+}

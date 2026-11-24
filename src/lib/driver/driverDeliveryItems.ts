@@ -4,6 +4,7 @@ import { DOCUMENT_STATUSES } from '@/lib/status/documentStatus';
 export type DriverDeliveryItem = {
   id: string;
   fiscalDocumentId: string;
+  invoiceNumber?: string;
   attemptId: string | null;
   isHistorical: boolean;
   sku: string;
@@ -31,9 +32,9 @@ export function readDriverDeliveryItems(value: unknown, context: { tenant: strin
       throw new Error('Itens ou resultados da tentativa estão inconsistentes. Atualize antes de registrar a entrega.');
     }
     ids.add(item.id);
-    return { id: item.id, fiscalDocumentId: item.fiscal_document_id, attemptId: item.attempt_id,
-      isHistorical: item.is_historical, sku: item.fiscal_document_id.slice(0, 8),
-      name: item.item_description || 'Item', qty: item.quantity, unit: 'UN', price: 0,
+    return { id: item.id, fiscalDocumentId: item.fiscal_document_id, ...(typeof item.invoice_number === 'string' ? {invoiceNumber:item.invoice_number} : {}), attemptId: item.attempt_id,
+      isHistorical: item.is_historical, sku: typeof item.product_code === 'string' && item.product_code ? item.product_code : item.fiscal_document_id.slice(0, 8),
+      name: item.item_description || 'Item', qty: item.quantity, unit: typeof item.unit === 'string' && item.unit ? item.unit : 'UN', price: 0,
       documentStatus: item.document_status };
   });
 }

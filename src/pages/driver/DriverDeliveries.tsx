@@ -19,6 +19,7 @@ import { DRIVER_TRIP_SELECT, normalizeDriverTrip, isDriverTripStarted } from '@/
 import { isReceiptScanAcceptable } from '@/lib/driver/receiptScan';
 import { baselineReceiptScanQualityPolicy, resolveReceiptScanQualityPolicy } from '@/lib/driver/receiptQualityPolicy';
 import { useDriverDeliveryEventDraft } from '@/hooks/useDriverDeliveryEventDraft';
+import { receiptCaptureScope } from '@/lib/driver/receiptCaptureStore';
 import { DriverDeliveryEventCatalogSheet } from '@/components/driver/deliveries/DriverDeliveryEventCatalogSheet';
 import { DriverDeliveryEventFormSheet } from '@/components/driver/deliveries/DriverDeliveryEventFormSheet';
 import { DriverDeliveryDetailSheet } from '@/components/driver/deliveries/DriverDeliveryDetailSheet';
@@ -427,6 +428,7 @@ export default function DriverDeliveries() {
       />
 
       <DriverDeliveryEventFormSheet
+        receiptCaptureScope={receiptCaptureScope(currentTenant?.id,user?.id,trip?.id,eventForm?.stop.id,eventForm?.eventKey)}
         selection={eventForm}
         stopsLoading={stopContextRefreshing}
         stopsError={stopContextError}

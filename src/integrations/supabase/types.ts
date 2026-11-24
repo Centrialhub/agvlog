@@ -6841,6 +6841,7 @@ export type Database = {
       }
       driver_direct_messages: {
         Row: {
+          agent_user_id: string | null
           attachment_url: string | null
           client_request_id: string | null
           conversation_user_id: string | null
@@ -6855,6 +6856,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          agent_user_id?: string | null
           attachment_url?: string | null
           client_request_id?: string | null
           conversation_user_id?: string | null
@@ -6869,6 +6871,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          agent_user_id?: string | null
           attachment_url?: string | null
           client_request_id?: string | null
           conversation_user_id?: string | null
@@ -29601,6 +29604,26 @@ export type Database = {
       }
       list_driver_chat_messages: {
         Args: { _before?: Json; _driver_id: string; _tenant_id: string }
+        Returns: Json
+      }
+      get_driver_agent_chat_context: {
+        Args: { _tenant_id: string; _driver_id: string; _agent_user_id: string }
+        Returns: Json
+      }
+      list_driver_agent_chat_messages: {
+        Args: { _tenant_id: string; _driver_id: string; _agent_user_id: string; _before?: Json }
+        Returns: Json
+      }
+      send_driver_agent_chat_message: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      list_driver_chat_agents: {
+        Args: { _tenant_id: string; _driver_id: string }
+        Returns: Json
+      }
+      list_driver_agent_inbox: {
+        Args: { _tenant_id: string; _before?: Json }
         Returns: Json
       }
       list_driver_expense_sources: {
