@@ -14,6 +14,7 @@ import {
 import {
   createDriverOperationalCommandService,
   type DriverOperationalCommand,
+  type DriverOperationalOfflineKind,
 } from '@/lib/driver/driverOperationalOffline';
 
 type RpcError = Error & { code?: string; retryable?: boolean };
@@ -81,11 +82,11 @@ export function useDriverOperationalOffline(options: { autoRecover?: boolean } =
     }
   }, [currentTenant?.id, user?.id]);
 
-  const recover = useCallback(async (includeNeedsAttention = false) => {
+  const recover = useCallback(async (includeNeedsAttention = false, kinds?: readonly DriverOperationalOfflineKind[]) => {
     if (!currentTenant?.id || !user?.id || !navigator.onLine) return { confirmed: 0, pending: 0 };
     setSyncing(true);
     try {
-      const result = await service.recover(currentTenant.id, user.id, includeNeedsAttention);
+      const result = await service.recover(currentTenant.id, user.id, includeNeedsAttention, kinds);
       setPending(result.pending);
       return result;
     } finally {

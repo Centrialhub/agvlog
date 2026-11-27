@@ -156,10 +156,11 @@ export function createDriverOperationalCommandService(deps: DriverOperationalCom
     return syncOne(record);
   };
 
-  const recover = async (tenantId: string, actorId: string, includeNeedsAttention = false) => {
+  const recover = async (tenantId: string, actorId: string, includeNeedsAttention = false, kinds?: readonly DriverOperationalOfflineKind[]) => {
     if (!deps.isOnline()) return { confirmed: 0, pending: (await deps.outbox.list(tenantId, actorId)).length };
     const records = (await deps.outbox.list(tenantId, actorId))
       .filter(isOperationalEnvelope)
+      .filter(record => !kinds || kinds.includes(record.kind))
       .filter(record => includeNeedsAttention || record.state !== 'needs_attention');
     let confirmed = 0;
     for (const record of records) {

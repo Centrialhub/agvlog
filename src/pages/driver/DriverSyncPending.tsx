@@ -97,14 +97,15 @@ export default function DriverSyncPending(){
     mutationFn:async()=>{
       // Arrival must be acknowledged before replaying a delivery prepared
       // against the locally projected "arrived" state.
-      const operational=await operationalQueue.recover(true);
+      const operational=await operationalQueue.recover(true,['arrival','journey','checklist','occurrence']);
       const results=await Promise.allSettled([
         replayPendingDeliverySubmissions(tenantId!,actorId!,undefined,{retryStateConflicts:true}),
         expenseQueue.replay.mutateAsync(),
       ]);
       const failures=results.filter(result=>result.status==='rejected');
       if(failures.length)throw new Error(`${failures.length} grupo(s) não puderam ser sincronizados. As evidências permanecem no aparelho.`);
-      return results.reduce((total,result)=>total+(result.status==='fulfilled'?confirmedCount(result.value):0),operational.confirmed);
+      const departures=await operationalQueue.recover(true,['departure']);
+      return results.reduce((total,result)=>total+(result.status==='fulfilled'?confirmedCount(result.value):0),operational.confirmed+departures.confirmed);
     },
     onSuccess:async confirmed=>{
       if(tenantId&&actorId)setLastSuccessfulSync(recordDriverSuccessfulSync(tenantId,actorId));

@@ -55,11 +55,26 @@ describe('fila offline unificada do motorista',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Sincronizar agora'}));
     await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledWith('tenant','actor',undefined,{retryStateConflicts:true}));
     expect(mocks.expenseReplay).toHaveBeenCalledOnce();
-    expect(mocks.operationalReplay).toHaveBeenCalledWith(true);
+    expect(mocks.operationalReplay).toHaveBeenNthCalledWith(1,true,['arrival','journey','checklist','occurrence']);
+    expect(mocks.operationalReplay).toHaveBeenNthCalledWith(2,true,['departure']);
     await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Sincronização concluída'})));
     client.clear();
   });
 
+  it('awaits the arrival and delivery acknowledgements before recovering departure',async()=>{
+    let arrival!:()=>void,delivery!:()=>void;
+    mocks.operationalReplay.mockImplementationOnce(()=>new Promise(resolve=>{arrival=()=>resolve({confirmed:1});}));
+    mocks.deliveryReplay.mockImplementationOnce(()=>new Promise(resolve=>{delivery=()=>resolve({confirmed:1});}));
+    const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
+    render(<QueryClientProvider client={client}><DriverSyncPending/></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('button',{name:'Sincronizar agora'}));
+    await waitFor(()=>expect(mocks.operationalReplay).toHaveBeenCalledTimes(1));
+    expect(mocks.deliveryReplay).not.toHaveBeenCalled();arrival();
+    await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledTimes(1));
+    expect(mocks.operationalReplay).toHaveBeenCalledTimes(1);delivery();
+    await waitFor(()=>expect(mocks.operationalReplay).toHaveBeenNthCalledWith(2,true,['departure']));
+    client.clear();
+  });
   it('removes a fiscal conflict only after the operator explicitly discarded it',async()=>{
     mocks.list.mockResolvedValue([{version:1,id:'a0000000-0000-4000-8000-000000000001',scopeKey:'tenant:actor',tenantId:'tenant',actorId:'actor',
       kind:'delivery',aggregateId:'trip',state:'needs_attention',payload:{eventKey:'entregue',attention:{code:'delivery_fiscal_snapshot_changed'}},
