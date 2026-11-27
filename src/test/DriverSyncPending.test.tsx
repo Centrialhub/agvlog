@@ -53,7 +53,7 @@ describe('fila offline unificada do motorista',()=>{
     }
     expect(screen.getByText('Conflito remoto')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Sincronizar agora'}));
-    await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledWith('tenant','actor'));
+    await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledWith('tenant','actor',undefined,{retryStateConflicts:true}));
     expect(mocks.expenseReplay).toHaveBeenCalledOnce();
     expect(mocks.operationalReplay).toHaveBeenCalledWith(true);
     await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Sincronização concluída'})));

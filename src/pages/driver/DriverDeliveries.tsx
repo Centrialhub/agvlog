@@ -292,7 +292,7 @@ export default function DriverDeliveries() {
       if (context !== latestContext.current) return;
       if(result&&'arrival' in result){
         toast({title:result.queued?'Chegada salva no aparelho':'Chegada registrada',description:result.queued?'A entrega já pode ser preenchida e a chegada será sincronizada primeiro.':undefined});
-        if(!result.queued)await invalidateDeliveryQueries(qc);
+        if(!result.queued)void invalidateDeliveryQueries(qc);
         if (context !== latestContext.current) return;
         resetForm();closeCatalog();return;
       }
@@ -309,7 +309,7 @@ export default function DriverDeliveries() {
       if (result) setLastEventId(result.operational_event_id);
       toast({title:result ? 'Evento registrado e enviado à operação' : 'Chegada registrada'});
       resetForm(); closeCatalog();
-      await invalidateDeliveryQueries(qc);
+      void invalidateDeliveryQueries(qc);
     },
     onError: (error, context) => { if (context === latestContext.current) toast({title:'Envio não confirmado',description:deliveryErrorMessage(error),variant:'destructive'}); },
   });

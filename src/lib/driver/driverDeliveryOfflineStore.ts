@@ -341,6 +341,6 @@ export const driverDeliveryOfflineStore:DriverDeliveryOfflineStore={
   async hasPendingPredecessor(draft){
     const records=await driverOfflineOutbox.list(draft.tenantId,draft.actorId);
     return records.some(record=>record.kind!=='delivery'&&record.aggregateId===draft.tripId
-      && record.createdAt<=draft.createdAt&&record.state!=='needs_attention');
+      && record.createdAt<=draft.createdAt&&(record.state!=='needs_attention'||record.kind==='arrival'));
   },
 };

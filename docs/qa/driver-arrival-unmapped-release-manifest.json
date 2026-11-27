@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-driver-arrival-unmapped-only",
+  "filename": "20261127210105_driver_arrival_unmapped_destination.sql",
+  "sha256": "c48ddaa5fcca99d7dad1cd92c939f85fb108d825bcbb3b6ba776d36d7363c042",
+  "preservedOperationalLoadArchiveManifestSha256": "334cb6798e5245f6eac6940502b221d806fef71b1320993986c9ce0ad0aa447d"
+}
