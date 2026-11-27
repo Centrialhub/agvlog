@@ -7,9 +7,18 @@ do $$begin
   raise exception 'isolated_seed_required';end if;
 end $$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","active_tenant_id":"20000000-0000-4000-8000-000000000001"}',true);
 select set_config('request.headers','{"x-agvlog-tenant-id":"20000000-0000-4000-8000-000000000001"}',true);
-update public.dispatch_trips set status='in_transit',actual_start_at=now()
- where id='80000000-0000-4000-8000-000000000001';
+set local role authenticated;
+do $start$ declare t constant uuid:='80000000-0000-4000-8000-000000000001';payload jsonb;begin
+ perform public.driver_save_checklist(t,'pre','{"schema_version":2,"checklist_model":"vehicle_readiness_v1","checked_items":[0,1,2,3,4,5],"total_items":6,"answers":[true,true,true,true,true,true],"expected_checklist_id":null,"expected_boundary_id":null}'::jsonb);
+ perform public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',t,gen_random_uuid(),'accept','{"vehicle_id":"50000000-0000-4000-8000-000000000001"}'::jsonb);
+ select jsonb_build_object('confirm_all_documents',true,'expected_updated_at',updated_at) into payload from public.trip_cargo_controls where dispatch_trip_id=t;
+ perform public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',t,gen_random_uuid(),'quick_confirm',payload);
+ perform public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',t,gen_random_uuid(),'mark_departed','{}'::jsonb);
+ perform public.driver_start_trip(t);
+end;$start$;
+reset role;
 update public.dispatch_stops set status='pending',actual_arrival_at=null,latitude=null,longitude=null
  where id='82000000-0000-4000-8000-000000000001';
 set local role authenticated;
