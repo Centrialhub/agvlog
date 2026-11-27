@@ -19,6 +19,7 @@ do $start$ declare t constant uuid:='80000000-0000-4000-8000-000000000001';paylo
  perform public.driver_start_trip(t);
 end;$start$;
 reset role;
+savepoint mapped_geofence_test;
 update public.dispatch_stops set status='pending',actual_arrival_at=null,latitude=null,longitude=null
  where id='82000000-0000-4000-8000-000000000001';
 set local role authenticated;
@@ -55,4 +56,42 @@ do $$begin
   raise exception 'mapped_geofence_bypassed';
  exception when check_violation then null;end;
 end $$;
+rollback to savepoint mapped_geofence_test;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',true);
+-- Execute the actual receipt outcome and its replay after an unmapped arrival.
+reset role;
+insert into storage.buckets(id,name,public) values('receipts','receipts',false) on conflict(id) do nothing;
+insert into storage.objects(bucket_id,name) values
+ ('receipts','20000000-0000-4000-8000-000000000001/deliveries/80000000-0000-4000-8000-000000000001/82000000-0000-4000-8000-000000000001/receipt/original/synthetic.jpg'),
+ ('receipts','20000000-0000-4000-8000-000000000001/deliveries/80000000-0000-4000-8000-000000000001/82000000-0000-4000-8000-000000000001/receipt/processed/synthetic.jpg');
+set local role authenticated;
+do $delivery$
+declare tenant constant uuid:='20000000-0000-4000-8000-000000000001';trip constant uuid:='80000000-0000-4000-8000-000000000001';
+ stop constant uuid:='82000000-0000-4000-8000-000000000001';prefix text;details jsonb;request uuid:=gen_random_uuid();result jsonb;again jsonb;
+begin
+ prefix:=tenant::text||'/deliveries/'||trip::text||'/'||stop::text||'/receipt/';
+ details:=jsonb_build_object('receiver_name','Recebedor sintetico sem assinatura desenhada','notes','Entrega de fixture revisada',
+ 'signature_path',null,'photo_paths',jsonb_build_array(prefix||'processed/synthetic.jpg'),
+ 'receipt_original_path',prefix||'original/synthetic.jpg','receipt_processed_path',prefix||'processed/synthetic.jpg',
+ 'receipt_original_hash',repeat('a',64),'receipt_processed_hash',repeat('b',64),'receipt_scan_mode','document_scan',
+ 'receipt_scan_quality',jsonb_build_object('accepted',true,'requiresConfirmation',false,'sourceWidth',2400,'sourceHeight',3200,
+ 'processedWidth',1900,'processedHeight',2800,'brightness',180,'contrast',40,'sharpness',12,'glareRatio',0.01,'edgeCutRisk',false,
+ 'estimatedDpi',422,'processingMs',100,'warnings','[]'::jsonb,'rejectionReasons','[]'::jsonb),
+ 'receipt_quality_confirmed',true,'latitude',-15.802,'longitude',-43.313,'accuracy_m',8,'captured_at',clock_timestamp(),
+ 'fiscal_snapshot',public.get_driver_delivery_fiscal_snapshot_v1(tenant,trip,stop));
+ result:=public.driver_record_delivery_outcome(stop,'delivered',details,request,'arrived');
+ if result->'conflict'='true'::jsonb or result->>'event_id' is null then raise exception 'signatureless_delivery_not_recorded';end if;
+ again:=public.driver_record_delivery_outcome(stop,'delivered',details,request,'arrived');
+ if again->'replayed' is distinct from 'true'::jsonb or again->>'event_id'<>result->>'event_id' then raise exception 'signatureless_delivery_replay_failed';end if;
+end;$delivery$;
+reset role;
+do $verify$ begin
+ if not exists(select 1 from public.delivery_receipts where dispatch_stop_id='82000000-0000-4000-8000-000000000001'
+  and signature_path is null and original_path like '%/receipt/original/synthetic.jpg' and processed_path like '%/receipt/processed/synthetic.jpg')
+ then raise exception 'signatureless_receipt_missing_or_fabricated_signature';end if;
+ if not exists(select 1 from public.loads where id='70000000-0000-4000-8000-000000000001' and status='delivered')
+  or not exists(select 1 from public.dispatch_trips where id='80000000-0000-4000-8000-000000000001' and status='completed') then
+  raise exception 'unmapped_delivery_status_not_propagated';end if;
+ if exists(select 1 from storage.objects where name like '%/signatures/%') then raise exception 'unexpected_drawn_signature';end if;
+end;$verify$;
 rollback;
