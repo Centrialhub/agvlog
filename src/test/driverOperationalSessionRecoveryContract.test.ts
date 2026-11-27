@@ -6,7 +6,7 @@ describe('driver operational session recovery contract',()=>{
     const source=readFileSync('src/hooks/useDriverOperationalOffline.ts','utf8');
     expect(source).toContain('operationalSessionRefresh');
     expect(source).toContain('supabase.auth.refreshSession()');
-    expect(source).toContain("const invoke=()=>rpc('driver_apply_offline_command_v1',args)");
+    expect(source).toContain("const invoke=()=>requestWithDeadline(()=>rpc('driver_apply_offline_command_v1',args),20000)");
     expect(source).toContain('await refreshOperationalSession()');
   });
 });
