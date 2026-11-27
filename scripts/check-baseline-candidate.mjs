@@ -15,6 +15,7 @@ import { verifyDriverReadinessRelease } from './driver-readiness-release-manifes
 import { verifyQuickCargoRelease } from './quick-cargo-release-manifest.mjs';
 import { verifyDrawnSignatureRelease } from './drawn-signature-release-manifest.mjs';
 import { verifyLoadNoteCheckRelease } from './load-note-check-release-manifest.mjs';
+import { verifyOperationalLoadArchiveRelease } from './operational-load-archive-release-manifest.mjs';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MANIFEST_PATH = "docs/qa/baseline-candidate-manifest.json";
@@ -111,9 +112,10 @@ export async function inspectBaselineCandidate(root = REPOSITORY_ROOT) {
   const quickCargoAddition = await verifyQuickCargoRelease({ root, forwardFiles, entries: directoryEntries });
   const drawnSignatureAddition = await verifyDrawnSignatureRelease({ root, forwardFiles, entries: directoryEntries });
   const loadNoteCheckAddition = await verifyLoadNoteCheckRelease({ root, forwardFiles, entries: directoryEntries });
+  const archiveAddition = await verifyOperationalLoadArchiveRelease({ root, forwardFiles, entries: directoryEntries });
   const supplementFiles = new Set(supplements?.forwards.map(({ filename }) => filename) ?? []);
   const followups = await verifyBaselineFollowups({ root, candidate,
-    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename && filename !== receiptOcrAddition?.filename && filename !== operationsReadAddition?.filename && filename !== openaiReceiptAddition?.filename && filename !== loadFieldsAddition?.filename && filename !== driverReadinessAddition?.filename && filename !== quickCargoAddition?.filename && filename !== drawnSignatureAddition?.filename && filename !== loadNoteCheckAddition?.filename), entries: directoryEntries });
+    forwardFiles: forwardFiles.filter((filename) => !supplementFiles.has(filename) && filename !== releaseAddition?.filename && filename !== subcontractingAddition?.filename && filename !== payerAddition?.filename && filename !== receiptOcrAddition?.filename && filename !== operationsReadAddition?.filename && filename !== openaiReceiptAddition?.filename && filename !== loadFieldsAddition?.filename && filename !== driverReadinessAddition?.filename && filename !== quickCargoAddition?.filename && filename !== drawnSignatureAddition?.filename && filename !== loadNoteCheckAddition?.filename && filename !== archiveAddition?.filename), entries: directoryEntries });
   return { candidate, followups, supplements, releaseAddition, subcontractingAddition, payerAddition, receiptOcrAddition, operationsReadAddition, openaiReceiptAddition,loadFieldsAddition,driverReadinessAddition,quickCargoAddition,drawnSignatureAddition };
 }
 

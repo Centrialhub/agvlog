@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-operational-load-archive-only",
+  "filename": "20261127191506_archive_operational_load_preserving_history.sql",
+  "sha256": "69919c2706f90ec724143bd7c00ca7aa1134b62969fbaa5ba3d78d17480be990",
+  "preservedLoadNoteCheckManifestSha256": "f63db0e603b19d0ab6de97412cf9fe6d3085d1ecbf8e6611b4fcdc5145bffb7d"
+}
