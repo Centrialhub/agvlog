@@ -17,6 +17,7 @@ Bloqueios preservados: tenant, versão obsoleta, concorrência NOWAIT, JMacêdo/
 
 - PGlite: 12 testes executam o SQL com FKs, RLS, gatilho de histórico imutável e verificação diferida de trânsito. É fixture parcial; não equivale ao staging completo.
 - CI completo obrigatório antes da promoção: validate, oito shards unit-tests e database-and-e2e. O job de banco aplica o forward no banco loopback existente e executa o contrato de permissões. Não usa dados ou credenciais produtivos.
+- A fixture SQL do job de banco executa o comando com os gatilhos reais, confirma preservação documental, viagem/paradas canceladas, vínculos históricos, repetição e ausência nos dois leitores autenticados. Restringe-se às sete identidades sintéticas e termina com ROLLBACK; jamais executar no alvo produtivo.
 - Antes da limpeza: conferir backup local já produzido, versões esperadas, exclusividade de viagem/jornada e hashes completos das 21 cargas e 1.072 notas JMacêdo.
 - Após a limpeza: confirmar 21 cargas visíveis, duas arquivadas, notas/JMacêdo inalteradas, jornadas retiradas do app e ausência de mudanças em documentos fiscais/conferências.
 
