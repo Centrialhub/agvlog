@@ -31,8 +31,6 @@ describe('driver operational offline command service', () => {
     expect(await outbox.list(tenant, actor, 'departure')).toHaveLength(1);
 
     online = true;
-    await expect(service.recover(tenant,actor,true,['arrival'])).resolves.toEqual({confirmed:0,pending:1});
-    expect(send).not.toHaveBeenCalled();
     await expect(service.recover(tenant, actor)).resolves.toEqual({ confirmed: 1, pending: 0 });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: request, attempts: 0, aggregateId: trip }));

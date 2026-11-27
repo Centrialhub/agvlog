@@ -69,6 +69,9 @@ do $delivery$
 declare tenant constant uuid:='20000000-0000-4000-8000-000000000001';trip constant uuid:='80000000-0000-4000-8000-000000000001';
  stop constant uuid:='82000000-0000-4000-8000-000000000001';prefix text;details jsonb;request uuid:=gen_random_uuid();result jsonb;again jsonb;
 begin
+ -- Recover a saved departure before the terminal delivery closes the stop.
+ if public.driver_register_departure(stop,null) is distinct from public.driver_register_departure(stop,null) then
+  raise exception 'unmapped_departure_replay_failed';end if;
  prefix:=tenant::text||'/deliveries/'||trip::text||'/'||stop::text||'/receipt/';
  details:=jsonb_build_object('receiver_name','Recebedor sintetico sem assinatura desenhada','notes','Entrega de fixture revisada',
  'signature_path',null,'photo_paths',jsonb_build_array(prefix||'processed/synthetic.jpg'),

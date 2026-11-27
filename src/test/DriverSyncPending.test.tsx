@@ -55,13 +55,12 @@ describe('fila offline unificada do motorista',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Sincronizar agora'}));
     await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledWith('tenant','actor',undefined,{retryStateConflicts:true}));
     expect(mocks.expenseReplay).toHaveBeenCalledOnce();
-    expect(mocks.operationalReplay).toHaveBeenNthCalledWith(1,true,['arrival','journey','checklist','occurrence']);
-    expect(mocks.operationalReplay).toHaveBeenNthCalledWith(2,true,['departure']);
+    expect(mocks.operationalReplay).toHaveBeenCalledWith(true);
     await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Sincronização concluída'})));
     client.clear();
   });
 
-  it('awaits the arrival and delivery acknowledgements before recovering departure',async()=>{
+  it('awaits arrival and departure recovery before sending the terminal delivery',async()=>{
     let arrival!:()=>void,delivery!:()=>void;
     mocks.operationalReplay.mockImplementationOnce(()=>new Promise(resolve=>{arrival=()=>resolve({confirmed:1});}));
     mocks.deliveryReplay.mockImplementationOnce(()=>new Promise(resolve=>{delivery=()=>resolve({confirmed:1});}));
@@ -72,7 +71,8 @@ describe('fila offline unificada do motorista',()=>{
     expect(mocks.deliveryReplay).not.toHaveBeenCalled();arrival();
     await waitFor(()=>expect(mocks.deliveryReplay).toHaveBeenCalledTimes(1));
     expect(mocks.operationalReplay).toHaveBeenCalledTimes(1);delivery();
-    await waitFor(()=>expect(mocks.operationalReplay).toHaveBeenNthCalledWith(2,true,['departure']));
+    await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Sincronização concluída'})));
+    expect(mocks.operationalReplay).toHaveBeenCalledTimes(1);
     client.clear();
   });
   it('removes a fiscal conflict only after the operator explicitly discarded it',async()=>{
