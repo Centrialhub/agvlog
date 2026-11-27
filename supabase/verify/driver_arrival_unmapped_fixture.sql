@@ -19,7 +19,6 @@ do $start$ declare t constant uuid:='80000000-0000-4000-8000-000000000001';paylo
  perform public.driver_start_trip(t);
 end;$start$;
 reset role;
-savepoint mapped_geofence_test;
 update public.dispatch_stops set status='pending',actual_arrival_at=null,latitude=null,longitude=null
  where id='82000000-0000-4000-8000-000000000001';
 set local role authenticated;
@@ -46,6 +45,7 @@ begin
  exception when insufficient_privilege then null;end;
 end $$;
 reset role;
+savepoint mapped_geofence_test;
 update public.dispatch_stops set status='pending',actual_arrival_at=null,latitude=-15.802,longitude=-43.313
  where id='82000000-0000-4000-8000-000000000001';
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',true);
