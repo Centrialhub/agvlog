@@ -52,6 +52,29 @@ beforeEach(() => {
 });
 
 describe('delivery frontend submission contract', () => {
+  it('preserves the receipt and waits for its pending arrival before uploading or dispatching', async () => {
+    const store=createMemoryDriverDeliveryOfflineStore();
+    const predecessor=vi.fn().mockResolvedValue(true);
+    const offlineStore={...store,hasPendingPredecessor:predecessor};
+    const attempt=createDeliverySubmission(input(),{offlineStore});
+    await expect(attempt.submit()).resolves.toMatchObject({queued:true});
+    expect(mocks.upload).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+    const saved=await store.list('tenant','driver-user');
+    expect(saved[0].receiptScan?.original.blob).toBeInstanceOf(Blob);
+    predecessor.mockResolvedValue(false);
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user',offlineStore)).resolves.toMatchObject({confirmed:1,pending:0});
+    expect(mocks.rpc.mock.calls[0][1]._client_event_id).toBe(saved[0].requestId);
+  });
+  it('explicitly recovers the same state-conflict request without changing evidence or expected state',async()=>{
+    mocks.rpc.mockResolvedValueOnce({data:null,error:{code:'40001',message:'A parada mudou'}});
+    await createDeliverySubmission(input()).submit();
+    const call=mocks.rpc.mock.calls[0];
+    await replayPendingDeliverySubmissions('tenant','driver-user');
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    await replayPendingDeliverySubmissions('tenant','driver-user',undefined,{retryStateConflicts:true});
+    expect(mocks.rpc.mock.calls[1]).toEqual(call);
+    expect(mocks.upload).toHaveBeenCalledTimes(4);expect(mocks.offline.size).toBe(0);
+  });
   it('calls one atomic RPC with proofs, receiver and stable request id', async () => {
     const attempt=createDeliverySubmission(input()); await attempt.submit();
     expect(mocks.rpc).toHaveBeenCalledTimes(1);

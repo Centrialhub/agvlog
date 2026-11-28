@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {useLoadLiveUpdates} from '@/hooks/useLoadLiveUpdates';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,6 +56,7 @@ interface DispatchStopInput {
 }
 
 function useLoad(id: string | undefined) {
+  useLoadLiveUpdates();
   const { currentTenant } = useTenant();
   return useQuery({
     queryKey: ['load', id, currentTenant?.id],
@@ -70,6 +72,8 @@ function useLoad(id: string | undefined) {
       return data as Load | null;
     },
     enabled: !!id && !!currentTenant,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
   });
 }
 

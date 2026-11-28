@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
+import {requestWithDeadline} from '@/lib/requestWithDeadline';
 import type { Json } from '@/integrations/supabase/types';
 import {
   DRIVER_OFFLINE_OUTBOX_CHANGED,
@@ -40,13 +41,13 @@ async function send(record: DriverOfflineEnvelope<Json>) {
     _command: record.kind === 'journey' ? 'journey_event' : record.kind,
     _payload: record.payload,
   };
-  const invoke=()=>rpc('driver_apply_offline_command_v1',args);
+  const invoke=()=>requestWithDeadline(()=>rpc('driver_apply_offline_command_v1',args),20000);
   let {data,error}=await invoke();
   if(isAuthorizationError(error)&&await refreshOperationalSession())({data,error}=await invoke());
   if (error) {
     const failure = new Error(error.message || 'Não foi possível sincronizar o comando.') as RpcError;
     failure.code = error.code;
-    failure.retryable = !error.code || ['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003'].includes(error.code);
+    failure.retryable = !error.code || ['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003','40001','55P03','40P01','57014'].includes(error.code);
     throw failure;
   }
   return data;

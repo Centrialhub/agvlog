@@ -95,18 +95,21 @@ export default function DriverSyncPending(){
   });
   const synchronize=useMutation({
     mutationFn:async()=>{
+      // Arrival must be acknowledged before replaying a delivery prepared
+      // against the locally projected "arrived" state.
+      // Saved departures require the arrived, nonterminal stop as well.
+      const operational=await operationalQueue.recover(true);
       const results=await Promise.allSettled([
-        replayPendingDeliverySubmissions(tenantId!,actorId!),
+        replayPendingDeliverySubmissions(tenantId!,actorId!,undefined,{retryStateConflicts:true}),
         expenseQueue.replay.mutateAsync(),
-        operationalQueue.recover(true),
       ]);
       const failures=results.filter(result=>result.status==='rejected');
       if(failures.length)throw new Error(`${failures.length} grupo(s) não puderam ser sincronizados. As evidências permanecem no aparelho.`);
-      return results.reduce((total,result)=>total+(result.status==='fulfilled'?confirmedCount(result.value):0),0);
+      return results.reduce((total,result)=>total+(result.status==='fulfilled'?confirmedCount(result.value):0),operational.confirmed);
     },
     onSuccess:async confirmed=>{
       if(tenantId&&actorId)setLastSuccessfulSync(recordDriverSuccessfulSync(tenantId,actorId));
-      if(confirmed)await invalidateDeliveryQueries(queryClient);
+      if(confirmed)void invalidateDeliveryQueries(queryClient);
       toast({title:confirmed?'Sincronização concluída':'Nenhum envio confirmado',
         description:confirmed?`${confirmed} ${confirmed===1?'registro confirmado':'registros confirmados'} pelo servidor.`:undefined});
     },

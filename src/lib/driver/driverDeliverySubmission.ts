@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {requestWithDeadline} from '@/lib/requestWithDeadline';
 import { createDeliverySingleFlight, deliveryErrorMessage, deliveryFailure, deliveryRetryExhausted,
   deliveryRetryReady, errorCode, isAuthorizationFailure, isRemoteConflict, newDeliveryRetry } from '@/lib/driver/driverDeliveryRetryPolicy';
 export { deliveryErrorMessage } from '@/lib/driver/driverDeliveryRetryPolicy';
@@ -142,13 +143,21 @@ export async function replayPendingDeliverySubmissions(
   tenantId: string,
   actorId: string,
   offlineStore: DriverDeliveryOfflineStore = driverDeliveryOfflineStore,
+  options: {retryStateConflicts?:boolean} = {},
 ) {
   let confirmed=0;
   const cleaned=0;
   let rejected=0;
   let superseded=0;
   const drafts = await offlineStore.list(tenantId, actorId);
-  for (const draft of drafts) {
+  for (const saved of drafts) {
+    let draft=saved;
+    // Explicit recovery resends the SAME immutable request after its arrival
+    // has synchronized. The server still validates the expected stop status.
+    if(options.retryStateConflicts&&draft.state==='needs_attention'
+      &&draft.attention?.kind==='remote_conflict'&&draft.attention.code==='40001'){
+      draft={...draft,state:'queued',attention:null};await offlineStore.save(draft);
+    }
     if(draft.state==='needs_attention'&&draft.attention?.kind!=='authorization'){rejected+=1;continue;}
     if (!deliveryRetryReady(draft.synchronization?.retry) || await offlineStore.hasPendingPredecessor?.(draft)) continue;
     try {
@@ -264,7 +273,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
     if(deliveryRetryExhausted(retry))throw Object.assign(new Error('Limite de tentativas atingido; o envio salvo requer revisão.'),{code:'delivery_retry_exhausted'});
     retry={...retry,attempts:retry.attempts+1,nextAttemptAt:null};
     await persist(stage);
-    return operation();
+    return requestWithDeadline(()=>operation(),20000);
   }
   async function retainFailure(error:unknown,entry?:DriverDeliveryUploadLedgerEntry){
     const failure=deliveryFailure(retry,error);retry=failure.retry;
@@ -398,6 +407,7 @@ export function createDeliverySubmission(input: DeliverySubmissionInput, options
     if(!deliveryRetryReady(retry)||isKnownOffline()&&durableSaved)return queuedResult();
     await ensureDurableDraft();
     if (isKnownOffline()) return queuedResult();
+    if(durableDraft&&await offlineStore.hasPendingPredecessor?.(durableDraft))return queuedResult();
     if(deliveryRetryExhausted(retry)){await markAttention('upload_failure',Object.assign(new Error('Limite de tentativas atingido; revise o envio salvo.'),{code:'delivery_retry_exhausted'}));return queuedResult();}
     let payload: Record<string, Json>;
     try {
@@ -455,7 +465,7 @@ export async function invalidateDeliveryQueries(client: QueryClient) {
   // A failed refresh cannot turn an already committed delivery into an error.
   // Use the shared graph keys so the operation and portal receive the same result.
   await Promise.allSettled([invalidateCompositionQueries(client), ...['driver_delivery_stops','driver_stops','driver_stop_products','driver_active_trip','driver_trip',
-    'driver_trip_specific','driver_loads','driver_events','driver_event_detail','loads','dispatch_trips',
+    'driver_trip_specific','driver_loads','driver_events','driver_event_detail','loads','load','load_trip_state','load_documents','dispatch_trips',
     'fiscal_documents','load_items','operational_events','pod-history','product-history','load-control','load-documents','load-unloading']
     .map(key => client.invalidateQueries({queryKey:[key]}))]);
 }

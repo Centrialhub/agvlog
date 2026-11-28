@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getCorrelationId } from '@/lib/observability/correlation';
 import { type UploadKind, validateUploadContent } from '@/lib/uploadPolicy';
+import {requestWithDeadline} from '@/lib/requestWithDeadline';
 
 interface SecureUploadRequest {
   tenantId: string;
@@ -29,10 +30,11 @@ export async function uploadSecureFile(request: SecureUploadRequest): Promise<st
     form.set('sha256', request.evidence.sha256);
   }
 
-  const { data, error } = await supabase.functions.invoke('secure-upload', {
+  const { data, error } = await requestWithDeadline(signal=>supabase.functions.invoke('secure-upload', {
     headers: { 'x-correlation-id': getCorrelationId() },
     body: form,
-  });
+    signal,
+  }),request.evidence?20000:30000);
   if (error) {
     const source=error as {code?:unknown;status?:unknown;context?:Response|{status?:unknown}};
     let gatewayCode:unknown=source.code;

@@ -7,6 +7,7 @@ import { invalidateTripLoadQueries, isConfirmedLoadTransition, tripMutationError
 import { useLoadAggregateCommand } from './useLoadAggregateCommand';
 import type { LoadHeaderChanges } from '@/lib/loads/loadAggregateCommands';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
+import {useLoadLiveUpdates} from './useLoadLiveUpdates';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -65,6 +66,7 @@ export function useLoadsPage(input: {
   pageSize: number;
   filters: Record<string, Json>;
 }) {
+  useLoadLiveUpdates();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   return useQuery({
@@ -94,6 +96,8 @@ export function useLoadsPage(input: {
     },
     enabled: !!currentTenant && !!user,
     placeholderData: previous => previous,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
   });
 }
 
